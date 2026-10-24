@@ -2,6 +2,8 @@ package local.clashfarmer.accounts
 
 import kotlinx.coroutines.delay
 import android.graphics.BitmapFactory
+import local.clashfarmer.core.PcGeometry
+import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Policy
 import local.clashfarmer.core.PopupGuard
@@ -49,6 +51,64 @@ class AccountSwitcher(
         val OKAY_DEFAULT = Point(800, 600)
         /** The Layout Editor's red X, measured on the phone on 29 September. */
         val LAYOUT_EDITOR_CLOSE = Point(1489, 54)
+
+        /**
+         * The PC's profile menu, in pixels of 1740x978 kept to the edge [onDisplay] is given
+         * ([PcGeometry]): the profile card on the left, and the menu's Settings tab, its X and the
+         * Supercell ID strip about the middle. A press of the card opened the menu
+         * (audit-evidence/live/20261024-134805-profile2). The Layout Editor has not been seen on the
+         * PC; its X is an estimate kept to the right edge.
+         */
+        val PC_PROFILE_BUTTON = Point(77, 92)
+        val PC_SETTINGS_TAB = Point(1335, 113)
+        val PC_SETTINGS_CLOSE_BTN = Point(1470, 111)
+        val PC_SETTINGS_IDENTITY_REGION = Region(745, 171, 1020, 264)
+        val PC_LAYOUT_EDITOR_CLOSE = Point(1676, 62)
+
+        /** The PC's identity templates, cut at 1740x978. Only Blood runs on the PC. */
+        val PC_IDENTITY_TEMPLATES = mapOf(AccountStore.BLOOD_ID to "identity/pc/blood.png")
+
+        /** The PC never presses the switch arrows: it runs Blood only. */
+        const val PC_SWITCH_REFUSED = "The PC does not switch accounts"
+
+        /** The phone's 1600x720, or a PC game surface ([PcGeometry.isPc]) of any size. */
+        fun supportedDisplay(display: Viewport?): Boolean = display != null &&
+            ((display.width == EXPECTED_WIDTH && display.height == EXPECTED_HEIGHT) || PcGeometry.isPc(display))
+
+        /** [phone], or on a PC frame of [display]'s size [pc], a point of 1740x978 kept to [anchor]. */
+        fun onDisplay(display: Viewport?, phone: Point, pc: Point, anchor: Anchor): Point =
+            if (display != null && PcGeometry.isPc(display)) PcGeometry.point(display, pc.x, pc.y, anchor) else phone
+
+        /** The Supercell ID strip's name and tag on a frame of [display]'s size. */
+        fun identityRegion(display: Viewport): Region =
+            if (PcGeometry.isPc(display)) PcGeometry.region(display, PC_SETTINGS_IDENTITY_REGION, Anchor.CENTRE)
+            else SETTINGS_IDENTITY_REGION
+
+        /** The identity templates by account id for a frame of [display]'s size. */
+        fun identityTemplates(display: Viewport): Map<String, String> =
+            if (PcGeometry.isPc(display)) PC_IDENTITY_TEMPLATES
+            else mapOf(AccountStore.SWEAT_ID to "identity/sweat.png", AccountStore.BLOOD_ID to "identity/blood.png")
+
+        /**
+         * [ImageMatcher.gainCorrectedDifference] of [region] of [screen] against [template]. A
+         * region of another size than the template, on a PC frame of another height than the one
+         * it was cut at, is scaled to the template's size first.
+         */
+        fun identityDifference(screen: android.graphics.Bitmap, region: Region, template: android.graphics.Bitmap): Double? {
+            if (region.width == template.width && region.height == template.height) {
+                return ImageMatcher.gainCorrectedDifference(screen, region, template)
+            }
+            val left = region.left.coerceIn(0, screen.width - 1)
+            val top = region.top.coerceIn(0, screen.height - 1)
+            val crop = android.graphics.Bitmap.createBitmap(screen, left, top,
+                region.right.coerceIn(left + 1, screen.width) - left, region.bottom.coerceIn(top + 1, screen.height) - top)
+            val scaled = try {
+                android.graphics.Bitmap.createScaledBitmap(crop, template.width, template.height, true)
+            } finally { crop.recycle() }
+            return try {
+                ImageMatcher.gainCorrectedDifference(scaled, Region(0, 0, template.width, template.height), template)
+            } finally { scaled.recycle() }
+        }
 
         /** Settings is open when an enrolled identity template matches its row. */
         fun settingsPanelShowing(differences: List<Double?>) =
@@ -107,14 +167,14 @@ class AccountSwitcher(
         val displayDeadline = System.currentTimeMillis() + 60_000L
         var display = service.currentDisplayViewport()
         while (display != null &&
-            (display.width != EXPECTED_WIDTH || display.height != EXPECTED_HEIGHT) &&
+            !supportedDisplay(display) &&
             System.currentTimeMillis() < displayDeadline) {
             delay(500)
             display = service.currentDisplayViewport()
         }
-        if (display == null || display.width != EXPECTED_WIDTH || display.height != EXPECTED_HEIGHT) {
+        if (!supportedDisplay(display)) {
             throw StopException(
-                "Display dimensions mismatch: expected ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}, got " +
+                "Display dimensions mismatch: expected ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT} or a PC game surface, got " +
                     (display?.let { "${it.width}x${it.height}" } ?: "unknown")
             )
         }
@@ -151,6 +211,9 @@ class AccountSwitcher(
                 "targetVillage" to target.villageName,
                 "targetTag" to target.playerTag
             )
+            if (display != null && PcGeometry.isPc(display)) {
+                throw StopException("$PC_SWITCH_REFUSED: Clash is on ${currentIdentity.villageName}, not ${target.villageName}")
+            }
             service.overlay?.updateStatus("Switching to ${target.villageName}...")
 
             // Tap switch arrows button to open picker. Decided on the identity frame; after a pause
@@ -353,13 +416,15 @@ class AccountSwitcher(
             // The menu opens on its profile tab. The tab's tap also clears the one-time "Settings
             // has moved" bubble, which dims the strip the identity is matched on.
             if (AccountIdentityParser.isProfileMenu(observation.rawText)) {
-                if (sentOrHeld { service.transport.tapButton(SETTINGS_TAB, runToken, decidedOn = decidedOn) }) delay(1200)
+                val tab = onDisplay(observation.viewport, SETTINGS_TAB, PC_SETTINGS_TAB, Anchor.CENTRE)
+                if (sentOrHeld { service.transport.tapButton(tab, runToken, decidedOn = decidedOn) }) delay(1200)
                 continue
             }
             if (observation.state == ScreenState.HOME ||
                 AccountIdentityParser.isVillageHome(observation.rawText)) {
                 // The next frame confirms the panel; a tap lost to a loading village is retried.
-                if (sentOrHeld { service.transport.tapButton(PROFILE_BUTTON, runToken, decidedOn = decidedOn) }) delay(1200)
+                val profile = onDisplay(observation.viewport, PROFILE_BUTTON, PC_PROFILE_BUTTON, Anchor.LEFT)
+                if (sentOrHeld { service.transport.tapButton(profile, runToken, decidedOn = decidedOn) }) delay(1200)
                 continue
             }
             if (observation.state == ScreenState.RESULT ||
@@ -390,7 +455,8 @@ class AccountSwitcher(
             // A gear tap that lands while the village's buttons are still settling can open the
             // Layout Editor above it instead (04:51 UTC, 29 September). Close it and try again.
             if (AccountIdentityParser.isLayoutEditor(observation.rawText)) {
-                if (sentOrHeld { service.transport.tapButton(LAYOUT_EDITOR_CLOSE, runToken, decidedOn = decidedOn) }) {
+                val close = onDisplay(observation.viewport, LAYOUT_EDITOR_CLOSE, PC_LAYOUT_EDITOR_CLOSE, Anchor.RIGHT)
+                if (sentOrHeld { service.transport.tapButton(close, runToken, decidedOn = decidedOn) }) {
                     AppLog.log("layout_editor_closed", "text" to observation.rawText.take(160))
                     delay(1500)
                 }
@@ -523,7 +589,8 @@ class AccountSwitcher(
         var decidedOn = service.transport.lastCaptureAt
         val closed = closeProfileMenu(
             press = {
-                if (sentOrHeld { service.transport.tapButton(SETTINGS_CLOSE_BTN, runToken, decidedOn = decidedOn) }) delay(800)
+                val close = onDisplay(service.currentDisplayViewport(), SETTINGS_CLOSE_BTN, PC_SETTINGS_CLOSE_BTN, Anchor.CENTRE)
+                if (sentOrHeld { service.transport.tapButton(close, runToken, decidedOn = decidedOn) }) delay(800)
             },
             stillOpen = {
                 val frame = service.transport.capture(runToken)
@@ -537,33 +604,33 @@ class AccountSwitcher(
         if (!closed) AppLog.log("settings_close_failed", "presses" to SETTINGS_CLOSE_ATTEMPTS)
     }
 
-    private fun identityDifferences(screen: android.graphics.Bitmap): List<Double?> =
-        listOf("identity/sweat.png", "identity/blood.png").map { name ->
+    private fun identityDifferences(screen: android.graphics.Bitmap): List<Double?> {
+        val display = Viewport(0, 0, screen.width, screen.height)
+        return identityTemplates(display).values.map { name ->
             val template = service.assets.open(name).use(BitmapFactory::decodeStream)
                 ?: throw StopException("Identity template could not be loaded: $name")
             try {
-                ImageMatcher.gainCorrectedDifference(screen, SETTINGS_IDENTITY_REGION, template)
+                identityDifference(screen, identityRegion(display), template)
             } finally { template.recycle() }
         }
+    }
 
     private suspend fun readSettingsIdentity(runToken: Long): SettingsIdentity {
         val frame = service.transport.capture(runToken)
         return try {
-            val obs = screenReader.observeRegion(frame.bitmap, SETTINGS_IDENTITY_REGION, scale = 5)
+            val display = Viewport(0, 0, frame.bitmap.width, frame.bitmap.height)
+            val region = identityRegion(display)
+            val obs = screenReader.observeRegion(frame.bitmap, region, scale = 5)
             val enrolled = AccountStore(service.filesDir).load()
             val matches = enrolled.mapNotNull { account ->
-                val templateName = when (account.id) {
-                    AccountStore.SWEAT_ID -> "identity/sweat.png"
-                    AccountStore.BLOOD_ID -> "identity/blood.png"
-                    else -> return@mapNotNull null
-                }
+                val templateName = identityTemplates(display)[account.id] ?: return@mapNotNull null
                 val villageVisible = obs.boxes.any {
                     AccountIdentityParser.normalize(it.text) == AccountIdentityParser.normalize(account.villageName)
                 }
                 val template = service.assets.open(templateName).use(BitmapFactory::decodeStream)
                     ?: throw StopException("Identity template could not be loaded for ${account.villageName}")
                 val difference = try {
-                    ImageMatcher.gainCorrectedDifference(frame.bitmap, SETTINGS_IDENTITY_REGION, template)
+                    identityDifference(frame.bitmap, region, template)
                 } finally { template.recycle() }
                 AppLog.log(
                     "account_identity_candidate", "village" to account.villageName,
