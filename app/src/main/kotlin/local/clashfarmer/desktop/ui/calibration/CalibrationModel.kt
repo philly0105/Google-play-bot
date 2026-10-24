@@ -378,9 +378,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
             }
             val current = profile
             val bitmap = withContext(Dispatchers.IO) {
-                // stream B: captureNormalizedVillage's returnToActivityClass should be Class<*>? = null,
-                // as captureClashGame's is; the PC reopens no helper screen, so this class goes unused.
-                service.captureNormalizedVillage(current, CalibrationModel::class.java).bitmap
+                service.captureNormalizedVillage(current).bitmap
             }
             try {
                 if (bitmap.width != profile.resolutionWidth || bitmap.height != profile.resolutionHeight) {

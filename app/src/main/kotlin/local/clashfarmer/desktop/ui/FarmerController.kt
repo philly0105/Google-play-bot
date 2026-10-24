@@ -252,8 +252,6 @@ class FarmerController(
                     if (service == null) {
                         toast(NOT_RUNNING)
                     } else {
-                        // stream B: FarmerService.launchClash() opens Clash of Clans in Google Play
-                        // Games (the sidecar's launch) and returns at once.
                         service.launchClash()
                     }
                 }

@@ -652,6 +652,27 @@ class FarmerService(
     /** Desktop: the notification's Stop, for the tray, with the reason the phone's receiver gave. */
     fun stopFromNotification() = stop(local.clashfarmer.core.UserStop.NOTIFICATION)
 
+    /**
+     * Desktop: Setup's Open Clash of Clans. Starts Clash through Google Play Games and returns at
+     * once. Sends nothing while a run is active, since the run starts Clash itself, or while a
+     * Clash window exists: a start into the running game left its input unanswered.
+     */
+    fun launchClash() {
+        if (isBusy) return
+        serviceScope.launch {
+            withTimeoutOrNull(WINDOW_LOOKUP_WAIT_MS) { host.window.first { it.checked && it.error == null } }
+            val status = host.window.value
+            if (!status.checked || status.error != null || status.window != null) return@launch
+            try {
+                host.launch()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                System.err.println("FarmerService: starting Clash from Setup failed: ${e.message}")
+            }
+        }
+    }
+
     /** The frame of the newest snapshot written, so one frame is saved once. */
     private var lastSnapshotFrameAt: Long? = null
 
@@ -1839,7 +1860,7 @@ class FarmerService(
      * still apply, and refuses anything but the village with nothing selected. Desktop: no helper
      * screen is reopened after it, so [returnToActivityClass] is not used.
      */
-    suspend fun captureNormalizedVillage(profile: PhoneProfile, returnToActivityClass: Class<*>): CapturedImage {
+    suspend fun captureNormalizedVillage(profile: PhoneProfile, returnToActivityClass: Class<*>? = null): CapturedImage {
         if (isBusy) throw IllegalStateException("A farming session is already active")
         ensureClashForeground(timeoutMs = 90_000)
         fitSurface(profile)
