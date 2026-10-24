@@ -20,9 +20,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -31,6 +40,7 @@ import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.FarmerSize
 import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.ui.FarmerTheme
+import java.util.Locale
 
 /** How wide a sheet grows in a wide window. */
 val SHEET_WIDTH: Dp = 680.dp
@@ -82,6 +92,7 @@ fun Sheet(
 /**
  * The phone's AlertDialog: a title, a message the user can select and copy, and one or two
  * buttons. [dismiss] null leaves only [confirm]; Escape and a click outside call [onDismiss].
+ * [monospace] sets the message in 12 sp monospace, as Inspect's report was.
  */
 @Composable
 fun MessageDialog(
@@ -91,15 +102,17 @@ fun MessageDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     dismiss: String? = null,
-    danger: Boolean = false
+    danger: Boolean = false,
+    monospace: Boolean = false
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Panel(460.dp) {
+        Panel(if (monospace) SHEET_WIDTH else 460.dp) {
             Label(title, Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp), size = FarmerTheme.TITLE, bold = true)
             ScrollBody(Modifier.weight(1f, fill = false)) {
                 SelectionContainer {
                     Label(message, Modifier.fillMaxWidth().padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 4.dp),
-                        size = FarmerTheme.BODY, color = FarmerColors.muted)
+                        size = if (monospace) 12f else FarmerTheme.BODY,
+                        color = if (monospace) FarmerColors.text else FarmerColors.muted, monospace = monospace)
                 }
             }
             Row(
@@ -112,6 +125,91 @@ fun MessageDialog(
             }
         }
     }
+}
+
+/**
+ * The phone's 24-hour TimePickerDialog: the time as HH:MM to type, with hour and minute steppers
+ * for the mouse. Enter or Set calls [onSet]; Escape, a click outside and Cancel call [onDismiss].
+ * Show it by composing it; both callbacks must stop composing it.
+ */
+@Composable
+fun TimeDialog(title: String, hour: Int, minute: Int, onSet: (hour: Int, minute: Int) -> Unit, onDismiss: () -> Unit) {
+    var picked by remember { mutableStateOf(hour.coerceIn(0, 23) to minute.coerceIn(0, 59)) }
+    var text by remember { mutableStateOf(clockValue(picked)) }
+    val valid = parseClock(text.text) != null
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        // Typing replaces the time at once, as in a desktop time field.
+        runCatching { focus.requestFocus() }
+    }
+    fun pick(next: Pair<Int, Int>) {
+        picked = next
+        text = clockValue(next)
+    }
+    fun confirm() {
+        val time = parseClock(text.text) ?: return
+        onSet(time.first, time.second)
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Panel(380.dp) {
+            Label(title, Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp), size = FarmerTheme.TITLE, bold = true)
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, top = 14.dp, end = 20.dp)) {
+                TextInput(
+                    value = text,
+                    onValueChange = { next ->
+                        text = next
+                        parseClock(next.text)?.let { picked = it }
+                    },
+                    modifier = Modifier.focusRequester(focus),
+                    hint = "HH:MM",
+                    maxLength = 5,
+                    error = !valid,
+                    onSubmit = ::confirm
+                )
+                Label(
+                    if (valid) "24-hour clock" else "Type the time as HH:MM, 00:00 to 23:59",
+                    Modifier.padding(top = 6.dp),
+                    size = FarmerTheme.SMALL,
+                    color = if (valid) FarmerColors.muted else FarmerColors.bad
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Label("Hour", Modifier.padding(bottom = 4.dp), size = FarmerTheme.SMALL, color = FarmerColors.muted)
+                        Stepper(picked.first, 0, 23, format = ::twoDigits) { pick(it to picked.second) }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Label("Minute", Modifier.padding(bottom = 4.dp), size = FarmerTheme.SMALL, color = FarmerColors.muted)
+                        Stepper(picked.second, 0, 59, format = ::twoDigits) { pick(picked.first to it) }
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                SecondaryButton("Cancel", compact = true, onClick = onDismiss)
+                PrimaryButton("Set", enabled = valid, compact = true, onClick = ::confirm)
+            }
+        }
+    }
+}
+
+/** "8:30", "08:30", "0830" or "8.30" as hour and minute on a 24-hour clock; null for anything else. */
+internal fun parseClock(text: String): Pair<Int, Int>? {
+    val match = CLOCK.matchEntire(text.trim()) ?: return null
+    val hour = match.groupValues[1].toInt()
+    val minute = match.groupValues[2].toInt()
+    return if (hour in 0..23 && minute in 0..59) hour to minute else null
+}
+
+private val CLOCK = Regex("""(\d{1,2})[:.]?(\d{2})""")
+
+private fun twoDigits(n: Int): String = String.format(Locale.US, "%02d", n)
+
+/** The time as HH:MM, all of it selected so typing replaces it. */
+private fun clockValue(time: Pair<Int, Int>): TextFieldValue {
+    val text = "${twoDigits(time.first)}:${twoDigits(time.second)}"
+    return TextFieldValue(text, TextRange(0, text.length))
 }
 
 /** The dialog card: background colour, hairline border, card radius, at most [width] wide. */

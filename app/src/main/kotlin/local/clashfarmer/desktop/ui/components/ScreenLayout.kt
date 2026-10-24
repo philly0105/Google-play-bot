@@ -35,14 +35,18 @@ import local.clashfarmer.ui.components.Tone
 /** The widest a page's column grows: past it, a wide window centres the column instead. */
 val PAGE_MAX_WIDTH: Dp = 880.dp
 
+/** A form's column (Run, the account editor): narrower, so tracks and steppers keep a sensible length. */
+val FORM_MAX_WIDTH: Dp = 640.dp
+
 /**
  * Page scaffolding every tab shares: a vertical scroller that fills the tab, the mouse wheel and
- * a scrollbar to move it, 16 dp gutters, and a centred column no wider than [PAGE_MAX_WIDTH].
+ * a scrollbar to move it, 16 dp gutters, and a centred column no wider than [maxWidth].
  */
 @Composable
 fun ScreenPage(
     modifier: Modifier = Modifier,
     scroll: ScrollState = rememberScrollState(),
+    maxWidth: Dp = PAGE_MAX_WIDTH,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Box(modifier.fillMaxSize()) {
@@ -52,7 +56,7 @@ fun ScreenPage(
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = PAGE_MAX_WIDTH)
+                    .widthIn(max = maxWidth)
                     .fillMaxWidth()
                     .padding(start = FarmerSize.GUTTER, top = 12.dp, end = FarmerSize.GUTTER, bottom = 24.dp),
                 content = content

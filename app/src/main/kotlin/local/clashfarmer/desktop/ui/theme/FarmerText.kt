@@ -1,5 +1,8 @@
 package local.clashfarmer.desktop.ui.theme
 
+import androidx.compose.foundation.DarkDefaultContextMenuRepresentation
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.LocalScrollbarStyle
 import androidx.compose.foundation.defaultScrollbarStyle
 import androidx.compose.foundation.text.BasicText
@@ -84,9 +87,11 @@ fun Label(
 }
 
 /**
- * The window's theme: the dark green background is drawn by the caller; this sets the scrollbar
- * and selection colours for a dark surface, which the desktop defaults (dark on light) are not.
+ * The window's theme: the dark green background is drawn by the caller; this sets the scrollbar,
+ * selection and right-click menu colours for a dark surface, which the desktop defaults (dark on
+ * light) are not.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FarmerDesktopTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(
@@ -98,6 +103,7 @@ fun FarmerDesktopTheme(content: @Composable () -> Unit) {
             handleColor = FarmerColors.gold,
             backgroundColor = FarmerColors.gold.copy(alpha = 0.35f)
         ),
+        LocalContextMenuRepresentation provides DarkDefaultContextMenuRepresentation,
         content = content
     )
 }

@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -64,7 +66,11 @@ fun BarChart(
                 if (index in 0 until n) click?.invoke(index)
             }
         }
-    Canvas(modifier.fillMaxWidth().defaultMinSize(minHeight = 180.dp).then(tapModifier)) {
+    Canvas(
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 180.dp)
+            .semantics { contentDescription = "Bar chart" }
+            .then(tapModifier)
+    ) {
         val pad = 4.dp.toPx()
         val headroom = 30.dp.toPx()  // max label row and the tallest bar's value
         val footer = 20.dp.toPx()    // x labels

@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.coroutineScope
@@ -63,15 +65,15 @@ fun Stepper(
 
     // A disabled stepper fades as a whole; its buttons then keep full alpha so it fades only once.
     Row(modifier.alpha(if (enabled) 1f else .45f), verticalAlignment = Alignment.CenterVertically) {
-        StepButton("-", enabled && shown > min, faded = enabled && shown <= min) { nudge(-1) }
+        StepButton("-", "Decrease", enabled && shown > min, faded = enabled && shown <= min) { nudge(-1) }
         Label(format(shown), Modifier.weight(1f), size = FarmerTheme.TITLE, bold = true, maxLines = 1, align = TextAlign.Center)
-        StepButton("+", enabled && shown < max, faded = enabled && shown >= max) { nudge(1) }
+        StepButton("+", "Increase", enabled && shown < max, faded = enabled && shown >= max) { nudge(1) }
     }
 }
 
 /** A 56 dp glass button that steps on press and keeps stepping while held. */
 @Composable
-private fun StepButton(symbol: String, usable: Boolean, faded: Boolean, nudge: () -> Boolean) {
+private fun StepButton(symbol: String, description: String, usable: Boolean, faded: Boolean, nudge: () -> Boolean) {
     val shape = RoundedCornerShape(FarmerSize.BUTTON_RADIUS)
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -87,6 +89,7 @@ private fun StepButton(symbol: String, usable: Boolean, faded: Boolean, nudge: (
     Box(
         modifier = Modifier
             .size(width = 56.dp, height = FarmerSize.CONTROL)
+            .semantics { contentDescription = description }
             .alpha(if (faded) .45f else 1f)
             .clip(shape)
             .background(FarmerColors.surfaceStrong)
