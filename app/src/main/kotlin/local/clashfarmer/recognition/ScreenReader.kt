@@ -8,6 +8,7 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.Policy
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
@@ -141,6 +142,14 @@ class ScreenReader : AutoCloseable {
          * scout of 7 October, so every cut sits above it; 232 to 252 all gave clean glyphs.
          */
         private val BADGE_CUTS = listOf(235, 240, 245, 250)
+
+        /**
+         * The PC's. Google Play Games draws the badge's white at 220 to 229, under every phone cut.
+         * On Blood's 1740x978 scout of 24 October, over card art under 135, every cut from 145 to
+         * 215 read the x44, x5 and x1 but 190 (the x5 as "KS") and 200 (no x1); 220 lost the x1
+         * and 225 read nothing. No event card has been measured on the PC.
+         */
+        private val PC_BADGE_CUTS = listOf(175, 185, 205, 210)
 
         fun agreedAmount(allDigitStrings: List<String>): Long? =
             agreedDigits(allDigitStrings)?.toLongOrNull()?.takeIf { it > 0 }
@@ -481,7 +490,7 @@ class ScreenReader : AutoCloseable {
 
     /** What each cut of a tray card's badge band reads as; parsed by AttackPlanner.badgeCount. */
     suspend fun readTrayBadge(bitmap: Bitmap, roi: Region): List<String> =
-        cutReadings(bitmap, roi, BADGE_CUTS, scale = 4)
+        cutReadings(bitmap, roi, PcGeometry.pick(Viewport(0, 0, bitmap.width, bitmap.height), BADGE_CUTS, PC_BADGE_CUTS), scale = 4)
 
     /**
      * One "You got" row of the result screen; null when the cuts do not agree, or when what they
