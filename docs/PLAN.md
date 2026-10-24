@@ -1,0 +1,120 @@
+# Clash Farmer PC - port plan
+
+Port of the phone bot in `C:\Users\aideo\Projects\clash-farmer` (branch `ui-overhaul`, head
+`eeaadba`, the build installed on the phone on 15 October 2026) to a Windows desktop app that farms
+Clash of Clans running in Google Play Games for PC (GPG). Same features, same decisions, same
+settings and history model. The PC bot replaces the phone bot.
+
+Source of truth for behaviour: `clash-farmer/android/app/src/main/java/local/clashfarmer/`
+(below: "the phone tree"). Read `clash-farmer/android/STATUS.md` before claiming anything works on
+the phone side.
+
+## What the user decided (2026-10-24)
+
+- The bot runs in the background. The user keeps using the PC while it farms, so the bot must not
+  move the real cursor or need the Clash window in front. Input goes to the GPG window directly.
+  Only if GPG ignores that kind of input do we fall back to real mouse input, and we tell the user.
+- Only the Blood account is signed in on the PC for now. Account switching is ported unchanged and
+  proven once a second account is signed in.
+- The PC bot replaces the phone bot. No coordination with the phone.
+- Full permission to drive Clash on this PC for Blood: inspect, calibrate, real attacks, unattended
+  runs. Never spend gems. Blood's walls are maxed, so no wall purchase can be proven live; the
+  "no wall left to buy" path can.
+
+## Facts about GPG on this PC
+
+- GPG 26.10.305.0 (beta channel), installed to `D:\D drive AI work\Play Games\current\`. Logs in
+  `%LOCALAPPDATA%\Google\Play Games\Logs\`. Hypervisor WHPX. Clash version code 180647006 (18.647).
+- The emulator boots with `androidboot.kiwi.adbproxy.enabled=0` and
+  `enable_devmode_sideloading=false`: no ADB, no sideloading. The bot sees and drives Clash only
+  through the Windows window.
+- crosvm renders with DXGI flip model (`usedxgiflipmodel=true`), so GDI BitBlt/PrintWindow may come
+  back black. Windows Graphics Capture (WGC) is the expected capture path.
+- Monitors: primary 1920x1080 at 100%, laptop panel 2560x1600 at 125%. The app must be per-monitor
+  DPI aware (v2) and work in physical pixels.
+- The spike results (window hierarchy, which input GPG accepts unfocused, resize behaviour) are in
+  `docs/gpg-spike.md` once written.
+
+## Architecture
+
+One Gradle module `app` (Kotlin/JVM 21, Compose Multiplatform for Desktop), plus a C# sidecar.
+
+```
+app/src/main/kotlin/
+  android/graphics/...        shims: Bitmap, BitmapFactory, Canvas, Color, Paint, Rect
+  android/os/SystemClock.kt   shim
+  com/google/mlkit/...        shim of the ML Kit text API the phone code calls, backed by OcrBackend
+  com/google/android/gms/tasks/Task.kt   shim
+  local/clashfarmer/...       the phone tree, copied (see file classes below)
+  local/clashfarmer/desktop/  everything Windows-specific: native bridge, OCR backend, window
+                              control, tray, notifications, Compose UI
+app/src/main/resources/       remote.html, identity images, app icon
+app/src/test/kotlin/          the phone tree's JVM tests, copied
+native/ClashFarmer.Native/    C# .NET 8 sidecar: WGC capture, Windows.Media.Ocr, window input
+```
+
+### File classes
+
+1. Verbatim: copied byte for byte from the phone tree. Everything with no `android`, `androidx`
+   or `com.google` import, for example all of `history/`, `insight/`, most of `core/`,
+   `accounts/` except `AccountSwitcher.kt`, the pure `recognition/` readers, `remote/RemoteApi.kt`,
+   `service/FirstStop.kt`, `FrameStore.kt`, `PendingStart.kt`, and the pure `ui/` models
+   (`DashboardLoader`, `DashboardScreen`, `DashboardState`, `FarmingSettingsEditor`,
+   `components/AccountColor`, `ChartScale`, `Tone`, `UiText`).
+2. Verbatim through shims: files whose only platform use is `android.graphics.*`,
+   `android.os.SystemClock` or ML Kit, which the shims satisfy: `core/LocalRunner.kt`,
+   `RunGuard.kt`, `VillageCamera.kt`, `CollectionRunner.kt`, `AndroidWallDevice.kt`,
+   `accounts/AccountSwitcher.kt`, `recognition/ImageMatcher.kt`, `ScreenReader.kt`,
+   `service/LatestFrame.kt`. They call into `FarmerService`, which exists on the desktop with the
+   same members.
+3. Ported: same class name, package and public members as the phone tree, desktop internals.
+   `service/FarmerService.kt` (a plain class, no AccessibilityService), `service/AndroidTransport.kt`
+   (all guard logic kept; only screenshot and gesture dispatch replaced by the native bridge),
+   `service/FarmerOverlay.kt` (an always-on-top panel), `service/RunNotifier.kt` (`RunNotice` and
+   `LiveStatus` stay verbatim; the notifier posts Windows notifications), `log/AppLog.kt`
+   (a files directory instead of a Context), `remote/RemoteServer.kt`.
+4. Rewritten in Compose: `MainActivity`, `CalibrationActivity`, `CalibrationView`, and every
+   Android View file under `ui/`. Same tabs, same content, same actions, laid out for a desktop
+   window.
+
+Any edit to a class 1 or class 2 file is a divergence. Keep them rare, and record each one in
+`docs/DIVERGENCES.md` with the reason. When a test targets a pure function that lives in a class 3
+or class 4 file, move that function into a pure file in the same package with the same name so the
+test compiles unchanged, and record the move.
+
+### Phone concept -> PC equivalent
+
+| Phone | PC |
+| --- | --- |
+| AccessibilityService `takeScreenshot` | WGC capture of the Clash window's client area via the sidecar |
+| `dispatchGesture` tap/swipe/hold | Posted mouse messages to the GPG window (fallback: SendInput) |
+| Two-finger pinch | Mouse wheel (or whatever GPG maps to zoom; see the spike) |
+| Global Back | Esc, which GPG maps to Android Back |
+| Clash in foreground | The Clash GPG window exists, is not minimized and shows Clash |
+| Screen off / locked | PC sleeping, or capture no longer delivering frames |
+| Battery and heat guard | Laptop battery when unplugged |
+| Restart Clash | Close the Clash window and relaunch it through GPG |
+| Floating overlay | Small always-on-top window with status, Pause and Stop |
+| Notifications | Windows notifications from the tray icon |
+| `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
+| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules |
+
+### Resolution
+
+Calibration is redone on the PC. The bot holds the Clash window's client area at a fixed size
+(1600x720 if GPG will render that, so the phone's layout and default profile carry over;
+otherwise the nearest size GPG accepts) and refuses to act when the captured size differs from
+the profile's.
+
+## Build
+
+`Build.ps1` at the repo root runs Gradle with the JDK and Gradle in `tools/` (gitignored). From a
+git worktree it finds `tools/` in the main checkout. Default tasks: `:app:test` and the desktop
+distributable. The sidecar builds with `dotnet` (SDK 8 is installed).
+
+## Safety rules for anyone driving the game
+
+- Never spend gems. Never press a button whose dialog shows a gem price.
+- Blood only. Don't sign accounts in or out.
+- Never move the user's real cursor, except in the documented SendInput fallback.
+- Bots violate Supercell's terms and risk a permanent ban; say so plainly where it matters.

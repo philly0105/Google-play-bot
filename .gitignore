@@ -1,0 +1,11 @@
+tools/
+.gradle/
+build/
+**/build/
+.kotlin/
+*.iml
+.idea/
+native/**/bin/
+native/**/obj/
+audit-evidence/
+local.properties
