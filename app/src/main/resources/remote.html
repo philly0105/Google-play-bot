@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Clash Farmer</title>
+<style>
+  /* The app's dark green glass (FarmerTheme): gold for the one primary action, resource colours for resources only. */
+  :root { --bg:#0f1710; --text:#fff; --muted:rgba(255,255,255,.65); --faint:rgba(255,255,255,.4);
+          --surface:rgba(255,255,255,.08); --strong:rgba(255,255,255,.12); --line:rgba(255,255,255,.14); --inset:rgba(0,0,0,.35);
+          --gold:#ffc53d; --elixir:#ff8ae0; --dark:#a58bff; --ok:#5ee29a; --warn:#ffb020; --bad:#e5463a; --idle:#8e8e93;
+          --acctA:#5ec8ff; --acctB:#ff8a5c; color-scheme:dark; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; min-height:100vh; color:var(--text); font:15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         font-variant-numeric:tabular-nums; -webkit-text-size-adjust:100%; }
+  [hidden] { display:none !important; }
+  main { max-width:560px; margin:0 auto; padding:12px 16px calc(24px + env(safe-area-inset-bottom)); }
+  h2 { font-size:20px; margin:0 0 12px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:16px; margin-top:12px; }
+
+  /* Sticky header: state word, account and count, and Stop whenever a run is going. */
+  header { position:sticky; top:0; z-index:5; height:56px; display:flex; align-items:center; gap:10px;
+           padding:0 max(16px, calc((100% - 528px) / 2)); background:rgba(15,23,16,.92); border-bottom:1px solid var(--line);
+           backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+  .dot { flex:none; width:10px; height:10px; border-radius:50%; background:var(--idle); }
+  .dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  .dot.warn { background:var(--warn); box-shadow:0 0 8px var(--warn); }
+  .dot.bad { background:var(--bad); }
+  #headText { flex:1; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  header button { width:auto; min-width:88px; }
+
+  button, .button { font:inherit; font-weight:700; min-height:48px; border:1px solid var(--line); border-radius:16px; padding:0 16px;
+           color:var(--text); background:var(--strong); width:100%; cursor:pointer; display:inline-flex; align-items:center;
+           justify-content:center; text-decoration:none; text-align:center; }
+  button:disabled { opacity:.4; cursor:default; }
+  .stop { background:var(--bad); border-color:rgba(255,120,110,.6); }
+  .primary { background:var(--gold); color:#2a1e00; border-color:var(--gold); }
+  .ghost { background:transparent; }
+  input { font:inherit; min-height:48px; padding:0 10px; border-radius:14px; border:1px solid var(--line); background:var(--inset); color:var(--text); }
+
+  .live { position:relative; aspect-ratio:2.22 / 1; border-radius:20px; overflow:hidden; border:1px solid var(--line); background:var(--inset); }
+  .live img { width:100%; height:100%; object-fit:cover; display:block; }
+  .live .pill { position:absolute; left:10px; top:10px; display:flex; align-items:center; gap:6px; padding:5px 11px; border-radius:999px;
+                background:rgba(0,0,0,.6); font-size:12px; font-weight:700; }
+  .live .pill .dot { width:8px; height:8px; }
+  .live .none { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; text-align:center; padding:20px; }
+
+  .phase { font-size:20px; font-weight:700; }
+  .progress { display:flex; align-items:center; gap:12px; margin-top:4px; }
+  .progress span { flex:1; color:var(--muted); }
+  .progress button { width:auto; min-width:104px; }
+  .bars { display:flex; gap:12px; margin-top:14px; }
+  .bars > div { flex:1; min-width:0; }
+  .bars b { display:block; font-size:15px; }
+  .bars small { font-size:12px; color:var(--muted); }
+  .track { height:6px; border-radius:3px; background:rgba(255,255,255,.15); margin-top:6px; overflow:hidden; }
+  .track i { display:block; height:100%; width:0; border-radius:3px; }
+  .tiles { margin-top:12px; font-size:13px; color:var(--muted); }
+  .tiles b { color:var(--text); }
+  .bad-text { color:var(--bad); font-weight:600; font-size:13px; margin-top:8px; }
+  .err { color:var(--bad); font-size:13px; margin-top:8px; min-height:0; }
+  .err:empty { display:none; }
+  .note { color:var(--ok); font-size:13px; margin-top:8px; }
+  .note:empty { display:none; }
+
+  details > summary { list-style:none; cursor:pointer; min-height:48px; display:flex; align-items:center; gap:8px; font-weight:700; }
+  details > summary::-webkit-details-marker { display:none; }
+  details > summary::after { content:""; margin-left:auto; width:8px; height:8px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(45deg); }
+  details[open] > summary::after { transform:rotate(-135deg); }
+  .badge { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--bad); color:#fff; font-size:13px; font-weight:800; }
+  .problem { border-top:1px solid var(--line); padding:10px 0; }
+  .problem b { display:block; }
+  .problem.bad b { color:#ff8a80; }
+  .problem.warn b { color:var(--warn); }
+
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { width:auto; min-height:48px; border-radius:999px; padding:0 16px; font-weight:600; font-size:14px; }
+  .field { margin-top:14px; }
+  .lbl { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; }
+  .seg { display:flex; gap:4px; padding:4px; background:var(--strong); border-radius:16px; }
+  .seg button { flex:1; min-width:0; border:0; background:transparent; border-radius:12px; padding:0 6px; font-size:14px; font-weight:600; color:var(--muted); }
+  .seg button[aria-pressed="true"] { background:rgba(255,255,255,.22); color:var(--text); }
+  .stepper { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .stepper button { width:56px; flex:none; font-size:22px; padding:0; }
+  .stepper input { flex:1; min-width:0; text-align:center; font-size:20px; font-weight:700; }
+  .stepper .unit { flex:none; color:var(--muted); font-size:13px; min-width:56px; }
+  .both-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .both-row .who { flex:none; width:64px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .both-row .stepper { flex:1; min-width:0; margin:0; }
+  .toggle { width:auto; min-width:96px; }
+  .toggle[aria-checked="true"] { background:rgba(94,226,154,.2); border-color:var(--ok); color:var(--ok); }
+  .hint { font-size:13px; color:var(--muted); margin-top:6px; }
+  .summary { white-space:pre-line; margin-top:16px; padding:12px; border-radius:14px; background:var(--inset); font-size:14px; min-height:48px; }
+  .ready { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .ready span { padding:6px 12px; border-radius:999px; font-size:13px; font-weight:600; background:rgba(229,70,58,.18); color:#ff8a80; }
+  .ready span.ok { background:rgba(94,226,154,.16); color:var(--ok); }
+  #startRun { margin-top:14px; }
+  .tools { margin-top:8px; }
+  .tools .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .tools .grid button { font-size:13px; padding:0 6px; }
+  .dmg { display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .dmg label { display:flex; align-items:center; gap:8px; min-height:48px; flex:1 1 100%; }
+  .dmg input[type=checkbox] { width:24px; height:24px; min-height:0; }
+  .dmg input[type=number] { width:72px; text-align:center; }
+  .dmg button { width:auto; flex:1; }
+
+  .nums { display:flex; gap:12px; margin-top:14px; }
+  .nums > div { flex:1; min-width:0; }
+  .nums b { display:block; font-size:20px; font-weight:800; letter-spacing:-.02em; white-space:nowrap; }
+  .nums small { color:var(--muted); font-size:12px; }
+  .acct-bar { margin-top:12px; }
+  .acct-bar .top { display:flex; justify-content:space-between; gap:8px; font-size:14px; }
+  .acct-bar .top span { color:var(--muted); font-size:13px; }
+  .session { border-top:1px solid var(--line); padding:10px 0; font-size:13px; }
+  .session b { display:block; font-size:14px; }
+  #csv { margin-top:12px; }
+
+  .group { border-top:1px solid var(--line); }
+  .group:first-child { border-top:0; }
+  .group summary { flex-wrap:wrap; padding:8px 0; }
+  .group summary b { flex:1 1 80%; font-size:14px; }
+  .group summary small { flex:1 1 100%; color:var(--muted); font-weight:400; font-size:13px; }
+  .group summary .dot { width:8px; height:8px; }
+  .lines { list-style:none; margin:0 0 10px; padding:0; }
+  .lines li { display:flex; gap:10px; font-size:13px; padding:3px 0; }
+  .lines time { flex:none; width:44px; color:var(--faint); }
+  .lines li.bad span { color:#ff8a80; }
+  .lines li.warn span { color:var(--warn); }
+  .lines li.ok span { color:var(--ok); }
+  #tech { font:12px/1.5 ui-monospace, Menlo, monospace; color:var(--muted); max-height:340px; overflow-y:auto; margin-top:10px; }
+  #techToggle { margin-top:10px; }
+  #tech .raw { color:var(--faint); word-break:break-all; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="headDot"></span>
+  <span id="headText">Connecting</span>
+  <button id="stopTop" class="stop" hidden>Stop</button>
+</header>
+
+<main>
+  <div class="live">
+    <img id="frame" alt="Latest capture" hidden>
+    <div class="none" id="noframe">No capture yet. Start a run.</div>
+    <div class="pill"><span class="dot" id="pillDot"></span><span id="pillText">Idle</span></div>
+  </div>
+
+  <section class="card">
+    <div class="phase" id="phase">Idle</div>
+    <div class="progress"><span id="progress">No run yet</span><button id="pause" hidden>Pause</button></div>
+    <div class="bad-text" id="phone" hidden></div>
+    <div class="bars">
+      <div><b id="goldText">-</b><small id="goldOf">Gold</small><div class="track"><i id="goldBar" style="background:var(--gold)"></i></div></div>
+      <div><b id="elixirText">-</b><small id="elixirOf">Elixir</small><div class="track"><i id="elixirBar" style="background:var(--elixir)"></i></div></div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="tiles" id="health"></div>
+    <div class="err" id="err"></div>
+  </section>
+
+  <details class="card" id="needs" hidden>
+    <summary><span class="badge" id="needsCount">0</span><span id="needsTitle">Needs you</span></summary>
+    <div id="needsList"></div>
+    <div class="muted" style="margin-top:8px">Confirm or clear these in the app.</div>
+  </details>
+
+  <section class="card" id="composer">
+    <h2>New run</h2>
+    <div class="chips" id="presets"></div>
+    <div class="field"><span class="lbl">Account</span><div class="seg" id="segAccount"></div></div>
+    <div class="field" id="lengthField">
+      <span class="lbl">Length</span>
+      <div class="seg" id="segLength">
+        <button data-v="attacks">Attacks</button><button data-v="minutes">Time</button><button data-v="endby">End by</button>
+      </div>
+      <div class="stepper" id="stepper">
+        <button id="minus" aria-label="Less">-</button>
+        <input id="value" type="number" inputmode="numeric" aria-label="Length">
+        <button id="plus" aria-label="More">+</button>
+        <span class="unit" id="unit">attacks</span>
+      </div>
+      <div class="stepper" id="endbyRow" hidden>
+        <input id="endby" type="time" aria-label="End by">
+      </div>
+    </div>
+    <div class="field" id="bothField" hidden>
+      <span class="lbl">Attacks per account</span>
+      <div class="both-row"><span class="who" id="firstName"></span><div class="stepper">
+        <button data-step="first:-1" aria-label="Fewer">-</button><input id="firstValue" type="number" inputmode="numeric" aria-label="First account attacks"><button data-step="first:1" aria-label="More">+</button></div></div>
+      <div class="both-row"><span class="who" id="secondName"></span><div class="stepper">
+        <button data-step="second:-1" aria-label="Fewer">-</button><input id="secondValue" type="number" inputmode="numeric" aria-label="Second account attacks"><button data-step="second:1" aria-label="More">+</button></div></div>
+      <div class="hint">Stops at 120 min. Walls follow each account's own setting.</div>
+    </div>
+    <div class="field" id="wallsField"><span class="lbl">Walls</span><button class="toggle" id="walls" role="switch" aria-checked="false">Off</button></div>
+    <div class="field">
+      <span class="lbl">Stop when</span>
+      <div class="seg" id="segStop"><button data-v="limit">Limit</button><button data-v="full">Full</button><button data-v="goal">Goal</button></div>
+      <div class="hint" id="stopHint" hidden>Follows the account's saved goal: ends early at the goal when one is set, else at the limit.</div>
+    </div>
+    <div class="field" id="armyField" hidden>
+      <span class="lbl">Army</span>
+      <div class="seg" id="segArmy"><button data-v="normal">Normal</button><button data-v="event">Event troops</button></div>
+    </div>
+    <div class="summary" id="summary">Checking...</div>
+    <div class="ready" id="ready"></div>
+    <button id="startRun" class="primary" disabled>Start run</button>
+    <div class="err" id="runErr"></div>
+    <div class="note" id="runNote"></div>
+    <details class="tools">
+      <summary>More tools</summary>
+      <div class="muted" id="toolsFor"></div>
+      <div class="grid" style="margin-top:8px">
+        <button data-mode="supervised" data-label="Test one attack">Test one attack</button>
+        <button data-mode="walls" data-label="Walls only">Walls only</button>
+        <button data-mode="switch" data-label="Switch account">Switch account</button>
+      </div>
+      <div class="dmg" id="dmg"></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Stats</h2>
+    <div class="seg" id="segDays"><button data-v="1">Today</button><button data-v="7">7 days</button><button data-v="30">30 days</button></div>
+    <div class="nums">
+      <div><b id="statRate">-</b><small>loot per hour</small></div>
+      <div><b id="statTotal">-</b><small>gold and elixir</small></div>
+      <div><b id="statHours">-</b><small>farming</small></div>
+    </div>
+    <div class="muted" id="statBattles" style="margin-top:4px"></div>
+    <div class="muted" id="statCoverage" style="margin-top:4px" hidden></div>
+    <div id="acctBars"></div>
+    <div id="sessions" style="margin-top:12px"></div>
+    <a class="button ghost" id="csv" download>Download CSV</a>
+  </section>
+
+  <section class="card">
+    <h2>Activity</h2>
+    <div id="groups"><div class="muted">Loading...</div></div>
+    <button class="ghost" id="techToggle">Show technical log</button>
+    <div id="tech" hidden></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// The key arrives in the address the app shows; it is never part of this page.
+const key = new URLSearchParams(location.search).get("key") || "";
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const p2 = n => String(n).padStart(2, "0");
+
+async function call(path, body) {
+  const opts = body === undefined ? { headers: { "X-Key": key } }
+    : { method: "POST", headers: { "X-Key": key, "Content-Type": "application/x-www-form-urlencoded" }, body };
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(res.status === 401 ? "Wrong or missing key. Open the page from the link in the app." : (data.error || "The phone answered " + res.status));
+  return data;
+}
+
+// Mirrors Format.amount and Format.clock in the app, for the live numbers only.
+function amount(v) {
+  if (v == null) return "-";
+  const sign = v < 0 ? "-" : "", a = Math.abs(v);
+  const body = a < 1000 ? String(a) : a < 9950 ? (a / 1e3).toFixed(1) + "k" : a < 999500 ? Math.floor((a + 500) / 1e3) + "k"
+    : a < 999950000 ? (a / 1e6).toFixed(1) + "M" : (a / 1e9).toFixed(2) + "B";
+  return sign + body;
+}
+function clock(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s >= 3600 ? Math.floor(s / 3600) + ":" + p2(Math.floor(s / 60) % 60) + ":" + p2(s % 60) : Math.floor(s / 60) + ":" + p2(s % 60);
+}
+function hhmm(ms) { const d = new Date(ms); return p2(d.getHours()) + ":" + p2(d.getMinutes()); }
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  return s < 60 ? s + " s ago" : s < 3600 ? Math.floor(s / 60) + " min ago" : hhmm(ms);
+}
+
+// ----- Status -----
+
+let state = null;
+let accounts = [];
+
+function shownName(s) { return s.account || (accounts.find(a => a.id === s.shownAccountId) || {}).name || ""; }
+// Running, but the snapshot is still the last run's until the new one logs its start.
+function starting(s) { return s.running && (!s.startedAt || !!s.endedAt); }
+
+function renderStatus(s) {
+  state = s;
+  accounts = s.accounts || [];
+  const who = shownName(s);
+  const count = s.limit && !starting(s) ? " " + s.completed + "/" + s.limit : "";
+  $("headDot").className = "dot" + (s.running ? (s.paused ? " warn" : " ok") : "");
+  $("headText").textContent = s.running ? (s.paused ? "Paused" : "Running") + (who ? " · " + who + count : "") : "Idle";
+  $("stopTop").hidden = !s.running;
+
+  $("phase").textContent = s.paused ? "Paused" : starting(s) ? "Starting" : s.running ? (s.phase || "Running")
+    : s.endedAt ? (s.completionReason ? s.phase : "Stopped") : "Idle";
+  $("pause").hidden = !s.running;
+  $("pause").textContent = s.paused ? "Resume" : "Pause";
+  $("phone").hidden = s.screenOn && s.unlocked;
+  $("phone").textContent = !s.screenOn ? "The phone's screen is off. Runs cannot start." : "The phone is locked. Runs cannot start.";
+  renderProgress();
+  renderStorage(s.storage);
+
+  const b = s.builders, rate = (s.lootRate || {})[s.shownAccountId] || {};
+  $("tiles").replaceChildren(
+    "Builders ", el("b", null, b ? b.free + "/" + b.total : "-"),
+    " · ", el("b", null, rate.text || "-"),
+    " · last ", el("b", null, rate.lastRaid || "-"));
+  const h = s.health;
+  $("health").textContent = h && h.battery != null
+    ? "Battery " + h.battery + "%" + (h.charging ? ", charging" : "") + (h.tempC != null ? " · " + h.tempC.toFixed(1) + " C" : "") : "";
+
+  if (!needsLoaded) renderNeedsCount(s.problems || 0);
+  syncComposer();
+  renderFrame();
+}
+
+function renderProgress() {
+  const s = state;
+  if (!s) return;
+  const parts = [];
+  if (starting(s)) {
+    parts.push("Starting");
+  } else {
+    if (s.running || s.startedAt) parts.push(s.limit ? s.completed + " of " + s.limit : s.completed + " attacks");
+    if (s.running) {
+      parts.push(clock(Date.now() - s.startedAt));
+      if (s.maxMinutes) parts.push("ends " + hhmm(s.startedAt + s.maxMinutes * 60000));
+    } else if (s.endedAt) {
+      parts.push("ended " + hhmm(s.endedAt));
+      if (s.stopText) parts.push(s.stopText);
+    }
+  }
+  $("progress").textContent = parts.join(" · ") || "No run yet";
+}
+
+function renderStorage(st) {
+  for (const [k, name] of [["gold", "Gold"], ["elixir", "Elixir"]]) {
+    const r = st && st[k] || {};
+    const pct = r.value != null && r.capacity ? Math.min(100, Math.floor(r.value * 100 / r.capacity)) : null;
+    $(k + "Text").textContent = r.value == null ? "-" : amount(r.value) + (r.capacity ? " / " + amount(r.capacity) : "");
+    $(k + "Of").textContent = r.value == null ? name + ", not read" : pct == null ? name + ", size not set" : name + ", " + pct + "%";
+    $(k + "Bar").style.width = (pct || 0) + "%";
+  }
+}
+
+let frameAt = 0;
+function renderFrame() {
+  const s = state;
+  if (!s) return;
+  const img = $("frame");
+  if (s.frameAt && s.frameAt !== frameAt) {
+    frameAt = s.frameAt;
+    img.src = "/api/frame.jpg?key=" + encodeURIComponent(key) + "&t=" + frameAt;
+    img.hidden = false; $("noframe").hidden = true;
+  }
+  if (!s.frameAt) { img.hidden = true; $("noframe").hidden = false; }
+  $("noframe").textContent = s.running ? "Waiting for the first capture." : "No capture yet. Start a run.";
+  $("pillDot").className = "dot" + (s.running ? (s.paused ? " warn" : " ok") : "");
+  $("pillText").textContent = !s.frameAt ? (s.running ? "Starting" : "Idle")
+    : s.paused ? "Paused, frame " + hhmm(s.frameAt)
+    : s.running ? "Live, " + ago(s.frameAt)
+    : "Last seen " + hhmm(s.frameAt);
+}
+$("frame").onerror = () => { $("frame").hidden = true; $("noframe").hidden = false; };
+
+let connError = false;
+async function refreshStatus() {
+  try {
+    renderStatus(await call("/api/status"));
+    if (connError) { connError = false; $("err").textContent = ""; }
+  } catch (e) {
+    connError = true;
+    $("headDot").className = "dot bad";
+    $("headText").textContent = "Not connected";
+    $("err").textContent = e.message;
+  }
+}
+
+async function act(target, fn) {
+  $(target).textContent = "";
+  try { await fn(); } catch (e) { $(target).textContent = e.message; }
+  await refreshStatus();
+  refreshTimeline();
+}
+
+$("stopTop").onclick = () => act("err", () => call("/api/stop", ""));
+$("pause").onclick = () => act("err", () => call("/api/pause", ""));
+
+// ----- Needs you -----
+
+let needsLoaded = false;
+function renderNeedsCount(n) {
+  $("needs").hidden = n === 0;
+  $("needsCount").textContent = n;
+  $("needsTitle").textContent = "Needs you (" + n + ")";
+}
+function renderNeeds(problems) {
+  needsLoaded = true;
+  renderNeedsCount(problems.length);
+  $("needsList").replaceChildren(...problems.map(p => {
+    const row = el("div", "problem " + p.tone);
+    row.append(el("b", null, p.title), el("div", "muted", p.detail));
+    if (p.time != null) row.append(el("div", "muted", p.clock));
+    return row;
+  }));
+}
+
+// ----- New run -----
+
+const LONG_RUN = 40;
+const STOP_FROM_KEY = { limit: "limit", storage_full: "full", account_goal: "goal", saved_goal: "saved" };
+const plan = { accounts: [], length: "attacks", attacks: LONG_RUN, minutes: 120, endby: "", second: LONG_RUN, walls: false, stop: "saved", event: false };
+let planReady = false;
+let presets = [];
+
+const isBoth = () => plan.accounts.length === 2;
+const eventOn = () => !!(state && state.eventActive);
+const selected = () => accounts.find(a => a.selected) || accounts[0];
+const byId = id => accounts.find(a => a.id === id);
+
+function defaultEndBy() { return hhmm(Math.ceil((Date.now() + 60 * 60000) / 300000) * 300000); }
+
+function loadPlan(p) {
+  const ids = (p.accounts || []).filter(byId).slice(0, 2);
+  const l = p.length || {};
+  plan.accounts = ids.length ? ids : selected() ? [selected().id] : [];
+  if (l.kind === "minutes") { plan.length = "minutes"; plan.minutes = l.m; }
+  else if (l.kind === "end_by") { plan.length = "endby"; plan.endby = p2(l.hour) + ":" + p2(l.minute); }
+  else { plan.length = "attacks"; plan.attacks = l.n || LONG_RUN; }
+  if (isBoth()) plan.length = "attacks";
+  plan.second = p.secondAttacks || plan.attacks;
+  plan.walls = !!p.walls;
+  plan.stop = STOP_FROM_KEY[p.stopWhen] || "limit";
+  plan.event = !!p.eventTroops;
+}
+
+function defaultPlan() {
+  const a = selected();
+  plan.accounts = a ? [a.id] : [];
+  plan.length = "attacks"; plan.attacks = LONG_RUN; plan.second = LONG_RUN;
+  plan.walls = !!(a && a.wallsEnabled);
+  plan.stop = "saved";
+  plan.event = false;
+}
+
+let accountSignature = "";
+function syncComposer() {
+  const signature = JSON.stringify([accounts.map(a => [a.id, a.name, a.selected, a.wallsEnabled, a.damageEnd]), state.eventActive]);
+  const accountsChanged = signature !== accountSignature;
+  accountSignature = signature;
+  if (!planReady && accounts.length) {
+    if (state.lastPlan) loadPlan(state.lastPlan); else defaultPlan();
+    planReady = true;
+  }
+  if (plan.accounts.some(id => !byId(id))) defaultPlan();
+  if (accountsChanged) renderComposer();
+  // Busy, screen and lock decide readiness, so a change in them asks the phone again.
+  const gate = [state.running, state.screenOn, state.unlocked].join();
+  if (gate !== lastGate) { lastGate = gate; schedulePreview(); }
+}
+let lastGate = "";
+
+function segButton(label, on, onClick) {
+  const b = el("button", null, label);
+  b.setAttribute("aria-pressed", on);
+  b.onclick = onClick;
+  return b;
+}
+function pressSeg(id, value) {
+  for (const b of $(id).querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.v === String(value));
+}
+
+function renderComposer() {
+  $("presets").replaceChildren(...presets.map(p => {
+    const c = el("button", "chip", p.name);
+    c.onclick = () => { loadPlan(p); changed(); };
+    return c;
+  }));
+  $("presets").hidden = presets.length === 0;
+
+  const seg = $("segAccount");
+  seg.replaceChildren(...accounts.map(a => segButton(a.name, !isBoth() && plan.accounts[0] === a.id, () => {
+    plan.accounts = [a.id];
+    changed();
+  })));
+  if (accounts.length === 2) {
+    seg.append(segButton("Both", isBoth(), () => {
+      const first = selected(), second = accounts.find(a => a.id !== first.id);
+      if (!isBoth()) { plan.accounts = [first.id, second.id]; plan.length = "attacks"; }
+      changed();
+    }));
+  }
+  if (!accounts.length) seg.replaceChildren(el("span", "muted", "Add an account in the app first."));
+
+  const both = isBoth();
+  $("lengthField").hidden = both;
+  $("bothField").hidden = !both;
+  $("wallsField").hidden = both;
+  $("armyField").hidden = both || !eventOn();
+  pressSeg("segLength", plan.length);
+  pressSeg("segStop", plan.stop);
+  pressSeg("segArmy", plan.event ? "event" : "normal");
+  $("stopHint").hidden = plan.stop !== "saved";
+
+  const endby = plan.length === "endby";
+  $("stepper").hidden = endby;
+  $("endbyRow").hidden = !endby;
+  if (endby && !plan.endby) plan.endby = defaultEndBy();
+  setValue($("endby"), plan.endby);
+  const minutes = plan.length === "minutes";
+  setValue($("value"), minutes ? plan.minutes : plan.attacks);
+  $("value").min = minutes ? 5 : 1;
+  $("value").max = minutes ? 120 : 100;
+  $("unit").textContent = minutes ? "min" : "attacks";
+
+  if (both) {
+    $("firstName").textContent = byId(plan.accounts[0]).name;
+    $("secondName").textContent = byId(plan.accounts[1]).name;
+    setValue($("firstValue"), plan.attacks);
+    setValue($("secondValue"), plan.second);
+  }
+  $("walls").setAttribute("aria-checked", plan.walls);
+  $("walls").textContent = plan.walls ? "On" : "Off";
+
+  const target = byId(plan.accounts[0]);
+  $("toolsFor").textContent = target ? "For " + target.name + ". Uses its saved settings." : "";
+  for (const b of document.querySelectorAll(".tools .grid button")) b.disabled = !target;
+  const dmgKey = target ? target.id + JSON.stringify(target.damageEnd) : "";
+  if (dmgKey !== lastDmgKey) {
+    lastDmgKey = dmgKey;
+    $("dmg").replaceChildren(...(target && target.damageEnd ? damageRow(target) : []));
+  }
+}
+let lastDmgKey = null;
+
+// A field being typed in keeps what is typed.
+function setValue(input, v) { if (document.activeElement !== input) input.value = v; }
+
+function changed() {
+  renderComposer();
+  schedulePreview();
+}
+
+// Attacks step by 1 up to 5, then by 5; time by 15 minutes from 5 to 120.
+function step(v, dir, minutes) {
+  if (minutes) return dir > 0 ? (v < 15 ? 15 : Math.min(120, Math.floor(v / 15) * 15 + 15)) : (v <= 15 ? 5 : Math.ceil(v / 15) * 15 - 15);
+  return dir > 0 ? (v < 5 ? v + 1 : Math.min(100, Math.floor(v / 5) * 5 + 5)) : (v <= 5 ? Math.max(1, v - 1) : Math.ceil(v / 5) * 5 - 5);
+}
+function clampInt(text, lo, hi, fallback) { const n = parseInt(text, 10); return isNaN(n) ? fallback : Math.min(hi, Math.max(lo, n)); }
+
+$("plus").onclick = () => bump(1);
+$("minus").onclick = () => bump(-1);
+function bump(dir) {
+  if (plan.length === "minutes") plan.minutes = step(plan.minutes, dir, true);
+  else plan.attacks = step(plan.attacks, dir, false);
+  changed();
+}
+$("value").oninput = () => {
+  if (plan.length === "minutes") plan.minutes = clampInt($("value").value, 5, 120, plan.minutes);
+  else plan.attacks = clampInt($("value").value, 1, 100, plan.attacks);
+  schedulePreview();
+};
+$("value").onchange = () => { $("value").blur(); renderComposer(); };
+for (const b of document.querySelectorAll("[data-step]")) {
+  const [which, dir] = b.dataset.step.split(":");
+  b.onclick = () => {
+    if (which === "first") plan.attacks = step(plan.attacks, +dir, false); else plan.second = step(plan.second, +dir, false);
+    changed();
+  };
+}
+$("firstValue").oninput = () => { plan.attacks = clampInt($("firstValue").value, 1, 100, plan.attacks); schedulePreview(); };
+$("secondValue").oninput = () => { plan.second = clampInt($("secondValue").value, 1, 100, plan.second); schedulePreview(); };
+$("firstValue").onchange = $("secondValue").onchange = e => { e.target.blur(); renderComposer(); };
+$("endby").oninput = () => { if ($("endby").value) { plan.endby = $("endby").value; schedulePreview(); } };
+for (const b of $("segLength").querySelectorAll("button")) b.onclick = () => { plan.length = b.dataset.v; changed(); };
+for (const b of $("segStop").querySelectorAll("button")) b.onclick = () => { plan.stop = b.dataset.v; changed(); };
+for (const b of $("segArmy").querySelectorAll("button")) b.onclick = () => { plan.event = b.dataset.v === "event"; changed(); };
+$("walls").onclick = () => { plan.walls = !plan.walls; changed(); };
+
+function planForm() {
+  const both = isBoth();
+  const length = both ? "attacks" : plan.length;
+  const f = new URLSearchParams({
+    accounts: plan.accounts.join(","),
+    length,
+    value: length === "attacks" ? plan.attacks : length === "minutes" ? plan.minutes : plan.endby,
+    walls: plan.walls,
+    stop: plan.stop,
+    event: !both && eventOn() && plan.event
+  });
+  if (both) f.set("second", plan.second);
+  return f;
+}
+
+let previewTimer = 0, previewSeq = 0;
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(preview, 400);
+}
+async function preview() {
+  if (!plan.accounts.length) { showPreview(null); return; }
+  const seq = ++previewSeq;
+  try {
+    const p = await call("/api/preview?" + planForm());
+    if (seq === previewSeq) showPreview(p);
+  } catch (e) {
+    if (seq === previewSeq) { $("summary").textContent = e.message; $("ready").replaceChildren(); $("startRun").disabled = true; }
+  }
+}
+function showPreview(p) {
+  $("summary").textContent = p ? p.summary : "Add an account in the app first.";
+  $("ready").replaceChildren(...(p ? (p.ready ? [el("span", "ok", "Ready")] : p.problems.map(t => el("span", null, t))) : []));
+  $("startRun").disabled = !p || !p.ready;
+}
+
+$("startRun").onclick = () => act("runErr", async () => {
+  $("runNote").textContent = "";
+  // One reading of the form, so the run sent is the one the dialog showed.
+  const form = planForm();
+  const p = await call("/api/preview?" + form);
+  showPreview(p);
+  if (!p.ready) throw new Error(p.problems[0] || "Not ready");
+  if (!confirm(p.summary + "\n\nStart this run?")) return;
+  await call("/api/run", form.toString());
+  $("runNote").textContent = "Started.";
+});
+
+for (const b of document.querySelectorAll(".tools .grid button")) {
+  b.onclick = () => {
+    const target = byId(plan.accounts[0]);
+    if (!target || !confirm(b.dataset.label + " on " + target.name + "?")) return;
+    act("runErr", () => call("/api/start", new URLSearchParams({ account: target.id, mode: b.dataset.mode }).toString()));
+  };
+}
+
+function damageRow(account) {
+  const d = account.damageEnd;
+  const on = el("input"); on.type = "checkbox"; on.checked = d.on;
+  const label = el("label"); label.append(on, "End battles at damage %");
+  const num = v => { const i = el("input"); i.type = "number"; i.inputMode = "numeric"; i.min = 1; i.max = 100; i.value = v; return i; };
+  const min = num(d.min), max = num(d.max);
+  min.setAttribute("aria-label", "Lowest damage"); max.setAttribute("aria-label", "Highest damage");
+  const save = el("button", null, "Save");
+  save.onclick = () => act("runErr", () => call("/api/damage", new URLSearchParams({
+    account: account.id, on: on.checked, min: min.value, max: max.value }).toString()));
+  return [label, min, el("span", null, "to"), max, save];
+}
+
+async function refreshPresets() {
+  try { presets = await call("/api/presets"); } catch (e) { presets = []; }
+  if (state) renderComposer();
+}
+
+// ----- Stats -----
+
+let days = 7;
+for (const b of $("segDays").querySelectorAll("button")) b.onclick = () => { days = +b.dataset.v; refreshStats(); };
+
+async function refreshStats() {
+  pressSeg("segDays", days);
+  let s;
+  try { s = await call("/api/stats?days=" + days); } catch (e) { $("statBattles").textContent = e.message; return; }
+  const t = s.totals;
+  $("statRate").textContent = t.rateText;
+  $("statTotal").textContent = t.totalText;
+  $("statHours").textContent = t.hoursText;
+  $("statBattles").textContent = s.period + ": " + t.battles + (t.battles === 1 ? " battle" : " battles") + (t.unread ? ", " + t.unread + " not read" : "");
+  $("statCoverage").textContent = s.coverage || "";
+  $("statCoverage").hidden = !s.coverage;
+  const top = Math.max(1, ...s.accounts.map(a => a.lootPerHour || 0));
+  $("acctBars").replaceChildren(...s.accounts.map(a => {
+    const i = accounts.findIndex(x => x.id === a.id);
+    const row = el("div", "acct-bar");
+    const head = el("div", "top");
+    head.append(el("b", null, a.name + " " + a.rateText), el("span", null, a.hoursText));
+    const bar = el("i");
+    bar.style.width = Math.round((a.lootPerHour || 0) * 100 / top) + "%";
+    bar.style.background = i === 1 ? "var(--acctB)" : "var(--acctA)";
+    const track = el("div", "track"); track.append(bar);
+    row.append(head, track);
+    return row;
+  }));
+  if (!s.accounts.length) $("acctBars").replaceChildren(el("div", "muted", "No battles in this period."));
+  $("sessions").replaceChildren(...s.sessions.slice(0, 5).map(r => {
+    const row = el("div", "session");
+    row.append(el("b", null, r.cells.slice(0, 2).join(" · ")), el("span", "muted", r.cells.slice(2).filter(Boolean).join(" · ")));
+    return row;
+  }));
+  $("csv").download = s.csvName;
+  $("csv").href = "/api/history.csv?days=" + days + "&key=" + encodeURIComponent(key);
+  $("csv").textContent = "Download CSV (" + s.period + ")";
+}
+
+// ----- Activity -----
+
+async function refreshTimeline() {
+  let t;
+  try { t = await call("/api/timeline?n=200"); } catch (e) { $("groups").replaceChildren(el("div", "muted", e.message)); return; }
+  renderNeeds(t.problems);
+  const open = new Set([...document.querySelectorAll("#groups details[open]")].map(d => d.dataset.start));
+  const first = !$("groups").querySelector("details");
+  $("groups").replaceChildren(...t.groups.slice(0, 12).map((g, i) => {
+    const d = el("details", "group");
+    d.dataset.start = String(g.start);
+    d.open = first ? i === 0 : open.has(String(g.start));
+    const sum = el("summary");
+    sum.append(el("span", "dot " + toneClass(g.tone)), el("b", null, g.header));
+    if (g.summary) sum.append(el("small", null, g.summary));
+    const list = el("ol", "lines");
+    list.append(...g.lines.map(l => {
+      const li = el("li", toneClass(l.tone));
+      li.append(el("time", null, l.clock), el("span", null, l.text));
+      return li;
+    }));
+    d.append(sum, list);
+    if (g.earlier) d.append(el("div", "muted", g.earlier + (g.earlier === 1 ? " earlier line is" : " earlier lines are") + " on the phone's Activity screen."));
+    return d;
+  }));
+  if (!t.groups.length) $("groups").replaceChildren(el("div", "muted", "Nothing logged yet."));
+  $("tech").replaceChildren(...t.technical.flatMap(l => [el("div", null, l.clock + "  " + l.text), el("div", "raw", l.raw)]));
+}
+function toneClass(tone) { return tone === "ok" ? "ok" : tone === "warn" ? "warn" : tone === "bad" ? "bad" : ""; }
+
+$("techToggle").onclick = () => {
+  $("tech").hidden = !$("tech").hidden;
+  $("techToggle").textContent = $("tech").hidden ? "Show technical log" : "Hide technical log";
+};
+
+// ----- Polling, paused while the tab is hidden -----
+
+let timers = [];
+function startTimers() {
+  stopTimers();
+  timers = [
+    setInterval(refreshStatus, 4000),
+    setInterval(() => { renderFrame(); renderProgress(); }, 1000),
+    setInterval(refreshTimeline, 15000),
+    setInterval(refreshStats, 60000)
+  ];
+}
+function stopTimers() { timers.forEach(clearInterval); timers = []; }
+async function refreshAll() {
+  await refreshStatus();
+  refreshPresets();
+  refreshStats();
+  refreshTimeline();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopTimers(); else { refreshAll(); startTimers(); }
+});
+refreshAll();
+startTimers();
+</script>
+</body>
+</html>
