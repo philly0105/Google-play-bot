@@ -239,7 +239,8 @@ label "Clash Farmer remote link" and its sensitive flag, and the `intent_action_
 The phone's screen-reader labels are kept: "Increase" and "Decrease" on the steppers, "Bar
 chart", "<section>, show or hide" on the editor's section headers, and each number box's label.
 
-Phone wording remains in shared files the UI shows but this port must not edit:
+Phone wording remains in shared files the UI shows but this port must not edit (line numbers as
+of main at b514d40):
 
 - `core/RunPlan.kt:284` "Turn on the accessibility service in Setup", the readiness reason when
   the service is not connected.
@@ -249,9 +250,9 @@ Phone wording remains in shared files the UI shows but this port must not edit:
 - `core/AppSwitchLatch.HOLD_TIMEOUT_REASON` (the notification shade).
 - `core/TrayCheck.kt:113` "tap Attack", and `:253`-`254` "Tap the middle of the right card again
   in Calibrate".
-- `insight/EventText.kt:168`-`171` (the notification shade), `:192`, `:441`, `:526`, `:571`,
-  `:575` ("the phone was locked") and `:596` ("a touch on the screen"); `insight/Problems.kt:127`,
-  `:129`, `:165`.
+- `insight/EventText.kt:168`-`171` (the notification shade), `:192`, `:444`-`445`, `:530`,
+  `:546` ("Phone guard"), `:575`, `:579` ("the phone was locked") and `:600` ("a touch on the
+  screen"); `insight/Problems.kt:127`, `:129`, `:165`.
 - `ui/screens/SetupChecklist.kt:95` "Starts with the accessibility service.", on Setup's remote
   line.
 
