@@ -103,7 +103,7 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
         }
     }
 
-    /** Sizes the game surface without activating the window; returns the size it ended at, which stays 16:9. */
+    /** Sizes the game surface without activating the window; returns the size it ended at, which keeps the surface's aspect. */
     suspend fun resize(width: Int, height: Int): SurfaceSize {
         val json = request("resize", JSONObject().put("width", width).put("height", height), timeoutMs = RESIZE_TIMEOUT_MS).json
         return SurfaceSize(json.getInt("width"), json.getInt("height"))
@@ -111,11 +111,6 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
 
     suspend fun launch(url: String) {
         request("launch", JSONObject().put("url", url))
-    }
-
-    /** Sends `WM_CLOSE` to the Clash window. */
-    suspend fun closeClash() {
-        request("close")
     }
 
     suspend fun power(): PowerState {

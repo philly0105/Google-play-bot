@@ -9,7 +9,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.platform.ClashHost
@@ -45,32 +44,19 @@ private fun openWindow(width: Int = 1280, height: Int = 720, iconic: Boolean = f
 
 class FarmerServicePcTest {
 
-    /** Opens the window [opensAfterMs] after a launch and drops it [closesAfterMs] after a close. */
+    /** Opens the window [opensAfterMs] after a launch. */
     private class FakeHost(private val scope: CoroutineScope) : ClashHost {
         override val window = MutableStateFlow(WindowStatus(checked = true))
 
         @Volatile var launches = 0
-        @Volatile var closes = 0
-        /** Whether a Clash window was open at each launch. */
-        val launchedWithWindow = mutableListOf<Boolean>()
         var opensAfterMs = 600L
-        var closesAfterMs = 0L
         var battery: () -> PowerState = { PowerState(ac = true, batteryPercent = -1, saver = false) }
 
         override suspend fun launch() {
             launches++
-            launchedWithWindow += window.value.window != null
             scope.launch {
                 delay(opensAfterMs)
                 window.value = openWindow()
-            }
-        }
-
-        override suspend fun close() {
-            closes++
-            scope.launch {
-                delay(closesAfterMs)
-                window.value = WindowStatus(checked = true)
             }
         }
 
@@ -148,15 +134,6 @@ class FarmerServicePcTest {
     }
 
     @Test
-    fun `Home closes Clash`() = runBlocking {
-        host.window.value = openWindow()
-        assertTrue(service.performGlobalAction(GLOBAL_ACTION_HOME))
-        withTimeout(5_000) { while (host.window.value.window != null) delay(20) }
-        assertEquals(1, host.closes)
-        assertEquals(0, host.launches)
-    }
-
-    @Test
     fun `with no Clash window a start launches Clash and returns once it draws`() = runBlocking {
         service.connectTransport()
         surface.frames = listOf(BLACK, GREY)
@@ -190,14 +167,12 @@ class FarmerServicePcTest {
     }
 
     @Test
-    fun `a start after Home launches Clash once its window has gone`() = runBlocking {
+    fun `Home leaves Clash up, so the reopening after the takeover wait does not launch it`() = runBlocking {
         service.connectTransport()
         host.window.value = openWindow()
-        host.closesAfterMs = 400
         assertTrue(service.performGlobalAction(GLOBAL_ACTION_HOME))
         service.ensureClashForeground(timeoutMs = 10_000)
-        assertEquals(1, host.closes)
-        assertEquals(listOf(false), host.launchedWithWindow)
-        assertEquals(0, surface.shotsWithoutWindow)
+        assertEquals(FarmerService.CLASH_PACKAGE, service.getActiveForegroundPackage())
+        assertEquals(0, host.launches)
     }
 }

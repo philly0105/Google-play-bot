@@ -114,17 +114,15 @@ image's pixels, top to bottom. The ML Kit shim gives each line its own text bloc
 ### `resize`
 
 Arguments: `width`, `height` of the game surface. Resizes the top-level window without activating
-it. Returns the `width` and `height` the surface ended at; Google Play Games keeps it at 16:9.
+it. Returns the `width` and `height` the surface ended at; Google Play Games keeps the aspect it
+chose at launch, so asking for 1740x978 on a 16:10 surface gave 1565x978.
 
 ### `launch`
 
 Arguments: `url`. Opens it through the shell, as `Start-Process` does. Clash's URL is
 `googleplaygames://launch/?id=com.supercell.clashofclans&lid=1&pid=1`. Google Play Games may bring
-its window to the front; a relaunch after `close` did not (`docs/gpg-spike.md`, Restarting).
-
-### `close`
-
-Sends `WM_CLOSE` to the Clash window. Google Play Games hides the window and keeps its VM running.
+its window to the front. The app sends it only when there is no Clash window: a relaunch into the
+running VM broke posted input (`docs/gpg-spike.md`, Restarting). There is no op to close Clash.
 
 ### `power`
 

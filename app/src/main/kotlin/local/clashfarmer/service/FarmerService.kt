@@ -30,7 +30,6 @@ import local.clashfarmer.core.sentOrHeld
 import local.clashfarmer.desktop.platform.ClashHost
 import local.clashfarmer.desktop.platform.ClasspathAssets
 import local.clashfarmer.desktop.platform.GameSurface
-import local.clashfarmer.desktop.sidecar.SidecarException
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.log.FailureSnapshot
 import local.clashfarmer.recognition.ImageMatcher
@@ -57,7 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class FarmerService(
     /** The app's files directory, `%LOCALAPPDATA%\ClashFarmerPC\files` on the PC; the phone's Context.filesDir. */
     val filesDir: File,
-    /** The Clash window, starting and closing Clash, the battery, and keeping the PC awake. */
+    /** The Clash window, starting Clash, the battery, and keeping the PC awake. */
     private val host: ClashHost,
     /** The game window's screenshots and input, which [transport] drives. */
     private val surface: GameSurface
@@ -73,8 +72,6 @@ class FarmerService(
         private const val PENDING_SLICE_MS = 30_000L
         /** Desktop: how often the battery is read for [readDeviceHealth]. */
         private const val HEALTH_REFRESH_MS = 30_000L
-        /** Desktop: how long Home waits for the Clash window to go once it has been closed. */
-        private const val CLOSE_WAIT_MS = 30_000L
         /** Desktop: how long a start waits for a window lookup that worked before it decides to launch Clash. */
         private const val WINDOW_LOOKUP_WAIT_MS = 10_000L
 
@@ -1754,9 +1751,6 @@ class FarmerService(
     }
 
     suspend fun ensureClashForeground(timeoutMs: Long = 90_000) {
-        // Desktop: a Home still closing Clash ends first, so a restart is the close, the window
-        // gone, then the launch.
-        closingClash?.join()
         val deadline = System.currentTimeMillis() + timeoutMs
 
         // Desktop: the read decides, not clashLooksForeground, which also passes a read of
@@ -1938,42 +1932,18 @@ class FarmerService(
 
     /**
      * Desktop: Back goes to the game window through [transport]. Home, the phone's only other
-     * global action here, came from the takeover wait; on the PC it closes Clash, and the
-     * [ensureClashForeground] after the wait starts it again. True once the close is under way, as
-     * Android answered once the action was dispatched.
+     * global action here, came from the takeover wait, where it put Clash in the background
+     * without stopping it. On the PC it does nothing: Clash stays on the takeover dialog, which
+     * holds the game just as the background did, and the account check after the wait presses its
+     * Reload. Closing the window instead and starting Clash again brought it back with posted
+     * input broken: taps did nothing, and after the link was sent again they landed 40 to 75 px
+     * above their targets (docs/gpg-spike.md, Restarting). True, as Android answered once the
+     * action was dispatched.
      */
     fun performGlobalAction(action: Int): Boolean = when (action) {
         GLOBAL_ACTION_BACK -> transport.back()
-        GLOBAL_ACTION_HOME -> {
-            closingClash = serviceScope.launch { closeClash() }
-            true
-        }
+        GLOBAL_ACTION_HOME -> true
         else -> false
-    }
-
-    /** Desktop: the Home in flight, which [ensureClashForeground] lets finish before it starts Clash. */
-    @Volatile
-    private var closingClash: Job? = null
-
-    /**
-     * Desktop: closes the Clash window and waits up to [CLOSE_WAIT_MS] for it to go. No window is
-     * already what Home wanted. A failure is only printed: the takeover wait goes on either way,
-     * and the reopening after it finds Clash still up or starts it again.
-     */
-    private suspend fun closeClash() {
-        try {
-            host.close()
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if ((e as? SidecarException)?.code != "no_window") {
-                System.err.println("FarmerService: closing Clash failed: ${e.message}")
-            }
-            return
-        }
-        if (withTimeoutOrNull(CLOSE_WAIT_MS) { host.window.first { it.window == null } } == null) {
-            System.err.println("FarmerService: the Clash window was still open $CLOSE_WAIT_MS ms after closing it")
-        }
     }
 
     /** Desktop: run jobs holding the PC awake; see [keepAwakeWhile]. */

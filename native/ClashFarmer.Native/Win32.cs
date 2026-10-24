@@ -6,7 +6,6 @@ namespace ClashFarmer.Native;
 
 internal static class Win32
 {
-    public const uint WM_CLOSE = 0x0010;
     public const uint WM_KEYDOWN = 0x0100;
     public const uint WM_KEYUP = 0x0101;
     public const uint WM_MOUSEMOVE = 0x0200;

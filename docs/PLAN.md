@@ -93,7 +93,8 @@ test compiles unchanged, and record the move.
 | Clash in foreground | The Clash GPG window exists, is not minimized and shows Clash |
 | Screen off / locked | PC sleeping, or capture no longer delivering frames |
 | Battery and heat guard | Laptop battery when unplugged |
-| Restart Clash | Close the Clash window and relaunch it through GPG |
+| Restart Clash | Start it through GPG's launch link, only when there is no Clash window |
+| Home (the takeover wait) | Nothing: Clash stays on the takeover dialog. The bot never closes the Clash window, since a relaunch into the running VM broke posted input (`docs/gpg-spike.md`, Restarting) |
 | Floating overlay | Small always-on-top window with status, Pause and Stop |
 | Notifications | Windows notifications from the tray icon |
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
@@ -101,8 +102,9 @@ test compiles unchanged, and record the move.
 
 ### Resolution and screen geometry
 
-GPG pins the game area to 16:9, so the phone's 1600x720 (20:9) can't be reproduced. Calibration is
-redone on the PC, and the bot refuses to act when the captured size differs from the profile's.
+GPG keeps the game area at an aspect it picks at launch (16:9 and 16:10 so far), so the phone's
+1600x720 (20:9) can't be reproduced. Calibration is redone on the PC, and the bot refuses to act
+when the captured size differs from the profile's.
 
 The phone tree places taps and reads text with fractions of 1600x720, mostly in `ScreenTargets`,
 `Builders`, `ArmyRecipes`, `WallPanel`, `UpgradeListNavigator` and `PopupGuard`. Some of them miss

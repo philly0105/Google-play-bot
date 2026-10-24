@@ -107,11 +107,12 @@ below.
     open, and a second launch may bring Clash to the front. A launch that throws stops the start.
     The wait for the read to name Clash is gone, since the window read already does;
     `awaitClashRead` stays for `ClashReadTest`. The blank-frame wait is the phone's.
-  - Home: `performGlobalAction(GLOBAL_ACTION_HOME)`, used only by the takeover wait, closes Clash
-    (`host.close()`, WM_CLOSE) in `serviceScope` and waits up to 30 s for the window to go. It
-    returns true at once, as Android did on dispatch, and `ensureClashForeground` waits for a
-    close still in progress, so a restart is close, window gone, launch. Back is
-    `transport.back()`.
+  - Home: `performGlobalAction(GLOBAL_ACTION_HOME)`, used only by the takeover wait, does nothing
+    and returns true, as Android did on dispatch. The phone put Clash in the background without
+    stopping it; on the PC Clash stays on the takeover dialog, the reopening after the wait finds
+    the window and launches nothing, and the account check presses the dialog's Reload as before.
+    Closing the window and starting Clash again broke posted input (`docs/gpg-spike.md`,
+    Restarting), so the PC never closes it. Back is `transport.back()`.
   - Keeping awake: the phone held no wake lock and set no keep-screen-on flag, but a PC left alone
     sleeps. Each run job (`startCombinedRun`, `startSwitchOnly`, `startGuardedAccountSession`, the
     legacy `startFarming`) calls `host.keepAwake(true)` as it starts, and `keepAwake(false)` goes
@@ -135,7 +136,7 @@ below.
     `app/src/main/resources`, for `AccountSwitcher`'s identity images and `remote.html`);
     `getSystemService(name)` and `performGlobalAction(action)`, above.
   - `RunNotifier` and `FarmerOverlay` are still the stubs below, and every call to them is kept.
-    Failures only the PC has (closing Clash, keeping awake, the Resume launch) print to
+    Failures only the PC has (keeping awake, the Resume launch) print to
     `System.err`, since `insight/EventText.kt` describes no event for them.
 - `service/RunNotifier.kt` and `service/RunNotice.kt`: `RunNotice` and `LiveStatus` moved verbatim
   (phone lines 26-200, with the imports they use) into `RunNotice.kt`. `RunNotifier` is a

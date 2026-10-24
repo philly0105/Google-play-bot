@@ -11,7 +11,7 @@ Everything belongs to the `crosvm` process:
 | Window | Class | Notes |
 | --- | --- | --- |
 | Top level | `HwndWrapper[DefaultDomain;;<guid>]` | Title `Clash of Clans - <GPG profile name>`. Custom chrome: a 45 px title bar and an 80 px sidebar (physical pixels at 125%). |
-| Game surface | `CROSVM_1`, title `crosvm` | Child of the top level. Always 16:9. |
+| Game surface | `CROSVM_1`, title `crosvm` | Child of the top level. Keeps the aspect chosen at launch: 16:9 or 16:10 so far. |
 | `subWin`, title `sub` | | Same rect as `CROSVM_1`, disabled. |
 | `MetricsOverlayWndClass` | | Hidden. |
 
@@ -41,7 +41,8 @@ splits the URL at `&`; use `explorer.exe "<url>"` or PowerShell `Start-Process`.
 ## Input
 
 All of these are `PostMessage` to `CROSVM_1`. None of them changed the foreground window (Chrome
-stayed in front playing video) or moved the real cursor, so the SendInput fallback isn't needed.
+stayed in front playing video) or moved the real cursor. They depend on Android keeping its touch
+device on the game's display, which a relaunch into the running VM broke (see Restarting).
 
 - Tap: `WM_MOUSEMOVE`, `WM_LBUTTONDOWN` with `MK_LBUTTON`, an 80 ms hold, then `WM_LBUTTONUP`.
 - Coordinates are physical pixels of `CROSVM_1`'s client area, even though crosvm is system-aware
@@ -57,8 +58,9 @@ stayed in front playing video) or moved the real cursor, so the SendInput fallba
 
 ## Resolution and layout
 
-- GPG pins the game area to 16:9. A 1680x765 window gave a 1280x720 game area with bars at the
-  sides, so the phone's 1600x720 (20:9) can't be reproduced.
+- GPG keeps the game area at the aspect it chose at launch. A 1680x765 window gave a 1280x720
+  game area with bars at the sides, and on a 16:10 surface a request for 1740x978 gave 1565x978.
+  So the phone's 1600x720 (20:9) can't be reproduced.
 - Clash's HUD scales with the game area. The Build button is 148 px wide at 1740 and 108 px at
   1280, a ratio of 1.37 against 1.36, so fractions of the game area hold at any 16:9 size.
 - The PC runs the same Clash version as the phone (the 18.647 HUD, with Build at the bottom right),
@@ -155,6 +157,21 @@ Checked on 24 October on Blood, with the village behind the idle dialog and anot
 - The surface came back at 1860x1162 (16:10), where it had been 1740x978 (16:9), on the same
   120 DPI panel. The HUD kept its edge anchors scaled by height, so the aspect is not fixed across
   launches and geometry has to come from the live surface size.
+- Posted input broke. Android gave the game a new 2560x1600 display but left its touch device on
+  the VM's 1280x1024 boot display (AndroidSerial.log: "Overriding the dimensions of MultiTouch
+  Device ... to 1280x1024"), so posted taps did nothing. A second close and relaunch did the same.
+  Making the window the foreground, or giving the surface focus inside crosvm, moved nothing.
+- Sending the launch link again while Clash ran moved the touch device to the game's display.
+  Taps then reached the game, but 40 to 75 px above where they were posted: RELOAD's text button
+  missed at y 660 and was hit at 700, and a tap 58 px below an elixir bubble collected it. Drags
+  kept their length on both axes, and x was right.
+- After the PC restarted, a fresh start (Google Play Games not running) chose 1920x1080 again on
+  the same panel. Android moved touch to the game's display within 3 s, and a tap at a gold
+  bubble's centre collected it.
+- So the app never closes the Clash window, and sends the launch link only when there is no Clash
+  window. A window closed by hand still leaves the VM running, and the app's launch after that is
+  the relaunch that broke input. Whether quitting Google Play Games from its tray icon gives a
+  fresh start, as the restart did, is untested.
 
 ## Still open
 

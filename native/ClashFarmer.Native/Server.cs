@@ -104,7 +104,6 @@ internal sealed class Server(Stream input, Stream output)
         // A resize moves the surface under any gesture in flight, so it waits its turn with them.
         "resize" => await InLane(_inputLane, () => Resize(r)),
         "launch" => Done(() => Launch(Str(r, "url"))),
-        "close" => Done(() => Win32.PostMessage(Require().Top, Win32.WM_CLOSE, IntPtr.Zero, IntPtr.Zero)),
         "power" => Power(),
         "keepAwake" => Done(() => SystemState.KeepAwake(Bool(r, "on"))),
         "input" => Activity(),
@@ -215,8 +214,9 @@ internal sealed class Server(Stream input, Stream output)
 
     /**
      * Sizes the top-level window so the game surface comes out [width] by [height]. Google Play
-     * Games keeps the surface at 16:9 inside its own title bar and sidebar, so the chrome is
-     * measured and kept, and a second pass corrects what the first missed.
+     * Games keeps the surface at the aspect it chose at launch, inside its own title bar and
+     * sidebar, so the chrome is measured and kept, and a second pass corrects what the first
+     * missed.
      */
     private static (JsonObject, byte[]) Resize(JsonObject r)
     {
