@@ -25,11 +25,17 @@ import java.util.Locale
  * 14 October logged unread), so one standalone token of two or three plain digits there, the
  * length of a hero level, is skipped. A single digit may be the front of a split value ("5 2%"
  * for 52%) and a token with letters may be the value itself, so neither is skipped.
+ *
+ * The PC's recogniser puts the battle button's label, "SURReNdeR" before the first star and "End
+ * Battle" after it, between the word and the value ("OveRall Damage End Battle 68%" on all nine
+ * damage readings of Blood's supervised attack of 24 October, none of them read), so that label is
+ * skipped too: a word of seven to ten letters starting with s, or one starting with e and then one
+ * starting with b.
  */
 object BattleDamage {
 
     private val OVERALL =
-        Regex("(?<![a-z])ove[a-z]{2,5}[,.]?\\s*d[a-z]{0,7}?\\.?(?:\\s+[0-9]{2,3}(?=\\s))?\\s*([0-9soilzg\$]{1,3})%")
+        Regex("(?<![a-z])ove[a-z]{2,5}[,.]?\\s*d[a-z]{0,7}?\\.?(?:\\s+(?:s[a-z]{6,9}|e[a-z]{1,3}\\s*b[a-z]{4,6}))?(?:\\s+[0-9]{2,3}(?=\\s))?\\s*([0-9soilzg\$]{1,3})%")
 
     fun overallPercent(rawText: String): Int? {
         val match = OVERALL.find(rawText.lowercase(Locale.ROOT)) ?: return null

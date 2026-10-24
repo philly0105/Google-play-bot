@@ -2136,6 +2136,7 @@ class LocalRunner(
         var popupTaps = 0
         var shopBacks = 0
         var quitCancels = 0
+        var rateLaters = 0
         val dialogue = DialogueBudget()
         val popupsLogged = mutableSetOf<String>()
         while (true) {
@@ -2149,12 +2150,23 @@ class LocalRunner(
             // checkpoint and the Attack press it gets Cancel, MAX_POPUP_TAPS times at most, and no
             // popup's tap, and is read again within this wait.
             val quit = ReturnHome.quitPrompt(obs.rawText, obs.boxes)
-            if (obs.state != ScreenState.UNKNOWN && quit == null) {
+            // The PC's rating dialog reads as the village too, and gets LATER the same way.
+            val rateLater = if (quit == null) RatePrompt.later(obs.boxes) else null
+            if (obs.state != ScreenState.UNKNOWN && quit == null && rateLater == null) {
                 return obs
             }
             if (quit != null && quitCancels < MAX_POPUP_TAPS &&
                 service.cancelQuitPrompt(quit.cancel, runToken, obs.timestampMs, "observe", obs.rawText)) {
                 quitCancels++
+                delay(1500)
+                continue
+            }
+            if (rateLater != null && rateLaters < MAX_POPUP_TAPS &&
+                sentOrHeld { service.transport.tapButton(rateLater, runToken, decidedOn = obs.timestampMs) }
+            ) {
+                rateLaters++
+                AppLog.log("popup_dismissed", "popup" to RatePrompt.POPUP, "x" to rateLater.x,
+                    "y" to rateLater.y, "text" to obs.rawText.take(200))
                 delay(1500)
                 continue
             }
