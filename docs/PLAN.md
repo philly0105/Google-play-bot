@@ -32,8 +32,8 @@ the phone side.
   back black. Windows Graphics Capture (WGC) is the expected capture path.
 - Monitors: primary 1920x1080 at 100%, laptop panel 2560x1600 at 125%. The app must be per-monitor
   DPI aware (v2) and work in physical pixels.
-- The spike results (window hierarchy, which input GPG accepts unfocused, resize behaviour) are in
-  `docs/gpg-spike.md` once written.
+- The spike results (windows, capture, input, zoom, OCR, screen geometry) are in
+  `docs/gpg-spike.md`.
 
 ## Architecture
 
@@ -50,7 +50,7 @@ app/src/main/kotlin/
                               control, tray, notifications, Compose UI
 app/src/main/resources/       remote.html, identity images, app icon
 app/src/test/kotlin/          the phone tree's JVM tests, copied
-native/ClashFarmer.Native/    C# .NET 8 sidecar: WGC capture, Windows.Media.Ocr, window input
+native/ClashFarmer.Native/    C# .NET 8 sidecar: WGC capture, PaddleOCR, window input
 ```
 
 ### File classes
@@ -88,7 +88,7 @@ test compiles unchanged, and record the move.
 | --- | --- |
 | AccessibilityService `takeScreenshot` | WGC capture of the Clash window's client area via the sidecar |
 | `dispatchGesture` tap/swipe/hold | Posted mouse messages to the GPG window (fallback: SendInput) |
-| Two-finger pinch | Mouse wheel (or whatever GPG maps to zoom; see the spike) |
+| Two-finger pinch | Mouse wheel. The bot only pinches out to the zoom-out limit, so a pinch-out becomes wheel notches out to the limit |
 | Global Back | Esc, which GPG maps to Android Back |
 | Clash in foreground | The Clash GPG window exists, is not minimized and shows Clash |
 | Screen off / locked | PC sleeping, or capture no longer delivering frames |
@@ -99,12 +99,17 @@ test compiles unchanged, and record the move.
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
 | Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules |
 
-### Resolution
+### Resolution and screen geometry
 
-Calibration is redone on the PC. The bot holds the Clash window's client area at a fixed size
-(1600x720 if GPG will render that, so the phone's layout and default profile carry over;
-otherwise the nearest size GPG accepts) and refuses to act when the captured size differs from
-the profile's.
+GPG pins the game area to 16:9, so the phone's 1600x720 (20:9) can't be reproduced. Calibration is
+redone on the PC, and the bot refuses to act when the captured size differs from the profile's.
+
+The phone tree places taps and reads text with fractions of 1600x720, mostly in `ScreenTargets`,
+`Builders`, `ArmyRecipes`, `WallPanel`, `UpgradeListNavigator` and `PopupGuard`. Some of them miss
+on the PC (see the spike's Screen geometry section). Those files keep the phone values and gain PC
+values measured on PC captures, and the frame's aspect picks between them. The phone's tests at
+1600x720 run unchanged, PC tests run the same readers on PC captures, and each edited file is
+listed in `docs/DIVERGENCES.md`.
 
 ## Build
 

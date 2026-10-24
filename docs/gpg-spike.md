@@ -49,8 +49,9 @@ stayed in front playing video) or moved the real cursor, so the SendInput fallba
   the button, yet it opened the Shop.
 - Drag: `WM_MOUSEMOVE` with `MK_LBUTTON` every 10 ms pans the village. Releasing while still moving
   leaves a fling; the phone's end hold covers that.
-- Wheel: `WM_MOUSEWHEEL` with screen coordinates in lParam and 120 per notch. It zooms around the
-  posted point, with no Ctrl needed. Each notch is about 10%: three notches out gave 0.72x.
+- Wheel: `WM_MOUSEWHEEL` with screen coordinates in lParam and 120 per notch, no Ctrl needed. Each
+  notch is about 10%: three notches out gave 0.72x. Where it zooms around wasn't pinned down (see
+  Zoom).
 - Esc (`WM_KEYDOWN`/`WM_KEYUP` with `VK_ESCAPE` and its scan code) acts as Android Back: it closed the
   Shop.
 
@@ -61,28 +62,34 @@ stayed in front playing video) or moved the real cursor, so the SendInput fallba
 - Clash's HUD scales with the game area. The Build button is 148 px wide at 1740 and 108 px at
   1280, a ratio of 1.37 against 1.36, so fractions of the game area hold at any 16:9 size.
 - The PC runs the same Clash version as the phone (the 18.647 HUD, with Build at the bottom right),
-  but the HUD sits at 16:9 with no notch inset, so the phone's fractions of 1600x720 don't carry
-  over. About 60 lines hold fixed positions: `ScreenTargets.kt`, `Builders.kt`,
-  `ArmyRecipes.kt`, `WallPanel.kt`, `UpgradeListNavigator.kt`, `PopupGuard.kt` and
-  `VillageCamera.kt`. Each needs a PC value. Most recognition goes by OCR text inside wide bands,
-  which should hold.
+  but the HUD sits at 16:9 with no notch inset, so the phone's fractions of 1600x720 don't all
+  carry over (see Screen geometry). Most recognition goes by OCR text inside wide bands, and most
+  of those hold.
 - Deploy points, perimeter segments and card regions come from the per-device calibration profile,
   so the PC calibrates them again, as the phone did.
 
 ## Zoom
 
+The bot barely zooms. It navigates the village through the HUD buttons and the builder's upgrade
+list, and the only home-village feature that uses the camera is resource collection
+(`CollectionRunner`), which runs only when collectors are calibrated. So the PC keeps zoom simple
+(the user's call on 24 October) rather than reproducing the phone's framing.
+
 - The PC's zoom-out limit is far wider than the phone's. At the limit the village is a small island
   in the scenery. The limit is reached within 20 notches.
-- The limit plus 12 notches in frames the village about as the phone's minimum zoom did, with the
-  walls filling the frame height. Both phone pinch call sites (`normalizeVillageCamera`,
-  `zoomOutForDeployment`) only pinch out to the limit, so the PC transport turns every pinch-out
-  into "out to the limit, then 12 in". That gives one fixed zoom and leaves the core alone.
-- The phone's clamp drags don't carry over. At the limit plus 12 the camera can pan far past the
-  village: two of `normalizeVillageCamera`'s drags (31%,28% to 84%,86%, 700 ms) left nothing but
-  sky and the HUD on screen (`audit-evidence/spike/serve-clamped.png`). If zooming out to the limit
-  recentres the camera, the PC skips the drags. That test was cut short when Blood was opened on
-  another device.
-- Not tested: the attack scene's limit.
+- Zooming out to the limit doesn't recentre the camera: across starts, the village centre at the
+  limit sat anywhere from (720,440) to (920,500).
+- Zooming in from the limit doesn't land in a repeatable place either. Three notches in from points
+  posted at (300,250) fitted anchors near (306,260) and (309,195); one posted at the centre fitted
+  one near the top left. So "out to the limit, then N in" isn't a fixed framing, and that plan is
+  dropped.
+- Plan: the PC transport turns a pinch-out into wheel notches out to the limit. The phone's
+  `normalizeVillageCamera` then runs unchanged: at the limit its clamp drags push the camera into
+  the pan limit, which is the phone's own approach. Collection registers the result against its
+  reference before tapping, so a camera that doesn't match ends the phase untapped. Unproven until
+  collectors are calibrated on the PC.
+- The attack scene opens with the whole enemy base in view (`geo-scout.png`), which the phone's
+  20:9 framing didn't. Deploy points are calibrated on the PC either way.
 
 ## OCR
 
@@ -98,14 +105,45 @@ Decision: PaddleOCR in the sidecar, 4 threads, angle classifier off. With all 32
 processors ONNX Runtime thrashed, at 1-3 s per frame. RapidOcrNet resolves its model paths against
 the working directory, so pass absolute paths. Its models and code are Apache-2.0.
 
+## Screen geometry
+
+Captured at 1740x978 on 24 October, with PaddleOCR boxes beside each frame
+(`audit-evidence/spike/geo-*.png` and `.json`). The phone's matching frames are in
+`clash-farmer/audit-evidence/clash-18647/`.
+
+- The HUD keeps its anchors. The phone drew it inside a 55 px safe-area inset on both sides; each
+  element sits at the same distance from its edge (left, right, centre; top, bottom, middle),
+  scaled by 1.14 at 1740x978, which is the surface height over 858. Battle, Build, the builder
+  counter and Shop all land within 2 px of that prediction.
+- Panels don't follow it. The upgrade list is a full-height panel at x 1272-1740 whose rows scale
+  by about 1.10, so it shows six rows in progress where the phone showed five. The army screen
+  scales by about 1.18. A selected building's buttons are the phone's own size (124 px wide,
+  139.5 px apart), centred at x 870. So each screen's fixed positions are measured, not modelled.
+- The phone's bands, points and regions in `ScreenTargets`, `Builders`, `ArmyRecipes`, `WallPanel`,
+  `UpgradeListNavigator` and `PopupGuard` are fractions of 1600x720. Some miss on the PC. For
+  example, the builder counter's band ends at y 0.803 and the PC counter sits at 0.807, and the
+  army tabs sit just below their bands.
+- Not captured: a battle with troops down, the surrender dialog, the result screen, the reward
+  chest, the wall bulk panel and its confirm dialog, and "All builders are busy!". Blood's walls are
+  maxed, and the battle screens need a real attack.
+
 ## Clash notes
 
 - With GPG idle in the background, Clash showed "Anyone there? You have been disconnected due to
   inactivity. RELOAD GAME". PopupGuard's reload handling covers this.
+- Esc on the village, even with a building selected, opens "Confirm Exit: Do you want to quit the
+  game? Cancel / Okay". A tap on empty scenery is what deselects.
+- Esc on the army screen goes back to the attack menu, and Esc there goes back to the village.
+- The attack menu shows two Find a Match buttons on Blood: the Battle card's (1700 gold) and the
+  Ranked Battle card's (1/18 attacks). The phone's calibrated `find_match` anchor must be the
+  Battle card's.
+- The army screen opened from Find a Match shows the My Army tab with Attack!; opened from Edit
+  Army, the same button reads Battle. Left of it is a green button with a gem icon, never pressed.
+- Starting a search with a shield up showed no warning, and End Battle before any troop went
+  straight home with the shield kept.
+- GPG draws keyboard hints on the troop bar (1, Q, W, E, R, A, S).
 
 ## Still open
 
 - A locked PC and a sleeping display.
-- Whether zooming out to the limit recentres the village camera, so the clamp drags can go.
-- The attack scene's zoom framing.
 - Restarting Clash: `WM_CLOSE` to the top level, then relaunch through the URL.
