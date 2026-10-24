@@ -103,6 +103,11 @@ below.
     aspect it chose at launch, so a surface of another aspect is left for the guard to refuse. It
     waits up to 2 s for the window watcher to see the new size. A resize kept taps landing in the
     spike, where a relaunch did not (`docs/gpg-spike.md`, Restarting).
+  - Accounts: the PC runs only Blood, the user's call on 24 October. `startCombinedRun`,
+    `startSwitchOnly` and `startGuardedAccountSession` refuse any other account before they start,
+    so the account check never switches accounts in Clash. `startSwitchOnly` checks an account
+    with no calibration at the surface's own size, where the phone defaulted to 1600x720, the one
+    display its switcher supports.
   - Battery: `readDeviceHealth` returns the reading a loop started by `onServiceConnected` takes
     from `host.power()` every 30 s in `serviceScope`. The phone read a sticky broadcast on the
     spot; here each reading is a sidecar round trip, and `LocalRunner` and `RemoteServer` call

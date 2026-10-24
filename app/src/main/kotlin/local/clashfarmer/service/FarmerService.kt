@@ -581,6 +581,16 @@ class FarmerService(
         pendingStart?.let { throw IllegalStateException("A start is set for ${clockTime(it.atMs)}; cancel it first") }
     }
 
+    /**
+     * Desktop: the PC runs only Blood, the user's call on 24 October. A run on another account
+     * would have the account check switch accounts in Clash.
+     */
+    private fun refuseOtherAccounts(vararg accounts: local.clashfarmer.accounts.AccountRecord) {
+        accounts.firstOrNull { it.id != local.clashfarmer.accounts.AccountStore.BLOOD_ID }?.let {
+            throw IllegalStateException("The PC runs only ${local.clashfarmer.accounts.AccountStore.BLOOD_VILLAGE_NAME}, not ${it.villageName}")
+        }
+    }
+
     private fun clockTime(ms: Long): String = local.clashfarmer.insight.Format.time(ms, java.time.ZoneId.systemDefault())
 
     /**
@@ -721,6 +731,7 @@ class FarmerService(
             throw IllegalStateException("A farming session is already active")
         }
         refuseWhilePending()
+        refuseOtherAccounts(account1, account2)
 
         val combinedRunId = java.util.UUID.randomUUID().toString()
         beginRunSnapshots()
@@ -824,9 +835,10 @@ class FarmerService(
         if (isBusy) {
             throw IllegalStateException("A farming session is already active")
         }
+        refuseOtherAccounts(target)
 
         val store = local.clashfarmer.accounts.AccountStore(filesDir)
-        val profile = store.readProfile(target.id) ?: PhoneProfile.createDefault(1600, 720)
+        val saved = store.readProfile(target.id)
 
         beginRunSnapshots()
         val job = serviceScope.launch {
@@ -835,6 +847,11 @@ class FarmerService(
                 // A hold under the shade moves the check's own deadlines on; this one allows its cap.
                 kotlinx.coroutines.withTimeout(ACCOUNT_CHECK_MS + AppSwitchLatch.HOLD_CAP_MS) {
                     ensureClashForeground()
+                    // Desktop: an account not yet calibrated is checked at the surface's own size,
+                    // where the phone's default was the one display its switcher supports.
+                    val profile = saved
+                        ?: currentDisplayViewport()?.let { PhoneProfile.createDefault(it.width, it.height) }
+                        ?: PhoneProfile.createDefault(1600, 720)
                     fitSurface(profile)
                     kotlin.coroutines.coroutineContext.ensureActive()
                     overlay?.updateStatus("Switching to ${target.villageName}...")
@@ -1044,6 +1061,7 @@ class FarmerService(
             throw IllegalStateException("A farming session is already active")
         }
         refuseWhilePending()
+        refuseOtherAccounts(account)
 
         val maxMinutes = overrideMaxMinutes ?: (if (wallOnly) 30 else account.settings.maxMinutes)
         beginRunSnapshots()

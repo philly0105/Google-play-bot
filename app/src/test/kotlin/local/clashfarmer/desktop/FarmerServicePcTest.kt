@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.platform.ClashHost
@@ -25,7 +26,9 @@ import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.service.FarmerService
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
@@ -203,5 +206,19 @@ class FarmerServicePcTest {
         host.window.value = openWindow(1740, 978)
         service.fitSurface(PhoneProfile.createDefault(1740, 978))
         assertEquals(emptyList<SurfaceSize>(), host.resizes)
+    }
+
+    @Test
+    fun `a start on any account but Blood is refused`() {
+        service.connectTransport()
+        val accounts = AccountStore(filesDir).ensureMigrated()
+        val sweat = accounts.first { it.id == AccountStore.SWEAT_ID }
+        val blood = accounts.first { it.id == AccountStore.BLOOD_ID }
+        assertThrows(IllegalStateException::class.java) { service.startSwitchOnly(sweat) }
+        assertThrows(IllegalStateException::class.java) { service.startSupervisedAccount(sweat) }
+        assertThrows(IllegalStateException::class.java) { service.startCombinedRun(blood, sweat, 1, 1) }
+        assertFalse(service.isBusy)
+        service.startSwitchOnly(blood)
+        assertTrue(service.isBusy)
     }
 }
