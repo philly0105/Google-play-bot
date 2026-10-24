@@ -149,17 +149,29 @@ below.
     helper's own package); `assets` (`desktop/platform/ClasspathAssets`, which opens
     `app/src/main/resources`, for `AccountSwitcher`'s identity images and `remote.html`);
     `getSystemService(name)` and `performGlobalAction(action)`, above.
-  - `RunNotifier` and `FarmerOverlay` are still the stubs below, and every call to them is kept.
-    Failures only the PC has (keeping awake, the Resume launch) print to
+  - Every call to `RunNotifier` and `FarmerOverlay` is kept.
+    Failures only the PC has (keeping awake, the Resume launch, Setup's launch) print to
     `System.err`, since `insight/EventText.kt` describes no event for them.
+  - Added `launchClash()`, Setup's Open Clash of Clans: it starts Clash and returns at once, and
+    sends nothing while a run is active or a Clash window exists. `captureNormalizedVillage`'s
+    `returnToActivityClass` defaults to null, as `captureClashGame`'s does.
 - `service/RunNotifier.kt` and `service/RunNotice.kt`: `RunNotice` and `LiveStatus` moved verbatim
-  (phone lines 26-200, with the imports they use) into `RunNotice.kt`. `RunNotifier` is a
-  no-argument stub: the companion's public constants and `withdraws` are the phone's, `post`,
-  `postLive` and `cancelLive` do nothing, and `withdraw` returns false. Left out with Android's
-  notification plumbing: the Context parameter, `controlAction` and `command(Intent)`.
-- `service/FarmerOverlay.kt`: a stub without the Context parameter. `show`, `updateStatus`,
-  `setVisible` and `dismiss` do nothing, and `hideForCapture` runs its action. `OverlayGeometry` is
-  verbatim (phone lines 492-533). The phone's View classes `StatusBubble` and `PauseGlyph` are left
-  out.
+  (phone lines 26-200, with the imports they use) into `RunNotice.kt`. `RunNotifier` takes no
+  argument and writes to `RunTray`, which Main's tray icon reads: `post` queues a Windows
+  notification and logs `notification_posted` (or `notification_skipped` without a notification
+  area), and `postLive` and `cancelLive` set the tooltip's status, with the phone's 10 s hold after
+  a result and its show-only-what-changed rule. `withdraw` returns false: Java cannot take back a
+  notification Windows has shown. The companion's public constants and `withdraws` are the
+  phone's. Left out with Android's notification plumbing: the Context parameter, the channels,
+  `controlAction` and `command(Intent)`; the tray's Pause, Resume and Stop call `FarmerService`.
+- `service/FarmerOverlay.kt`: no Context parameter. The ticker, `tick`, `lastEarned`,
+  `updateStatus`'s five seconds and `setVisible` are the phone's, run on the Swing thread, and
+  publish a `Panel` that `desktop/ui/StatusPanel.kt` draws as an always-on-top window that never
+  takes focus, in the bottom right corner of the main screen. It shows only while a run is busy or
+  a start is set: the phone's idle "Ready" pill would sit over every window, and the tray icon opens
+  the app instead. The card's folded state is kept per launch, not in preferences, and
+  `hideForCapture` only runs its action, since the capture is of the Clash window alone.
+  `OverlayGeometry` is verbatim (phone lines 492-533). `StatusBubble` and `PauseGlyph` are drawn in
+  Compose in `StatusPanel.kt`.
 - `remote/RemoteServer.kt` is verbatim through shims (above), not ported or stubbed. It holds
   `ServiceRemoteBackend`, which calls `FarmerService`.

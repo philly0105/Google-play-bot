@@ -69,27 +69,10 @@ class FarmerController(
 @Composable fun FarmerWindowContent(controller: FarmerController)
 ```
 
-Main.kt builds it inside `application`, on the Swing thread, after `onServiceConnected()`:
-
-```kotlin
-application {
-    val controller = remember { FarmerController(services.filesDir, services.host.window) }
-    Window(
-        onCloseRequest = { controller.close(); service.onDestroy(); services.close(); exitApplication() },
-        title = "Clash Farmer PC",
-        icon = farmerIconPainter(),
-        state = rememberWindowState(size = DpSize(1100.dp, 760.dp))
-    ) {
-        FarmerWindowContent(controller)
-    }
-}
-```
-
-`FarmerWindowContent` calls `windowShown()` when it enters the composition and `windowHidden()`
-when it leaves. A window hidden to the tray without leaving the composition should call them
-itself. Tray menu items send through `externalAction`, for example
-`Item("Stop") { controller.externalAction("stop") }`. The controller calls `AppLog.init` again;
-the log replays its history only on the first call, so that is harmless.
+`Main.kt` builds it inside `application`, on the Swing thread, after `onServiceConnected()`, and
+draws the window only while it is open, so `FarmerWindowContent` calls `windowShown()` when the
+window opens and `windowHidden()` when it closes to the tray. The controller calls `AppLog.init`
+again; the log replays its history only on the first call, so that is harmless.
 
 The controller never sets `FarmerService.helperActivityVisible` and never touches the overlay's
 visibility. The overlay is its own window, and the PC bot works the game in the background.
@@ -122,22 +105,33 @@ The phone's `intent_action_rejected` ("replayed from recents") is gone: Windows 
 to replay an action from. The UI logs 16 event names, all of them ones `insight/EventText.kt`
 knows, as `EventTextTest.everyLoggedEventHasAPlainSentence` requires.
 
-## Stream B
+## Service members
 
-The UI needs one new FarmerService member, marked `// stream B:` in `FarmerController.kt`:
+The UI calls `FarmerService.launchClash()` for Setup's Open Clash of Clans. It starts Clash on the
+service's scope and returns at once, and sends nothing while a run is active or a Clash window
+exists, following the rule in `docs/gpg-spike.md` (Restarting). Calibration calls
+`captureNormalizedVillage(profile)`, whose helper-class parameter now defaults to null.
 
-- `fun launchClash()`. Opens Clash of Clans in Google Play Games through the sidecar's `launch` op
-  on the service's scope and returns at once. It should send nothing when a Clash window exists,
-  following the rule in `docs/gpg-spike.md` (Restarting).
-
-Optional: `captureNormalizedVillage(profile, returnToActivityClass: Class<*>)` could default
-`returnToActivityClass` to null, as `captureClashGame` does. Calibration passes
-`CalibrationModel::class.java`, which the PC ignores, so it compiles as it is.
-
-Everything else the UI calls exists on main: `instance`, `isBusy`, `inspecting`, `runGuard`,
+Everything else it calls is the phone's: `instance`, `isBusy`, `inspecting`, `runGuard`,
 `latestFrame`, `overlay`, `pendingStart`, `cancelPendingStart`, `scheduleStart`, `startPlan`,
 `startPlanCombined`, `startSwitchOnly`, `stop`, `captureClashGame`, `readDeviceHealth` and
 `remoteKey`.
+
+## Tray and status panel
+
+Main adds a tray icon when Windows has a notification area. Its tooltip is the run's title and
+phase, double-clicking it opens the window, and its menu holds Open Clash Farmer, Pause or Resume
+and Stop while a run is busy (`FarmerService.pauseFromNotification`, `resumeFromNotification` and
+`stopFromNotification`, the phone's ongoing notification buttons), Status panel, and Quit. Result
+notices from `RunNotifier` show as Windows notifications from the icon.
+
+Closing the window leaves the bot running behind the icon, as the phone's service outlived its
+screen, and says so in a notification the first time. Quit stops any run and ends the app. With
+no notification area, closing the window quits.
+
+`StatusPanel.kt` draws `FarmerOverlay.panel` as a window over the others in the bottom right
+corner of the main screen, while a run is busy or a start is set. It never takes focus and has no
+taskbar button.
 
 ## Changes from the phone
 
@@ -281,5 +275,4 @@ of main at b514d40):
 - Apply's fixed pixel boxes are the phone's 1600x720 sizes and do not scale with the surface: the
   card area about 67 px, a loot row 148x30, the countdown 100x34, the fee 88x30, a balance 194x36
   and a wall cost 100x30.
-- Not compiled or run. The likeliest compile errors are in Compose API details checked against
-  memory rather than the jars, listed in the hand-off report.
+- Compiled and unit tested, not yet seen running.
