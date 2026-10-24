@@ -92,8 +92,8 @@ still be a click, since a posted button-up can't be told apart from a real one.
 Arguments: `x`, `y`, `notches`, `intervalMs` (default 40). Negative notches zoom out, positive
 zoom in, around the point. Clash zooms about 10% per notch.
 
-The transport turns a phone pinch-out into 20 notches out (past the PC's limit) and then 12 in.
-See `docs/gpg-spike.md`.
+The game surface turns a phone pinch-out into 25 notches out around the pinch's centre, past the
+PC's zoom-out limit. See `docs/gpg-spike.md`.
 
 ### `key`
 
