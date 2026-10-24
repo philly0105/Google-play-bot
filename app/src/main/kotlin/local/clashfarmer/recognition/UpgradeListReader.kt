@@ -59,6 +59,10 @@ object UpgradeListReader {
     /**
      * Since Clash 18.647 a row is a card: the name, then its price about 22 px lower and flush
      * right. A line this close under a row that has no price yet is that row's second line.
+     *
+     * On the PC it is 32 px at 1740x978 scaled with the frame's height ([PcGeometry]): there a
+     * card's second line sits 22-29 px under its name (audit-evidence/spike/geo-list-*.json), which
+     * at 1860x1162 would be 27-34 px and split three of those cards. No list is captured at 16:10.
      */
     private const val CARD_LINE_GAP = 32
 
@@ -342,6 +346,7 @@ object UpgradeListReader {
         all: List<RecognizedBox>, popup: Region, viewport: Viewport, pixels: (Region) -> IntArray, panel: Boolean
     ): List<Row> {
         val iconColumn = PcGeometry.pick(viewport, ICON_COLUMN, PcGeometry.length(viewport, PC_ICON_COLUMN))
+        val cardLineGap = PcGeometry.pick(viewport, CARD_LINE_GAP, PcGeometry.length(viewport, CARD_LINE_GAP))
         val boxes = if (panel) all.filter { it.right >= popup.left + iconColumn } else all
         val split = popup.left + (popup.width * NAME_SPLIT).toInt()
         val clusters = mutableListOf<MutableList<RecognizedBox>>()
@@ -359,7 +364,7 @@ object UpgradeListReader {
                 // A section header is its own line, never a card's.
                 val header = line.any { compact(it.text).contains("upgrade") }
                 if (card != null && !priced && !header &&
-                    line.map { it.center.y }.average() - card.minOf { it.center.y } <= CARD_LINE_GAP
+                    line.map { it.center.y }.average() - card.minOf { it.center.y } <= cardLineGap
                 ) card += line else cards += line
             }
             return cards.mapNotNull { cluster -> rowOf(cluster, popup, split, viewport, pixels, panel) }

@@ -454,8 +454,8 @@ class PcGeometryTest {
 
     /**
      * Synthetic: the list frames moved onto both 16:10 frames as the model moves the panel still
-     * read as the list, with the close X and the swipe on the panel and the hand-made Wall cards
-     * whole. No list has been captured at 16:10.
+     * read as the list, every row named and priced as at 1740x978, with the close X and the swipe
+     * on the panel and the hand-made Wall cards whole. No list has been captured at 16:10.
      */
     @Test fun theListMovedByTheModelStillReadsAtBothSizes() {
         for ((viewport, panel) in listOf(wide to Region(1304, 75, 1860, 1037), resized to Region(1097, 63, 1565, 873))) {
@@ -465,6 +465,12 @@ class PcGeometryTest {
                 assertTrue("$name $viewport", upgradeListCardShowing(boxes, viewport))
                 assertEquals("$name $viewport", panel, upgradePopupRegion(viewport, boxes))
                 assertTrue("$name $viewport", UpgradeListReader.read(boxes, viewport, white).builderPanel)
+                // A card's second line, 22-29 px under its name at 1740x978, stays on its card.
+                assertEquals(
+                    "$name $viewport",
+                    UpgradeListReader.read(frame(name), pc, white).rows.map { it.name to it.priceText },
+                    UpgradeListReader.read(boxes, viewport, white).rows.map { it.name to it.priceText }
+                )
             }
             for (name in listOf("geo-list-top", "geo-list-scroll1")) {
                 assertInside("$name $viewport", named(keptRight(frame(name), viewport), "X"), upgradeListClosePoint(viewport))
