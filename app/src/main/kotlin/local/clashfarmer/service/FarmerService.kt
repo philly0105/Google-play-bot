@@ -75,6 +75,8 @@ class FarmerService(
         private const val HEALTH_REFRESH_MS = 30_000L
         /** Desktop: how long Home waits for the Clash window to go once it has been closed. */
         private const val CLOSE_WAIT_MS = 30_000L
+        /** Desktop: how long a start waits for a window lookup that worked before it decides to launch Clash. */
+        private const val WINDOW_LOOKUP_WAIT_MS = 10_000L
 
         /** Why a start is refused while Inspect or the tray check holds Clash on screen. */
         const val INSPECTING = "The app is reading the game screen for Inspect or the tray check; try again when it ends"
@@ -1759,7 +1761,10 @@ class FarmerService(
 
         // Desktop: the read decides, not clashLooksForeground, which also passes a read of
         // nothing. On the phone that was Clash drawing with no node tree; on the PC it is no
-        // Clash window at all.
+        // Clash window at all. Before the watcher's first lookup, and while the sidecar restarts,
+        // the read is nothing even with Clash open, and starting it again may bring it to the
+        // front, so the read waits for a lookup that worked.
+        withTimeoutOrNull(WINDOW_LOOKUP_WAIT_MS) { host.window.first { it.checked && it.error == null } }
         if (getActiveForegroundPackage() != CLASH_PACKAGE) {
             try {
                 host.launch()

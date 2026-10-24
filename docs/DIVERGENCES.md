@@ -35,10 +35,12 @@ These change no copied file, but the copied code runs on them, so they can chang
 - `android.os.SystemClock.elapsedRealtime()` and `uptimeMillis()` both read `System.nanoTime()`.
   There is no deep sleep on the PC to tell them apart.
 - `Context`, `PowerManager` and `AccessibilityService` shims exist only for the constants and the
-  one property that verbatim code names: `Context.POWER_SERVICE` and `PowerManager.isInteractive`
-  in `remote/RemoteServer.kt`, and `AccessibilityService.GLOBAL_ACTION_BACK` (fully qualified) in
-  `core/LocalRunner.kt`. With them, `RemoteServer.kt`, which PLAN.md lists as ported (class 3),
-  stays verbatim (class 2).
+  one property that copied code names: `Context.POWER_SERVICE` and `PowerManager.isInteractive`
+  in `remote/RemoteServer.kt` and in `FarmerService`'s start set for later,
+  `AccessibilityService.GLOBAL_ACTION_BACK` (fully qualified) in `core/LocalRunner.kt`, and
+  `GLOBAL_ACTION_HOME` in `FarmerService`'s takeover wait. `FarmerService` answers them through its
+  own `getSystemService` and `performGlobalAction`. With them, `RemoteServer.kt`, which PLAN.md
+  lists as ported (class 3), stays verbatim (class 2).
 - The ML Kit shim returns each OCR line as its own `TextBlock` with one `Line`; ML Kit groups
   lines into blocks. `Text.text` joins them with newlines, as ML Kit does.
 - `org.json` is json.org's `org.json:json:20240303`, the same artifact the phone's JVM tests used,
@@ -50,9 +52,7 @@ These change no copied file, but the copied code runs on them, so they can chang
 ## Class 3 ports
 
 The ported files keep the phone's class names, packages and public members, with the exceptions
-below. Bodies marked `TODO("stream B: ...")` say what the phone's body does; stream B ports them
-from the phone file at `eeaadba`. `TODO` throws `NotImplementedError`, an `Error`, so the
-`catch (e: Exception)` blocks in the copied code do not swallow it.
+below.
 
 - `log/AppLog.kt`: `init(filesDir: File)` takes the files directory where the phone took a
   Context, and the two `android.util.Log` calls print to `System.err` with the stack trace. The
@@ -102,9 +102,11 @@ from the phone file at `eeaadba`. `TODO` throws `NotImplementedError`, an `Error
     null and logs `device_health_failed` once per outage.
   - Starting Clash: `ensureClashForeground` calls `host.launch()` when the read is not Clash. The
     phone launched when `clashLooksForeground()` failed, but that passes a null read, which on the
-    PC means no window. A launch that throws stops the start. The wait for the read to name Clash
-    is gone, since the window read already does; `awaitClashRead` stays for `ClashReadTest`. The
-    blank-frame wait is the phone's.
+    PC means no window. Before deciding, it waits up to 10 s for a window lookup that worked: before
+    the watcher's first lookup, and while the sidecar restarts, the read is null even with Clash
+    open, and a second launch may bring Clash to the front. A launch that throws stops the start.
+    The wait for the read to name Clash is gone, since the window read already does;
+    `awaitClashRead` stays for `ClashReadTest`. The blank-frame wait is the phone's.
   - Home: `performGlobalAction(GLOBAL_ACTION_HOME)`, used only by the takeover wait, closes Clash
     (`host.close()`, WM_CLOSE) in `serviceScope` and waits up to 30 s for the window to go. It
     returns true at once, as Android did on dispatch, and `ensureClashForeground` waits for a

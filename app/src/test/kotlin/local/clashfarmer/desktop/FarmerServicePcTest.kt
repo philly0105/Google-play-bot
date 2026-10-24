@@ -176,6 +176,20 @@ class FarmerServicePcTest {
     }
 
     @Test
+    fun `a start waits for a lookup that worked before it launches Clash`() = runBlocking {
+        service.connectTransport()
+        host.window.value = WindowStatus()
+        scope.launch {
+            delay(300)
+            host.window.value = WindowStatus(checked = true, error = "Sidecar restarting")
+            delay(300)
+            host.window.value = openWindow()
+        }
+        service.ensureClashForeground(timeoutMs = 10_000)
+        assertEquals(0, host.launches)
+    }
+
+    @Test
     fun `a start after Home launches Clash once its window has gone`() = runBlocking {
         service.connectTransport()
         host.window.value = openWindow()
