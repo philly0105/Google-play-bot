@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -221,7 +222,7 @@ internal sealed class Server(Stream input, Stream output)
      * Sizes the top-level window so the game surface comes out [width] by [height]. Google Play
      * Games keeps the surface at the aspect it chose at launch, inside its own title bar and
      * sidebar, so the chrome is measured and kept, and a second pass corrects what the first
-     * missed.
+     * missed. A window the new size runs off its monitor is then moved back onto it.
      */
     private static (JsonObject, byte[]) Resize(JsonObject r)
     {
@@ -236,8 +237,31 @@ internal sealed class Server(Stream input, Stream output)
                 Win32.SWP_NOMOVE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
             Settle(window.Game);
         }
+        KeepOnMonitor(window.Top);
         Win32.GetClientRect(window.Game, out var now);
         return (new JsonObject { ["width"] = now.Width, ["height"] = now.Height }, []);
+    }
+
+    /**
+     * Moves [top], without activating it, back inside the work area of the monitor it is mostly
+     * on wherever its visible frame runs past an edge, and to the work area's top left when it is
+     * too big for it. It stays on that monitor: another one may have another DPI, which would
+     * change the surface's size in physical pixels.
+     */
+    private static void KeepOnMonitor(IntPtr top)
+    {
+        var info = new Win32.MONITORINFO { cbSize = Marshal.SizeOf<Win32.MONITORINFO>() };
+        if (Win32.IsIconic(top) || !Win32.GetMonitorInfo(Win32.MonitorFromWindow(top, 2), ref info)) return;
+        // The frame bounds leave out the invisible resize borders the window rect includes.
+        if (Win32.DwmGetWindowAttribute(top, Win32.DWMWA_EXTENDED_FRAME_BOUNDS, out var seen, Marshal.SizeOf<Win32.RECT>()) != 0) return;
+        var work = info.rcWork;
+        var dx = Math.Max(work.Left - seen.Left, Math.Min(0, work.Right - seen.Right));
+        var dy = Math.Max(work.Top - seen.Top, Math.Min(0, work.Bottom - seen.Bottom));
+        if (dx == 0 && dy == 0) return;
+        Win32.GetWindowRect(top, out var outer);
+        Win32.SetWindowPos(top, IntPtr.Zero, outer.Left + dx, outer.Top + dy, 0, 0,
+            Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        Log($"moved the Clash window by {dx},{dy} to keep it on its monitor");
     }
 
     /** Waits, up to 3 s, until the surface has kept one size for 300 ms: Google Play Games lays it out after the window. */

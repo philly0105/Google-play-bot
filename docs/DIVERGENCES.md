@@ -20,7 +20,7 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `ui/components/ResourceBar.kt` | New object holding only `FULL_AT = 0.98f`, from the companion of the `ResourceBar` View. | `HomeCards.storageFull` reads `ResourceBar.FULL_AT`. |
 | `ui/FarmerTheme.kt` | New object with the token lines 22-73 and `withAlpha` (lines 82-83). The View factories and the `dp`, `dpf` and `spf` extensions are left out. | Verbatim `Tone` and `AccountColor` read the tokens, and `AccountColorTest` reads `acctA` and `acctB`. |
 | `ui/AccountEditor.kt` | New object with only `saveEnabled`, from the companion of the `AccountEditor` sheet. | `AccountEditorTest` calls `AccountEditor.saveEnabled`; the sheet is a View. |
-| `insight/EventText.kt` | Added sentences for `surface_resized`, `surface_aspect_differs` and `surface_resize_failed`, after `gesture_held`. | `FarmerService.fitSurface` logs them when it sizes the game window back to its calibration, and `EventTextTest` requires a sentence for every logged event. |
+| `insight/EventText.kt` | Added sentences for `surface_resized`, `surface_aspect_differs` and `surface_resize_failed`, after `gesture_held`. | `FarmerService.fitSurface` logs them when it sizes the game window to its calibration or to the preferred size, and `EventTextTest` requires a sentence for every logged event. |
 | `app/src/test/kotlin/local/clashfarmer/insight/EventTextTest.kt` (a test) | Line 22: `File("src/main/java")` is now `File("src/main/kotlin")`. No assertion changed. | The test reads every logged event name from the main source root, which this repo keeps in `src/main/kotlin`. See `docs/TESTS.md`. |
 | `core/PcGeometry.kt` (new, PC only) | `isPc(viewport)` is true for a landscape aspect from 1.3:1 up to, not including, 2:1; `pick(viewport, phone, pc)` returns the PC value then and the phone's otherwise. `length`, `x`, `y`, `point`, `region` and `xFraction` place a PC value, given in pixels of 1740x978 with the edge it keeps to (`Anchor.LEFT`, `CENTRE` or `RIGHT`), on a frame of any size: its distance from that edge and its height from the top scale with the frame's height over 978. | Google Play Games draws the game at the aspect of the monitor it launched on and keeps it through a resize: 1740x978 (16:9), and after a relaunch 1860x1162, resized to 1565x978 (16:10). The rows below keep every phone value and add a PC one beside it, chosen through this object. The phone's tests use 1600x720, 2400x1080, 800x360, 1550x720, 1500x620 and 1700x720, all 2.15:1 or wider, and 720x1600, so they keep the phone values; RunGuardTest's 1920x1080 counts as the PC's, and that test only compares sizes. `docs/PC-GEOMETRY.md` lists each value with its anchor and its evidence. |
 | `core/Policy.kt` | `QUIT_BODY` takes "che" for "the"; `QUIT_TITLE` lets the t of "Exit" go missing; two last `STATE_RULES` entries read " baftle " and " batfle " with " build " as HOME. | PaddleOCR read the PC's quit prompt as "Do you want Go quit Che game?" and "CONfiRM Exi+", and the village's Battle as "Baftle" (`audit-evidence/spike/geo-after-deselect.json`) and, on six village frames at 1860x1162, "Batfle" (`audit-evidence/live/20261024-030816-profile/00-home.json` among them). These are spellings, not positions, so they apply at every aspect; each only widens a match the phone already makes. |
@@ -114,12 +114,18 @@ below.
     surface back to the profile's when the aspects agree within 1%. Google Play Games keeps the
     aspect it chose at launch, so a surface of another aspect is left for the guard to refuse. It
     waits up to 2 s for the window watcher to see the new size. A resize kept taps landing in the
-    spike, where a relaunch did not (`docs/gpg-spike.md`, Restarting).
+    spike, where a relaunch did not (`docs/gpg-spike.md`, Restarting). Where no calibration sets
+    the size, the bot works at `preferredSurface`: 1740x978, the size every PC measurement was
+    taken at, when the surface has that aspect, else the surface's own size. `captureClashGame`
+    (Calibrate's capture, Inspect and the tray check) sizes the surface to it first, and
+    Calibrate's starting profile uses it, so a calibration is taken at the size runs are fitted
+    to. The sidecar's resize then moves a window that runs off its monitor's work area back
+    onto it, on the same monitor, without activating it.
   - Accounts: the PC runs only Blood, the user's call on 24 October. `startCombinedRun`,
     `startSwitchOnly` and `startGuardedAccountSession` refuse any other account before they start,
     so the account check never switches accounts in Clash; the switcher refuses as well, before
     the switch arrows (`accounts/AccountSwitcher.kt` above). `startSwitchOnly` checks an account
-    with no calibration at the surface's own size, where the phone defaulted to 1600x720, the one
+    with no calibration at `preferredSurface`, where the phone defaulted to 1600x720, the one
     display its switcher supported.
   - Battery: `readDeviceHealth` returns the reading a loop started by `onServiceConnected` takes
     from `host.power()` every 30 s in `serviceScope`. The phone read a sticky broadcast on the

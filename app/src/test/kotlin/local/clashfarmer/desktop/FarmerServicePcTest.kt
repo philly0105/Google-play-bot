@@ -221,6 +221,30 @@ class FarmerServicePcTest {
     }
 
     @Test
+    fun `the preferred size is 1740x978 at its aspect and the surface's own at another`() {
+        assertEquals(SurfaceSize(1740, 978), FarmerService.preferredSurface(SurfaceSize(1920, 1080)))
+        assertEquals(SurfaceSize(1740, 978), FarmerService.preferredSurface(SurfaceSize(1280, 720)))
+        assertEquals(SurfaceSize(1860, 1162), FarmerService.preferredSurface(SurfaceSize(1860, 1162)))
+    }
+
+    @Test
+    fun `a capture sizes the surface to the preferred size first`() = runBlocking {
+        service.connectTransport()
+        host.window.value = openWindow(1280, 720)
+        service.captureClashGame().bitmap.recycle()
+        assertEquals(listOf(SurfaceSize(1740, 978)), host.resizes)
+        assertEquals(Viewport(0, 0, 1740, 978), service.currentDisplayViewport())
+    }
+
+    @Test
+    fun `a capture leaves a surface of another aspect at its own size`() = runBlocking {
+        service.connectTransport()
+        host.window.value = openWindow(1860, 1162)
+        service.captureClashGame().bitmap.recycle()
+        assertEquals(emptyList<SurfaceSize>(), host.resizes)
+    }
+
+    @Test
     fun `a start on any account but Blood is refused`() {
         service.connectTransport()
         val accounts = AccountStore(filesDir).ensureMigrated()

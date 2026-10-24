@@ -428,7 +428,7 @@ object EventText {
         // Desktop: the game window, put back to the size the run was calibrated at.
         "surface_resized" -> "Resized the game window${str(e, "from")?.let { " from $it" } ?: ""} to ${str(e, "to") ?: "its calibrated size"}" to Tone.NEUTRAL
         "surface_aspect_differs" -> "The game window is not the shape it was calibrated at${str(e, "profile")?.let { " ($it)" } ?: ""}, so it was left as it is" to Tone.WARN
-        "surface_resize_failed" -> "The game window could not be resized to its calibration" to Tone.WARN
+        "surface_resize_failed" -> "The game window could not be resized" to Tone.WARN
 
         // Readings.
         "storage_read" -> "Storage read: ${storageText(e)}" to Tone.NEUTRAL

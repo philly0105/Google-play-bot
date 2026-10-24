@@ -21,6 +21,7 @@ import local.clashfarmer.core.AppSwitchLatch
 import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.core.LocalRunner
 import local.clashfarmer.core.MaintenanceWait
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.PopupGuard
 import local.clashfarmer.core.ReturnHome
 import local.clashfarmer.core.RunGuard
@@ -31,6 +32,7 @@ import local.clashfarmer.desktop.platform.ClashHost
 import local.clashfarmer.desktop.platform.ClasspathAssets
 import local.clashfarmer.desktop.platform.GameSurface
 import local.clashfarmer.desktop.sidecar.SidecarException
+import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.log.FailureSnapshot
 import local.clashfarmer.recognition.ImageMatcher
@@ -91,6 +93,18 @@ class FarmerService(
             private set
 
         fun isConnected(): Boolean = instance != null
+
+        /**
+         * Desktop: the size the bot works at without a calibration to hold it to, for a game
+         * surface now [surface]: [PcGeometry]'s 1740x978, where every PC measurement was taken,
+         * when the surface has its aspect, else the surface's own size, since Google Play Games
+         * keeps the aspect it chose at launch.
+         */
+        fun preferredSurface(surface: SurfaceSize): SurfaceSize =
+            if (sameAspect(surface, PcGeometry.WIDTH, PcGeometry.HEIGHT)) SurfaceSize(PcGeometry.WIDTH, PcGeometry.HEIGHT) else surface
+
+        private fun sameAspect(surface: SurfaceSize, width: Int, height: Int): Boolean =
+            kotlin.math.abs(surface.width.toDouble() / surface.height * height / width - 1) <= SAME_ASPECT_TOLERANCE
 
         /**
          * One per process, not per service. After an install the system can connect a fresh
@@ -873,10 +887,10 @@ class FarmerService(
                 // A hold under the shade moves the check's own deadlines on; this one allows its cap.
                 kotlinx.coroutines.withTimeout(ACCOUNT_CHECK_MS + AppSwitchLatch.HOLD_CAP_MS) {
                     ensureClashForeground()
-                    // Desktop: an account not yet calibrated is checked at the surface's own size,
+                    // Desktop: an account not yet calibrated is checked at the preferred size,
                     // where the phone's default was the one display its switcher supports.
                     val profile = saved
-                        ?: currentDisplayViewport()?.let { PhoneProfile.createDefault(it.width, it.height) }
+                        ?: host.window.value.surface?.let { preferredSurface(it) }?.let { PhoneProfile.createDefault(it.width, it.height) }
                         ?: PhoneProfile.createDefault(1600, 720)
                     fitSurface(profile)
                     kotlin.coroutines.coroutineContext.ensureActive()
@@ -1853,12 +1867,14 @@ class FarmerService(
     }
 
     /**
-     * Desktop: one frame of Clash. The PC has no status bar or rotation to wait out before it, so
-     * the phone's wait for Clash to fill the display is gone, and no helper screen to reopen after
-     * it, so [returnToActivityClass] is not used.
+     * Desktop: one frame of Clash, at the [preferredSurface] size, so Calibrate, Inspect and the
+     * tray check see the size runs are calibrated at. The PC has no status bar or rotation to
+     * wait out before it, so the phone's wait for Clash to fill the display is gone, and no
+     * helper screen to reopen after it, so [returnToActivityClass] is not used.
      */
     suspend fun captureClashGame(returnToActivityClass: Class<*>? = null): CapturedImage {
         ensureClashForeground()
+        host.window.value.surface?.let { preferredSurface(it) }?.let { fitSurface(it.width, it.height) }
         return transport.capture()
     }
 
@@ -1949,14 +1965,13 @@ class FarmerService(
      * left for the guard to refuse. A resize kept taps landing in the spike, where a relaunch did
      * not (docs/gpg-spike.md, Restarting).
      */
-    internal suspend fun fitSurface(profile: PhoneProfile) {
+    internal suspend fun fitSurface(profile: PhoneProfile) = fitSurface(profile.resolutionWidth, profile.resolutionHeight)
+
+    private suspend fun fitSurface(width: Int, height: Int) {
         val surface = host.window.value.surface ?: return
-        val width = profile.resolutionWidth
-        val height = profile.resolutionHeight
         if (surface.width == width && surface.height == height) return
         val from = "${surface.width}x${surface.height}"
-        val stray = surface.width.toDouble() / surface.height * height / width - 1
-        if (kotlin.math.abs(stray) > SAME_ASPECT_TOLERANCE) {
+        if (!sameAspect(surface, width, height)) {
             AppLog.log("surface_aspect_differs", "surface" to from, "profile" to "${width}x$height")
             return
         }

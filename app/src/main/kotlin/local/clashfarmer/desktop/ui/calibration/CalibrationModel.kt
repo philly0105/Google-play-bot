@@ -45,12 +45,12 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
 
     /**
      * The profile being edited. Until the saved one is read, and for an account without one, it is
-     * the default at the game surface's live size when the window watcher has measured it (the
-     * surface may be 16:9 or 16:10, such as 1860x1162), else at the phone's 1600x720. A capture
-     * sets the frame's own size either way.
+     * the default at the preferred size ([FarmerService.preferredSurface]) when the window watcher
+     * has measured the surface (a 16:10 one, such as 1860x1162, keeps its own size), else at the
+     * phone's 1600x720. A capture sets the frame's own size either way.
      */
     var profile: PhoneProfile by mutableStateOf(
-        host.windowStatus.value.surface?.let { PhoneProfile.createDefault(it.width, it.height) }
+        host.windowStatus.value.surface?.let { FarmerService.preferredSurface(it) }?.let { PhoneProfile.createDefault(it.width, it.height) }
             ?: PhoneProfile.createDefault()
     )
         private set
