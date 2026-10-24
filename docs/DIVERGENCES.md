@@ -72,40 +72,69 @@ from the phone file at `eeaadba`. `TODO` throws `NotImplementedError`, an `Error
     and a retryable flag in place of Android's error code; the phone retried "interval too short"
     and "internal error".
   - The 1.1 s floor between screenshots, Android 11's limit, is kept. The PC may not need it.
-- `service/FarmerService.kt`: a plain class, `FarmerService(filesDir: File)`.
-  - Line for line from the phone: the companion's public constants, `instance` and `isConnected`;
-    the fields; the shade hold and app-switch latch (`latchAction`, `gateAction`,
-    `holdForSystemWindow`, `watchHold`, `holdIfShadeOver`, `releaseSystemWindowHold`,
-    `releaseHoldIfClashBack`); `awaitClearToAct`, `heldMs`, `awaitResume`, `waitWhilePaused`;
-    `stopBetweenRuns`, `stop`; `saveFailureSnapshot`; `backIfClear`, `shopStillUp`,
-    `cancelQuitPrompt`; `clashLooksForeground`, `getActiveForegroundPackage`; the thin start
-    methods (`startFarmingAccount`, `startTimedFarmingAccount`, `startAttacksOnlyAccount`,
-    `startEventAccount`, `startSupervisedAccount`, `startWallPhaseAccount`, `startPlan`,
-    `startPlanCombined`) and `startWallPhase`; the top-level `awaitClashRead`.
-  - `TODO` bodies with the phone's signatures: `onServiceConnected`, `onDestroy`, `scheduleStart`,
-    `cancelPendingStart`, `dropPendingStart`, `readDeviceHealth`, `startCombinedRun`,
-    `startSwitchOnly`, `startGuardedAccountSession`, `startFarming`, `ensureClashForeground`,
-    `captureClashGame`, `captureNormalizedVillage`, `readForeground`, `windowSummary`,
-    `currentDisplayViewport`, `isDeviceUnlocked`.
-  - Left out: `onAccessibilityEvent`, `onInterrupt`, `announcedForegroundPackage`, the screen-off
-    and notification receivers, the companion's private `RESUME_AFTER_MS`, `PENDING_SLICE_MS`,
-    `IMMERSIVE_WAIT_MS`, `CLASH_READ_WAIT_MS` and `remoteServer`, and the private members only the
-    `TODO` bodies use: `pendingJob`, `pendingLock`, `pendingStore`, `notificationResume`,
-    `claimPause`, `firePendingStart`, `replaced`, `refusePendingStart`, `refuseWhilePending`,
-    `clockTime`, `pauseFromNotification`, `resumeFromNotification`, `beginRunSnapshots`,
-    `runSingleAccountSession`, `verifiedAccountId`, `farmRestarting`, `withAccountContext`,
-    `waitForTakenVillage`, `recoverToVillage`, `waitOutMaintenance`, `recordAccountResult`,
-    `awaitImmersiveClash`, `clashCoversDisplay`.
+- `service/FarmerService.kt`: a plain class, `FarmerService(filesDir: File, host: ClashHost,
+  surface: GameSurface)`. `host` (`desktop/platform/ClashHost.kt`) takes the place of Android's
+  system services: the Clash window as `ClashWindowWatcher` last saw it, starting and closing
+  Clash, the battery, and keeping the PC awake. `surface` goes to `AndroidTransport`.
+  `onServiceConnected` and `onDestroy` are plain methods for the app to call. `onServiceConnected`
+  builds the transport through the internal `connectTransport`, which tests call alone, and
+  passes `filesDir` to `AppLog.init`, `RunNotifier()` and `FarmerOverlay` without a Context.
+  - The rest is the phone file line for line, including pending starts, the combined,
+    switch-only and single-account sessions, restarts, the takeover wait, recovery to the
+    village, maintenance waits, run snapshots and result recording. The departures follow.
+  - Foreground: `readForeground` gives `CLASH_PACKAGE` (source "window") while the Clash window
+    exists, minimized or behind other windows, and null ("no window") without one. The capture
+    restores a minimized window without focus and input goes to the window directly, so the
+    window need not be in front. `helperActivityVisible` stays false, and `windowSummary`
+    describes the Clash window alone. With no shade to read, the app-switch latch never holds; a
+    window that vanishes mid-run fails the next capture's `checkCanAct`, which a restartable run
+    recovers from.
+  - Display and lock: `currentDisplayViewport` is the game surface's size, kept while the window
+    is minimized and null with no window. `isDeviceUnlocked` is always true, and
+    `getSystemService(Context.POWER_SERVICE)` gives a PowerManager whose `isInteractive` is always
+    true. A locked or sleeping PC is left to the captures: one that fails stops or recovers the
+    run. Whether capture fails on a locked PC, rather than returning black frames, is untested.
+  - Battery: `readDeviceHealth` returns the reading a loop started by `onServiceConnected` takes
+    from `host.power()` every 30 s in `serviceScope`. The phone read a sticky broadcast on the
+    spot; here each reading is a sidecar round trip, and `LocalRunner` and `RemoteServer` call
+    this from threads that must not wait on it. Level is `batteryPercent` (null for Windows' -1),
+    charging is `ac`, and `tempC` is null, so the heat guard never trips. A failed read leaves
+    null and logs `device_health_failed` once per outage.
+  - Starting Clash: `ensureClashForeground` calls `host.launch()` when the read is not Clash. The
+    phone launched when `clashLooksForeground()` failed, but that passes a null read, which on the
+    PC means no window. A launch that throws stops the start. The wait for the read to name Clash
+    is gone, since the window read already does; `awaitClashRead` stays for `ClashReadTest`. The
+    blank-frame wait is the phone's.
+  - Home: `performGlobalAction(GLOBAL_ACTION_HOME)`, used only by the takeover wait, closes Clash
+    (`host.close()`, WM_CLOSE) in `serviceScope` and waits up to 30 s for the window to go. It
+    returns true at once, as Android did on dispatch, and `ensureClashForeground` waits for a
+    close still in progress, so a restart is close, window gone, launch. Back is
+    `transport.back()`.
+  - Keeping awake: the phone held no wake lock and set no keep-screen-on flag, but a PC left alone
+    sleeps. Each run job (`startCombinedRun`, `startSwitchOnly`, `startGuardedAccountSession`, the
+    legacy `startFarming`) calls `host.keepAwake(true)` as it starts, and `keepAwake(false)` goes
+    out when the last one ends, on a scope `onDestroy` does not cancel. A start set for later and
+    Inspect do not hold the PC awake.
+  - Leaving the app: `captureClashGame` and `captureNormalizedVillage` keep
+    `returnToActivityClass` and ignore it, with no helper screen to reopen. `captureClashGame` no
+    longer waits for Clash to fill the display: the PC has no status bar or rotation to wait out.
+  - The notification's buttons: `pauseFromNotification` and `resumeFromNotification` are public,
+    and the new `stopFromNotification` stops with the reason the control receiver gave, all for
+    the tray. Resume calls `host.launch()` only when there is no Clash window, since Google Play
+    Games may bring the window it starts to the front, and does so inside its job before the
+    wait, since the call suspends.
+  - Left out: `onAccessibilityEvent`, `announcedForegroundPackage`, `onInterrupt`, the screen-off
+    receiver (Windows has no matching broadcast; a sleeping PC fails the next capture instead),
+    the notification control receiver, `awaitImmersiveClash`, `clashCoversDisplay`,
+    `IMMERSIVE_WAIT_MS` and `CLASH_READ_WAIT_MS`.
   - Added for the copied callers, in place of Android members: `packageName`
     (`"local.clashfarmer"`, the phone's application id, which `AppSwitchLatch` takes as the
     helper's own package); `assets` (`desktop/platform/ClasspathAssets`, which opens
-    `app/src/main/resources`, for `AccountSwitcher`'s identity images); `getSystemService(name)`
-    (`TODO`; `RemoteServer` asks it for the PowerManager); `performGlobalAction(action)` (Back goes
-    to `transport.back()`; Home is a `TODO`, used only by the takeover wait).
-  - Until stream B lands: nothing sets `instance` or `transport`; `stop()` with nothing running
-    reaches the `dropPendingStart` `TODO`; `awaitClearToAct`, `backIfClear` and
-    `clashLooksForeground` reach the `readForeground` or `isDeviceUnlocked` `TODO`, so no run can
-    act.
+    `app/src/main/resources`, for `AccountSwitcher`'s identity images and `remote.html`);
+    `getSystemService(name)` and `performGlobalAction(action)`, above.
+  - `RunNotifier` and `FarmerOverlay` are still the stubs below, and every call to them is kept.
+    Failures only the PC has (closing Clash, keeping awake, the Resume launch) print to
+    `System.err`, since `insight/EventText.kt` describes no event for them.
 - `service/RunNotifier.kt` and `service/RunNotice.kt`: `RunNotice` and `LiveStatus` moved verbatim
   (phone lines 26-200, with the imports they use) into `RunNotice.kt`. `RunNotifier` is a
   no-argument stub: the companion's public constants and `withdraws` are the phone's, `post`,
