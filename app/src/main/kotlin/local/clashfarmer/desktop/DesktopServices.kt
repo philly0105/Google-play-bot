@@ -61,6 +61,9 @@ class DesktopServices(val filesDir: File, sidecarExe: File) : AutoCloseable {
 internal class DesktopLog(private val file: File, private val maxBytes: Long = 5_000_000) {
     private val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
 
+    /** Standard error as it was before the app sent its own here, so a failure can't loop back in. */
+    private val fallback = System.err
+
     @Synchronized
     fun write(line: String) {
         try {
@@ -70,7 +73,7 @@ internal class DesktopLog(private val file: File, private val maxBytes: Long = 5
             }
             file.appendText("${format.format(Date())} $line\n")
         } catch (e: Exception) {
-            System.err.println("ClashFarmer: can't write ${file.path}: ${e.message}")
+            fallback.println("ClashFarmer: can't write ${file.path}: ${e.message}")
         }
     }
 }
