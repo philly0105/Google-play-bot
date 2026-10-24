@@ -1,0 +1,320 @@
+{
+  "resolutionWidth": 1600,
+  "resolutionHeight": 720,
+  "viewport": {
+    "left": 0,
+    "top": 0,
+    "right": 1600,
+    "bottom": 720
+  },
+  "stateAnchors": {
+    "attack": {
+      "x": 134,
+      "y": 637
+    },
+    "find_match": {
+      "x": 270,
+      "y": 533
+    },
+    "army": {
+      "x": 1307,
+      "y": 647
+    },
+    "return_home": {
+      "x": 800,
+      "y": 624
+    },
+    "village_neutral": {
+      "x": 150,
+      "y": 480
+    }
+  },
+  "troopAnchors": {
+    "valkyries": {
+      "x": 302,
+      "y": 650
+    },
+    "king": {
+      "x": 409,
+      "y": 650
+    },
+    "queen": {
+      "x": 506,
+      "y": 650
+    },
+    "warden": {
+      "x": 603,
+      "y": 650
+    },
+    "champion": {
+      "x": 700,
+      "y": 650
+    },
+    "rages": {
+      "x": 808,
+      "y": 650
+    },
+    "jumps": {
+      "x": 905,
+      "y": 650
+    }
+  },
+  "troopRois": {
+    "valkyries": {
+      "left": 269,
+      "top": 600,
+      "right": 335,
+      "bottom": 702
+    },
+    "king": {
+      "left": 376,
+      "top": 600,
+      "right": 443,
+      "bottom": 702
+    },
+    "queen": {
+      "left": 473,
+      "top": 600,
+      "right": 540,
+      "bottom": 702
+    },
+    "warden": {
+      "left": 570,
+      "top": 600,
+      "right": 637,
+      "bottom": 702
+    },
+    "champion": {
+      "left": 667,
+      "top": 600,
+      "right": 733,
+      "bottom": 702
+    },
+    "rages": {
+      "left": 775,
+      "top": 600,
+      "right": 842,
+      "bottom": 702
+    },
+    "jumps": {
+      "left": 872,
+      "top": 600,
+      "right": 938,
+      "bottom": 702
+    }
+  },
+  "perimeterSegments": [
+    {
+      "start": {
+        "x": 195,
+        "y": 215
+      },
+      "end": {
+        "x": 160,
+        "y": 280
+      }
+    },
+    {
+      "start": {
+        "x": 150,
+        "y": 310
+      },
+      "end": {
+        "x": 215,
+        "y": 425
+      }
+    },
+    {
+      "start": {
+        "x": 1345,
+        "y": 155
+      },
+      "end": {
+        "x": 1420,
+        "y": 235
+      }
+    },
+    {
+      "start": {
+        "x": 1430,
+        "y": 290
+      },
+      "end": {
+        "x": 1340,
+        "y": 440
+      }
+    }
+  ],
+  "heroDrop": {
+    "x": 185,
+    "y": 250
+  },
+  "deploymentPoints": [],
+  "wallPoints": [
+    {
+      "x": 295,
+      "y": 143
+    },
+    {
+      "x": 331,
+      "y": 143
+    },
+    {
+      "x": 370,
+      "y": 143
+    },
+    {
+      "x": 408,
+      "y": 143
+    },
+    {
+      "x": 451,
+      "y": 143
+    },
+    {
+      "x": 292,
+      "y": 172
+    },
+    {
+      "x": 331,
+      "y": 172
+    },
+    {
+      "x": 373,
+      "y": 172
+    },
+    {
+      "x": 412,
+      "y": 172
+    },
+    {
+      "x": 250,
+      "y": 174
+    },
+    {
+      "x": 254,
+      "y": 202
+    },
+    {
+      "x": 292,
+      "y": 202
+    },
+    {
+      "x": 330,
+      "y": 202
+    },
+    {
+      "x": 211,
+      "y": 203
+    },
+    {
+      "x": 174,
+      "y": 231
+    },
+    {
+      "x": 215,
+      "y": 231
+    },
+    {
+      "x": 253,
+      "y": 231
+    },
+    {
+      "x": 295,
+      "y": 231
+    },
+    {
+      "x": 256,
+      "y": 260
+    },
+    {
+      "x": 176,
+      "y": 261
+    },
+    {
+      "x": 215,
+      "y": 261
+    },
+    {
+      "x": 176,
+      "y": 290
+    },
+    {
+      "x": 772,
+      "y": 294
+    },
+    {
+      "x": 172,
+      "y": 320
+    }
+  ],
+  "isVerified": false,
+  "wallConfig": {
+    "currencies": {
+      "gold": {
+        "costRoi": {
+          "left": 885,
+          "top": 504,
+          "right": 980,
+          "bottom": 532
+        },
+        "buttonPoint": {
+          "x": 938,
+          "y": 559
+        },
+        "confirmationButton": {
+          "x": 937,
+          "y": 461
+        }
+      },
+      "elixir": {
+        "costRoi": {
+          "left": 1028,
+          "top": 504,
+          "right": 1122,
+          "bottom": 532
+        },
+        "buttonPoint": {
+          "x": 1079,
+          "y": 559
+        },
+        "confirmationButton": {
+          "x": 937,
+          "y": 461
+        }
+      }
+    },
+    "bulkButton": {
+      "x": 798,
+      "y": 559
+    },
+    "removeButton": {
+      "x": 516,
+      "y": 559
+    },
+    "titleRoi": {
+      "left": 570,
+      "top": 458,
+      "right": 1030,
+      "bottom": 500
+    },
+    "bulkConfirmationButton": {
+      "x": 937,
+      "y": 461
+    },
+    "resourceRois": {
+      "gold": {
+        "left": 1283,
+        "top": 22,
+        "right": 1477,
+        "bottom": 58
+      },
+      "elixir": {
+        "left": 1283,
+        "top": 92,
+        "right": 1480,
+        "bottom": 126
+      }
+    }
+  }
+}
