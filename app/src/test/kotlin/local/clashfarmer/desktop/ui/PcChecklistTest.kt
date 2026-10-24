@@ -50,6 +50,17 @@ class PcChecklistTest {
     }
 
     @Test
+    fun `a window closed by hand is red, with no fix that would start Clash again`() {
+        val status = WindowStatus(checked = true, window = window().copy(visible = false), surface = SurfaceSize(1600, 900))
+        val line = PcChecklist.gameWindow(status)
+        assertEquals(Tone.BAD, line.tone)
+        assertEquals("Closed", line.chip)
+        assertTrue(line.detail.endsWith("Restart the PC, then open Clash of Clans."))
+        assertTrue(line.counts)
+        assertNull(line.fix)
+    }
+
+    @Test
     fun `a minimized window is fine and gives its last size`() {
         val status = WindowStatus(checked = true, window = window(0, 0, iconic = true), surface = SurfaceSize(1600, 900))
         val line = PcChecklist.gameWindow(status)

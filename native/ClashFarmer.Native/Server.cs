@@ -138,6 +138,8 @@ internal sealed class Server(Stream input, Stream output)
             ["game"] = window.Game.ToInt64(),
             ["title"] = window.Title,
             ["iconic"] = Win32.IsIconic(window.Top),
+            // Closing the window by hand hides it and leaves the game running.
+            ["visible"] = Win32.IsWindowVisible(window.Top),
             ["width"] = game.Width,
             ["height"] = game.Height,
             ["foreground"] = Win32.GetForegroundWindow() == window.Top,
@@ -148,6 +150,9 @@ internal sealed class Server(Stream input, Stream output)
     private (JsonObject, byte[]) Capture(JsonObject r)
     {
         var window = Require();
+        // A window closed by hand sends no frames, and showing it again is not a restart
+        // (docs/gpg-spike.md, Restarting).
+        if (!Win32.IsWindowVisible(window.Top)) throw new SidecarException("closed", "The Clash window was closed");
         long newerThan = 0;
         if (Win32.IsIconic(window.Top))
         {

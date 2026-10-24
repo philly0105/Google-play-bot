@@ -46,7 +46,9 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
             width = json.getInt("width"),
             height = json.getInt("height"),
             foreground = json.getBoolean("foreground"),
-            monitorDpi = json.getInt("monitorDpi")
+            monitorDpi = json.getInt("monitorDpi"),
+            // A sidecar from before the field answers without it.
+            visible = json.optBoolean("visible", true)
         )
     }
 
@@ -182,7 +184,11 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
 
 data class Hello(val version: String, val pid: Int, val ocrReady: Boolean)
 
-/** [top] and [game] are window handles; [width] and [height] are the game surface's physical pixels. */
+/**
+ * [top] and [game] are window handles; [width] and [height] are the game surface's physical pixels.
+ * [visible] is false once the window was closed by hand: Google Play Games hides it and keeps the
+ * game running, and starting Clash then is the relaunch that broke input (docs/gpg-spike.md).
+ */
 data class ClashWindow(
     val top: Long,
     val game: Long,
@@ -191,7 +197,8 @@ data class ClashWindow(
     val width: Int,
     val height: Int,
     val foreground: Boolean,
-    val monitorDpi: Int
+    val monitorDpi: Int,
+    val visible: Boolean = true
 )
 
 /** [pixels] are ARGB, top row first, the layout Android's Bitmap keeps. [timestampMs] is Unix ms. */

@@ -119,7 +119,9 @@ below.
     PC means no window. Before deciding, it waits up to 10 s for a window lookup that worked: before
     the watcher's first lookup, and while the sidecar restarts, the read is null even with Clash
     open, and a second launch may bring Clash to the front. A launch that throws stops the start.
-    The wait for the read to name Clash is gone, since the window read already does;
+    A window closed by hand (the sidecar's `visible` false) stops the start with `CLASH_CLOSED`
+    and launches nothing: the game runs on hidden, and a launch then is the relaunch that broke
+    input. The wait for the read to name Clash is gone, since the window read already does;
     `awaitClashRead` stays for `ClashReadTest`. The blank-frame wait is the phone's.
   - Home: `performGlobalAction(GLOBAL_ACTION_HOME)`, used only by the takeover wait, does nothing
     and returns true, as Android did on dispatch. The phone put Clash in the background without

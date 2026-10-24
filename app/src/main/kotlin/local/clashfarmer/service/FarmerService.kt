@@ -79,6 +79,9 @@ class FarmerService(
         private const val SAME_ASPECT_TOLERANCE = 0.01
         /** Desktop: how long a resize waits for the window watcher, which looks every 500 ms, to see it. */
         private const val RESIZE_SEEN_MS = 2_000L
+        /** Desktop: why a start stops when the Clash window was closed by hand. */
+        const val CLASH_CLOSED = "The Clash window was closed, and Google Play Games keeps the game running hidden. " +
+            "Opening it again stops the bot's taps from reaching the game, so restart the PC, then start again."
 
         /** Why a start is refused while Inspect or the tray check holds Clash on screen. */
         const val INSPECTING = "The app is reading the game screen for Inspect or the tray check; try again when it ends"
@@ -1809,6 +1812,9 @@ class FarmerService(
         // the read is nothing even with Clash open, and starting it again may bring it to the
         // front, so the read waits for a lookup that worked.
         withTimeoutOrNull(WINDOW_LOOKUP_WAIT_MS) { host.window.first { it.checked && it.error == null } }
+        // Desktop: a window closed by hand is hidden with the game still running. It sends no
+        // frames, and starting Clash now is the relaunch that broke input (docs/gpg-spike.md).
+        if (host.window.value.window?.visible == false) throw StopException(CLASH_CLOSED)
         if (getActiveForegroundPackage() != CLASH_PACKAGE) {
             try {
                 host.launch()

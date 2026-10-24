@@ -180,7 +180,9 @@ Setup:
   accessibility and notification lines; battery, remote and the per-account lines are kept.
 - Game window reads the window watcher. Before the first lookup it is not read and not counted.
   A failed lookup is red with the reason. No window is amber, "Not open", with the fix "Open
-  Clash of Clans", which sends `launch_clash`. A minimized window is fine. A found window gives
+  Clash of Clans", which sends `launch_clash`. A window closed by hand is red, "Closed", with no
+  fix: Google Play Games keeps the game running hidden, and opening it again is the relaunch that
+  broke input, so the line says to restart the PC. A minimized window is fine. A found window gives
   the game area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI
   assumes 16:9.
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
@@ -271,11 +273,10 @@ of main at b514d40):
 
 ## Open points
 
-- The Game window fix and the hand-closed window. `GameWindow.Find()` in the sidecar does not
-  check visibility, so a Clash window closed by hand (hidden, with crosvm still running) should
-  still read as found, and the line shows "Open" for a window nobody can see. The fix is not
-  offered then, which avoids the relaunch that broke input, but the line is wrong. A `visible`
-  flag from `find` would let it say the window is closed and how to start clean.
+- A window closed by hand reads as "Closed" from the sidecar's `visible` flag, following the
+  spike's finding that closing hides the window. That has not been seen live, since closing it
+  breaks input until the PC restarts. Whether quitting Google Play Games from its tray icon also
+  gives a clean start is untested, so the line names only the restart.
 - The remote link on the clipboard can be kept by Windows clipboard history or cloud clipboard.
   Android marked the clip sensitive; Java has no such mark.
 - Apply's fixed pixel boxes are the phone's 1600x720 sizes and do not scale with the surface: the

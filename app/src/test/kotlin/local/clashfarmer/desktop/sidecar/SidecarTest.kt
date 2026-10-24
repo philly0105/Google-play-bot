@@ -33,6 +33,20 @@ class SidecarTest {
     }
 
     @Test
+    fun `find reads a window closed by hand, and a reply without the flag as visible`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        fun JSONObject.window() = put("found", true).put("top", 1).put("game", 2).put("title", "Clash of Clans - Blood")
+            .put("iconic", false).put("width", 1740).put("height", 978).put("foreground", false).put("monitorDpi", 120)
+        val hidden = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window().put("visible", false) }
+        assertEquals(ClashWindow(1, 2, "Clash of Clans - Blood", false, 1740, 978, false, 120, visible = false), hidden.await())
+        val older = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window() }
+        assertTrue(older.await()!!.visible)
+    }
+
+    @Test
     fun `ocr sends the image as the payload and reads the lines`() = runBlocking {
         val fake = FakeSidecar()
         val sidecar = Sidecar { fake.connection }

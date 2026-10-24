@@ -37,6 +37,7 @@ Error codes:
 | --- | --- |
 | `no_window` | No Clash of Clans window from Google Play Games. |
 | `minimized` | The window is minimized and the request said not to restore it. |
+| `closed` | The window was closed by hand: Google Play Games hid it and the game still runs. |
 | `timeout` | No frame arrived in time. |
 | `bad_request` | Unknown op or a missing argument. |
 | `failed` | Anything else; `error` says what. |
@@ -57,8 +58,10 @@ Returns `version`, `pid` and `ocrReady`. OCR models load in the background at st
 Looks the window up again on every call; handles change when Google Play Games restarts.
 
 Returns `found`, and when found: `top` and `game` (window handles as numbers), `title`, `iconic`,
-`width` and `height` of the game surface, `foreground` (the Clash window is the active window), and
-`monitorDpi`.
+`visible`, `width` and `height` of the game surface, `foreground` (the Clash window is the active
+window), and `monitorDpi`. `visible` is false once the window was closed by hand: Google Play Games
+hides it and keeps the game running, and a launch then is the relaunch that broke input
+(`docs/gpg-spike.md`, Restarting).
 
 ### `capture`
 
@@ -74,7 +77,8 @@ window's frame on the right and bottom, and those columns and rows are copied fr
 neighbours so the frame has the surface's size.
 
 A minimized window sends no frames. With `restore` the sidecar restores it without activating it
-(`SW_SHOWNOACTIVATE`) and waits for a frame from after the restore.
+(`SW_SHOWNOACTIVATE`) and waits for a frame from after the restore. A hidden window, one closed by
+hand, fails with `closed`: it sends no frames either, and showing it is not a restart.
 
 ### `gesture`
 

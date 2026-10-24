@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.DeviceHealth
+import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.platform.ClashHost
 import local.clashfarmer.desktop.platform.GameSurface
@@ -164,6 +165,17 @@ class FarmerServicePcTest {
         service.ensureClashForeground(timeoutMs = 10_000)
         assertEquals(0, host.launches)
         assertEquals(1, surface.shots)
+    }
+
+    @Test
+    fun `a start with the window closed by hand stops and launches nothing`() = runBlocking {
+        service.connectTransport()
+        host.window.value = openWindow().let { it.copy(window = it.window?.copy(visible = false)) }
+        val stop = runCatching { service.ensureClashForeground(timeoutMs = 10_000) }.exceptionOrNull()
+        assertTrue(stop is StopException)
+        assertEquals(FarmerService.CLASH_CLOSED, stop?.message)
+        assertEquals(0, host.launches)
+        assertEquals(0, surface.shots)
     }
 
     @Test
