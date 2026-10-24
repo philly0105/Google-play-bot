@@ -77,6 +77,11 @@ stayed in front playing video) or moved the real cursor, so the SendInput fallba
   walls filling the frame height. Both phone pinch call sites (`normalizeVillageCamera`,
   `zoomOutForDeployment`) only pinch out to the limit, so the PC transport turns every pinch-out
   into "out to the limit, then 12 in". That gives one fixed zoom and leaves the core alone.
+- The phone's clamp drags don't carry over. At the limit plus 12 the camera can pan far past the
+  village: two of `normalizeVillageCamera`'s drags (31%,28% to 84%,86%, 700 ms) left nothing but
+  sky and the HUD on screen (`audit-evidence/spike/serve-clamped.png`). If zooming out to the limit
+  recentres the camera, the PC skips the drags. That test was cut short when Blood was opened on
+  another device.
 - Not tested: the attack scene's limit.
 
 ## OCR
@@ -101,5 +106,6 @@ the working directory, so pass absolute paths. Its models and code are Apache-2.
 ## Still open
 
 - A locked PC and a sleeping display.
+- Whether zooming out to the limit recentres the village camera, so the clamp drags can go.
 - The attack scene's zoom framing.
 - Restarting Clash: `WM_CLOSE` to the top level, then relaunch through the URL.

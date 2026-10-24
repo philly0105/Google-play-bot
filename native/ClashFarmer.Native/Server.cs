@@ -1,0 +1,322 @@
+using System.Buffers.Binary;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json.Nodes;
+
+namespace ClashFarmer.Native;
+
+/** A failure the app is told about by [Code]; see docs/SIDECAR.md. */
+internal sealed class SidecarException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
+}
+
+/**
+ * The protocol host the app runs as `ClashFarmer.Native.exe serve`. Requests come in on standard
+ * input and responses go out on standard output, framed as docs/SIDECAR.md describes. Requests
+ * run concurrently; input, capture and OCR each run one at a time.
+ */
+internal sealed class Server(Stream input, Stream output)
+{
+    private const string Version = "1";
+    private const int MaxBlockBytes = 256 << 20;
+
+    private readonly object _writeLock = new();
+    private readonly SemaphoreSlim _inputLane = new(1, 1);
+    private readonly SemaphoreSlim _captureLane = new(1, 1);
+    private readonly SemaphoreSlim _ocrLane = new(1, 1);
+    private WindowCapture? _capture;
+
+    public static void Log(string message) => Console.Error.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {message}");
+
+    public int Run()
+    {
+        // Gesture steps of 8 ms need a finer timer than the default 15.6 ms.
+        Win32.timeBeginPeriod(1);
+        PaddleOcr.Warm();
+        Log($"sidecar {Version} ready, pid {Environment.ProcessId}");
+        try
+        {
+            while (ReadBlock() is { } json)
+            {
+                var payload = ReadBlock() ?? throw new EndOfStreamException("Input closed between a request and its payload");
+                var request = JsonNode.Parse(json)?.AsObject() ?? throw new InvalidDataException("Empty request");
+                _ = Task.Run(() => Handle(request, payload));
+            }
+            Log("input closed, exiting");
+            return 0;
+        }
+        catch (Exception e)
+        {
+            Log($"stopping on a broken stream: {e.Message}");
+            return 2;
+        }
+        finally
+        {
+            Input.ReleaseHeld();
+        }
+    }
+
+    private async Task Handle(JsonObject request, byte[] payload)
+    {
+        var id = request["id"]?.GetValue<long>() ?? 0;
+        var op = request["op"]?.GetValue<string>() ?? "";
+        JsonObject response;
+        byte[] data = [];
+        try
+        {
+            (response, data) = await Dispatch(op, request, payload);
+            response["ok"] = true;
+        }
+        catch (SidecarException e)
+        {
+            response = Failure(e.Code, e.Message);
+        }
+        catch (TimeoutException e)
+        {
+            response = Failure("timeout", e.Message);
+        }
+        catch (Exception e)
+        {
+            Log($"{op} failed: {e}");
+            response = Failure("failed", e.Message);
+        }
+        response["id"] = id;
+        try
+        {
+            Write(response, data);
+        }
+        catch (IOException e)
+        {
+            Log($"could not answer {op} {id}: {e.Message}");
+        }
+    }
+
+    private async Task<(JsonObject, byte[])> Dispatch(string op, JsonObject r, byte[] payload) => op switch
+    {
+        "hello" => (new JsonObject { ["version"] = Version, ["pid"] = Environment.ProcessId, ["ocrReady"] = PaddleOcr.Ready }, []),
+        "find" => (Find(), []),
+        "capture" => await InLane(_captureLane, () => Capture(r)),
+        "gesture" => await InLane(_inputLane, () => Gesture(r)),
+        "wheel" => await InLane(_inputLane, () => Done(() => Input.Wheel(Require().Game, Int(r, "x"), Int(r, "y"), Int(r, "notches"), Int(r, "intervalMs", 40)))),
+        "key" => await InLane(_inputLane, () => Done(() => Input.Key(Require().Game, (uint)Int(r, "vk")))),
+        "ocr" => await InLane(_ocrLane, () => Ocr(r, payload)),
+        // A resize moves the surface under any gesture in flight, so it waits its turn with them.
+        "resize" => await InLane(_inputLane, () => Resize(r)),
+        "launch" => Done(() => Launch(Str(r, "url"))),
+        "close" => Done(() => Win32.PostMessage(Require().Top, Win32.WM_CLOSE, IntPtr.Zero, IntPtr.Zero)),
+        "power" => Power(),
+        "keepAwake" => Done(() => SystemState.KeepAwake(Bool(r, "on"))),
+        "input" => Activity(),
+        _ => throw new SidecarException("bad_request", $"Unknown op '{op}'")
+    };
+
+    private static async Task<(JsonObject, byte[])> InLane(SemaphoreSlim lane, Func<(JsonObject, byte[])> work)
+    {
+        await lane.WaitAsync();
+        try { return work(); }
+        finally { lane.Release(); }
+    }
+
+    private static (JsonObject, byte[]) Done(Action action)
+    {
+        action();
+        return (new JsonObject(), []);
+    }
+
+    private static GameWindow Require() =>
+        GameWindow.Find() ?? throw new SidecarException("no_window", "No Clash of Clans window from Google Play Games");
+
+    private static JsonObject Find()
+    {
+        var window = GameWindow.Find();
+        if (window == null) return new JsonObject { ["found"] = false };
+        Win32.GetClientRect(window.Game, out var game);
+        return new JsonObject
+        {
+            ["found"] = true,
+            ["top"] = window.Top.ToInt64(),
+            ["game"] = window.Game.ToInt64(),
+            ["title"] = window.Title,
+            ["iconic"] = Win32.IsIconic(window.Top),
+            ["width"] = game.Width,
+            ["height"] = game.Height,
+            ["foreground"] = Win32.GetForegroundWindow() == window.Top,
+            ["monitorDpi"] = Win32.MonitorDpi(window.Top)
+        };
+    }
+
+    private (JsonObject, byte[]) Capture(JsonObject r)
+    {
+        var window = Require();
+        long newerThan = 0;
+        if (Win32.IsIconic(window.Top))
+        {
+            if (!Bool(r, "restore", true)) throw new SidecarException("minimized", "The Clash window is minimized");
+            Win32.ShowWindow(window.Top, Win32.SW_SHOWNOACTIVATE);
+            // Every frame held from before is from before the minimize.
+            newerThan = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 300;
+            Log("restored the minimized Clash window without activating it");
+        }
+        if (_capture == null || _capture.Hwnd != window.Top || _capture.CropTo != window.Game)
+        {
+            _capture?.Dispose();
+            _capture = new WindowCapture(window.Top, window.Game);
+        }
+        Frame frame;
+        try
+        {
+            frame = _capture.Grab(Int(r, "timeoutMs", 3000), newerThan);
+        }
+        catch (TimeoutException)
+        {
+            // A session that stopped sending, after a lost graphics device say, starts over next time.
+            _capture.Dispose();
+            _capture = null;
+            throw;
+        }
+        return (new JsonObject { ["width"] = frame.Width, ["height"] = frame.Height, ["timestampMs"] = frame.TimestampMs }, frame.Bgra);
+    }
+
+    private static (JsonObject, byte[]) Gesture(JsonObject r)
+    {
+        var strokes = new List<Stroke>();
+        foreach (var node in r["strokes"] as JsonArray ?? throw new SidecarException("bad_request", "Missing 'strokes'"))
+        {
+            var stroke = node as JsonObject ?? throw new SidecarException("bad_request", "A stroke is not an object");
+            var (fromX, fromY) = PointOf(stroke, "from");
+            var (toX, toY) = PointOf(stroke, "to");
+            strokes.Add(new Stroke(fromX, fromY, toX, toY, Int(stroke, "ms")));
+        }
+        if (strokes.Count == 0) throw new SidecarException("bad_request", "A gesture needs a stroke");
+        Input.Gesture(Require().Game, strokes);
+        return (new JsonObject(), []);
+    }
+
+    private static (JsonObject, byte[]) Ocr(JsonObject r, byte[] payload)
+    {
+        int width = Int(r, "width"), height = Int(r, "height");
+        if (width <= 0 || height <= 0 || payload.Length != width * height * 4)
+        {
+            throw new SidecarException("bad_request", $"Expected {width}x{height} BGRA, got {payload.Length} bytes");
+        }
+        var lines = new JsonArray();
+        foreach (var line in PaddleOcr.Read(width, height, payload))
+        {
+            lines.Add(new JsonObject
+            {
+                ["text"] = line.Text,
+                ["box"] = new JsonArray(line.Left, line.Top, line.Right, line.Bottom),
+                ["score"] = Math.Round(line.Score, 3)
+            });
+        }
+        return (new JsonObject { ["lines"] = lines }, []);
+    }
+
+    /**
+     * Sizes the top-level window so the game surface comes out [width] by [height]. Google Play
+     * Games keeps the surface at 16:9 inside its own title bar and sidebar, so the chrome is
+     * measured and kept, and a second pass corrects what the first missed.
+     */
+    private static (JsonObject, byte[]) Resize(JsonObject r)
+    {
+        int width = Int(r, "width"), height = Int(r, "height");
+        var window = Require();
+        for (var pass = 0; pass < 2; pass++)
+        {
+            Win32.GetClientRect(window.Game, out var game);
+            if (game.Width == width && game.Height == height) break;
+            Win32.GetWindowRect(window.Top, out var outer);
+            Win32.SetWindowPos(window.Top, IntPtr.Zero, 0, 0, outer.Width + width - game.Width, outer.Height + height - game.Height,
+                Win32.SWP_NOMOVE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            Settle(window.Game);
+        }
+        Win32.GetClientRect(window.Game, out var now);
+        return (new JsonObject { ["width"] = now.Width, ["height"] = now.Height }, []);
+    }
+
+    /** Waits, up to 3 s, until the surface has kept one size for 300 ms: Google Play Games lays it out after the window. */
+    private static void Settle(IntPtr game)
+    {
+        var deadline = Environment.TickCount64 + 3000;
+        Win32.GetClientRect(game, out var last);
+        var steadySince = Environment.TickCount64;
+        while (Environment.TickCount64 < deadline && Environment.TickCount64 - steadySince < 300)
+        {
+            Thread.Sleep(50);
+            Win32.GetClientRect(game, out var now);
+            if (now.Width == last.Width && now.Height == last.Height) continue;
+            last = now;
+            steadySince = Environment.TickCount64;
+        }
+    }
+
+    /** Only Google Play Games launch links: the shell would run anything else it is handed. */
+    private static void Launch(string url)
+    {
+        if (!url.StartsWith("googleplaygames://", StringComparison.Ordinal))
+        {
+            throw new SidecarException("bad_request", "Only googleplaygames:// links are launched");
+        }
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+    }
+
+    private static (JsonObject, byte[]) Power()
+    {
+        var (ac, percent, saver) = SystemState.Power();
+        return (new JsonObject { ["ac"] = ac, ["batteryPercent"] = percent, ["saver"] = saver }, []);
+    }
+
+    private static (JsonObject, byte[]) Activity()
+    {
+        var (idleMs, gameForeground, cursorInGame) = SystemState.Activity();
+        return (new JsonObject { ["idleMs"] = idleMs, ["gameForeground"] = gameForeground, ["cursorInGame"] = cursorInGame }, []);
+    }
+
+    private static int Int(JsonObject r, string name, int? fallback = null) =>
+        r[name] is JsonValue v ? v.GetValue<int>() : fallback ?? throw Missing(name);
+
+    private static bool Bool(JsonObject r, string name, bool? fallback = null) =>
+        r[name] is JsonValue v ? v.GetValue<bool>() : fallback ?? throw Missing(name);
+
+    private static string Str(JsonObject r, string name) =>
+        r[name] is JsonValue v ? v.GetValue<string>() : throw Missing(name);
+
+    private static (int, int) PointOf(JsonObject r, string name) =>
+        r[name] is JsonArray { Count: 2 } p ? (p[0]!.GetValue<int>(), p[1]!.GetValue<int>()) : throw Missing(name);
+
+    private static SidecarException Missing(string name) => new("bad_request", $"Missing '{name}'");
+
+    private static JsonObject Failure(string code, string message) =>
+        new() { ["ok"] = false, ["code"] = code, ["error"] = message };
+
+    /** One length-prefixed block, or null when the input ends cleanly before it. */
+    private byte[]? ReadBlock()
+    {
+        var header = new byte[4];
+        var got = input.ReadAtLeast(header, 4, throwOnEndOfStream: false);
+        if (got == 0) return null;
+        if (got < 4) throw new EndOfStreamException("Input closed inside a length");
+        var length = BinaryPrimitives.ReadInt32LittleEndian(header);
+        if (length < 0 || length > MaxBlockBytes) throw new InvalidDataException($"A block of {length} bytes");
+        var block = new byte[length];
+        input.ReadExactly(block);
+        return block;
+    }
+
+    private void Write(JsonObject response, byte[] payload)
+    {
+        var json = Encoding.UTF8.GetBytes(response.ToJsonString());
+        var length = new byte[4];
+        lock (_writeLock)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(length, json.Length);
+            output.Write(length);
+            output.Write(json);
+            BinaryPrimitives.WriteInt32LittleEndian(length, payload.Length);
+            output.Write(length);
+            output.Write(payload);
+            output.Flush();
+        }
+    }
+}

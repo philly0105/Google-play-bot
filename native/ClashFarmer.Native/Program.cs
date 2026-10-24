@@ -1,7 +1,8 @@
 using System.Globalization;
 using ClashFarmer.Native;
 
-// Spike CLI for probing Google Play Games. Becomes the sidecar's protocol host later.
+// `serve` is the sidecar the app runs (docs/SIDECAR.md). The other commands are the probe used for
+// docs/gpg-spike.md.
 var command = args.Length > 0 ? args[0] : "help";
 var rest = args.Skip(1).ToArray();
 
@@ -20,6 +21,14 @@ void Describe(IntPtr h, string indent)
 
 switch (command)
 {
+    case "serve":
+    {
+        // Standard output carries protocol frames only, so anything written to the console goes to standard error.
+        var output = Console.OpenStandardOutput();
+        Console.SetOut(Console.Error);
+        Environment.ExitCode = new Server(Console.OpenStandardInput(), output).Run();
+        break;
+    }
     case "list":
     {
         // Every visible top-level window whose process or title matches the filter, with its children.
@@ -233,7 +242,7 @@ switch (command)
         break;
     }
     default:
-        Console.WriteLine("commands: list [filter] | capture <hwnd> <out.png> [wgc|print|screen] | click <hwnd> x y [holdMs] | " +
+        Console.WriteLine("commands: serve | list [filter] | capture <hwnd> <out.png> [wgc|print|screen] | click <hwnd> x y [holdMs] | " +
                           "drag <hwnd> x1 y1 x2 y2 ms [holdEndMs] | wheel <hwnd> x y notches [ctrl] | key <hwnd> vkHex | setclient <hwnd> w h | ocr <file>");
         break;
 }

@@ -77,6 +77,49 @@ internal static class Win32
     public static extern IntPtr CreateWindowEx(uint exStyle, string className, string title, uint style, int x, int y, int w, int h,
         IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
     [DllImport("user32.dll")] public static extern bool DestroyWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+    [DllImport("kernel32.dll")] public static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS status);
+    [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr PowerCreateRequest(ref REASON_CONTEXT context);
+    [DllImport("kernel32.dll")] public static extern bool PowerSetRequest(IntPtr request, int type);
+    [DllImport("kernel32.dll")] public static extern bool PowerClearRequest(IntPtr request, int type);
+    [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);
+
+    public const int SW_SHOWNOACTIVATE = 4;
+    public const int PowerRequestDisplayRequired = 0;
+    public const int PowerRequestSystemRequired = 1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SYSTEM_POWER_STATUS
+    {
+        public byte ACLineStatus;
+        public byte BatteryFlag;
+        public byte BatteryLifePercent;
+        public byte SystemStatusFlag;
+        public uint BatteryLifeTime;
+        public uint BatteryFullLifeTime;
+    }
+
+    /**
+     * The simple-string form of the union; Windows reads only the string with
+     * POWER_REQUEST_CONTEXT_SIMPLE_STRING. [Unused] pads the union to its full size.
+     */
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct REASON_CONTEXT
+    {
+        public uint Version;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.LPWStr)] public string SimpleReasonString;
+        public IntPtr Unused;
+    }
+
     [DllImport("user32.dll")] public static extern bool PeekMessage(out MSG msg, IntPtr hwnd, uint min, uint max, uint remove);
     [DllImport("user32.dll")] public static extern bool TranslateMessage(ref MSG msg);
     [DllImport("user32.dll")] public static extern IntPtr DispatchMessage(ref MSG msg);

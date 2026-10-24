@@ -59,33 +59,66 @@ internal static class D3D
 /**
  * Windows Graphics Capture of one window. Works for DXGI flip-model windows that GDI reads as
  * black, and for windows covered by others; not for minimized ones.
+ *
+ * Every frame is taken off the pool as it arrives and only the newest is kept. A pool left full
+ * drops the frames that come after, so draining it at grab time would hand out a frame from just
+ * after the previous grab, however long ago that was.
  */
 internal sealed class WindowCapture : IDisposable
 {
     private static readonly Guid IID_IGraphicsCaptureItem = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
 
-    private readonly IntPtr _hwnd;
-    private readonly IntPtr _cropTo;
+    public IntPtr Hwnd { get; }
+    public IntPtr CropTo { get; }
     private readonly IDirect3DDevice _device;
     private readonly GraphicsCaptureItem _item;
-    private Direct3D11CaptureFramePool _pool;
+    private readonly Direct3D11CaptureFramePool _pool;
     private readonly GraphicsCaptureSession _session;
     private Windows.Graphics.SizeInt32 _poolSize;
     private readonly object _lock = new();
 
-    /** Captures [hwnd]; frames are cropped to [cropTo]'s window rect if given, else to the client area. */
+    /** The newest frame not yet copied out, and when it arrived (Unix ms). */
+    private Direct3D11CaptureFrame? _latest;
+    private long _latestAt;
+
+    /** The last frame copied out. A still window sends no new frames, and this is still what it shows. */
+    private Frame? _copied;
+
+    /** Captures [hwnd]; frames are cropped to [cropTo]'s client area if given, else to [hwnd]'s. */
     public WindowCapture(IntPtr hwnd, IntPtr cropTo = default)
     {
-        _hwnd = hwnd;
-        _cropTo = cropTo;
+        Hwnd = hwnd;
+        CropTo = cropTo;
         _device = D3D.CreateDevice();
         _item = CreateItem(hwnd);
         _poolSize = _item.Size;
-        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _poolSize);
+        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 3, _poolSize);
+        _pool.FrameArrived += OnFrameArrived;
         _session = _pool.CreateCaptureSession(_item);
         try { _session.IsCursorCaptureEnabled = false; } catch { }
         try { _session.IsBorderRequired = false; } catch { }
         _session.StartCapture();
+    }
+
+    private void OnFrameArrived(Direct3D11CaptureFramePool pool, object _)
+    {
+        Direct3D11CaptureFrame? old;
+        lock (_lock)
+        {
+            var next = pool.TryGetNextFrame();
+            if (next == null) return;
+            old = _latest;
+            _latest = next;
+            _latestAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var size = next.ContentSize;
+            if (size.Width != _poolSize.Width || size.Height != _poolSize.Height)
+            {
+                _poolSize = size;
+                pool.Recreate(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 3, _poolSize);
+            }
+            Monitor.PulseAll(_lock);
+        }
+        old?.Dispose();
     }
 
     private static GraphicsCaptureItem CreateItem(IntPtr hwnd)
@@ -99,68 +132,80 @@ internal sealed class WindowCapture : IDisposable
     }
 
     /**
-     * The newest frame, cropped to the window's client area. Waits up to [timeoutMs] for one to
-     * arrive; frames come only when the window redraws, so a static window may need the wait.
+     * The newest frame that arrived after [newerThan] (Unix ms), cropped to the client area.
+     * Waits up to [timeoutMs] when there is none yet.
      */
-    public Frame Grab(int timeoutMs = 2000)
+    public Frame Grab(int timeoutMs = 3000, long newerThan = 0)
     {
         lock (_lock)
         {
             var deadline = Environment.TickCount64 + timeoutMs;
-            Direct3D11CaptureFrame? newest = null;
             while (true)
             {
-                // Drain to the latest frame the pool holds.
-                Direct3D11CaptureFrame? next;
-                while ((next = _pool.TryGetNextFrame()) != null)
+                if (_latest != null && _latestAt > newerThan)
                 {
-                    newest?.Dispose();
-                    newest = next;
+                    var latest = _latest;
+                    _latest = null;
+                    using (latest) _copied = Copy(latest, _latestAt);
+                    return _copied;
                 }
-                if (newest != null) break;
-                if (Environment.TickCount64 > deadline) throw new TimeoutException("No frame from Windows Graphics Capture");
-                Thread.Sleep(5);
-            }
-            using (newest)
-            {
-                var contentSize = newest.ContentSize;
-                if (contentSize.Width != _poolSize.Width || contentSize.Height != _poolSize.Height)
-                {
-                    _poolSize = contentSize;
-                    _pool.Recreate(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _poolSize);
-                }
-                using var bitmap = SoftwareBitmap.CreateCopyFromSurfaceAsync(newest.Surface, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
-                var full = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
-                bitmap.CopyToBuffer(full.AsBuffer());
-                return CropToClient(full, bitmap.PixelWidth, bitmap.PixelHeight, contentSize.Width, contentSize.Height);
+                if (_latest == null && _copied != null && _copied.TimestampMs > newerThan) return _copied;
+                var left = deadline - Environment.TickCount64;
+                if (left <= 0) throw new TimeoutException($"No frame from Windows Graphics Capture in {timeoutMs} ms");
+                Monitor.Wait(_lock, (int)left);
             }
         }
     }
 
-    /** The captured surface covers the window's frame bounds; the client area sits inside it. */
-    private Frame CropToClient(byte[] full, int stride, int surfaceHeight, int contentWidth, int contentHeight)
+    private Frame Copy(Direct3D11CaptureFrame frame, long arrivedAt)
     {
-        var frame = Win32.FrameBounds(_hwnd);
-        Win32.RECT client;
-        if (_cropTo != IntPtr.Zero) Win32.GetWindowRect(_cropTo, out client);
-        else client = Win32.ClientOnScreen(_hwnd);
-        var dx = Math.Max(0, client.Left - frame.Left);
-        var dy = Math.Max(0, client.Top - frame.Top);
-        var w = Math.Min(client.Width, contentWidth - dx);
-        var h = Math.Min(client.Height, contentHeight - dy);
-        if (w <= 0 || h <= 0) throw new InvalidOperationException($"Client area {client} lies outside the captured {contentWidth}x{contentHeight}");
+        var contentSize = frame.ContentSize;
+        using var bitmap = SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
+        var full = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
+        bitmap.CopyToBuffer(full.AsBuffer());
+        return CropToClient(full, bitmap.PixelWidth, Math.Min(contentSize.Width, bitmap.PixelWidth),
+            Math.Min(contentSize.Height, bitmap.PixelHeight), arrivedAt);
+    }
+
+    /**
+     * The captured surface covers the window's frame bounds and the client area sits inside it,
+     * except that the game surface runs a few pixels past the frame on the right and bottom. Those
+     * pixels are copied from the nearest captured ones, so the frame has the client area's size and
+     * its pixels are the ones input coordinates name.
+     */
+    private Frame CropToClient(byte[] full, int stride, int contentWidth, int contentHeight, long timestampMs)
+    {
+        var frame = Win32.FrameBounds(Hwnd);
+        var client = Win32.ClientOnScreen(CropTo != IntPtr.Zero ? CropTo : Hwnd);
+        int x0 = client.Left - frame.Left, y0 = client.Top - frame.Top, w = client.Width, h = client.Height;
+        if (w <= 0 || h <= 0 || x0 >= contentWidth || y0 >= contentHeight || x0 + w <= 0 || y0 + h <= 0)
+        {
+            throw new InvalidOperationException($"Client area {client} lies outside the captured {contentWidth}x{contentHeight}");
+        }
+        // The columns of each row that the surface has; the rest repeat the pixel at the edge.
+        int from = Math.Max(0, -x0), to = Math.Min(w, contentWidth - x0);
         var outBytes = new byte[w * h * 4];
         for (var row = 0; row < h; row++)
         {
-            Buffer.BlockCopy(full, ((row + dy) * stride + dx) * 4, outBytes, row * w * 4, w * 4);
+            var sourceRow = Math.Clamp(y0 + row, 0, contentHeight - 1) * stride;
+            var target = row * w * 4;
+            Buffer.BlockCopy(full, (sourceRow + x0 + from) * 4, outBytes, target + from * 4, (to - from) * 4);
+            for (var col = 0; col < from; col++) Buffer.BlockCopy(full, (sourceRow + x0 + from) * 4, outBytes, target + col * 4, 4);
+            for (var col = to; col < w; col++) Buffer.BlockCopy(full, (sourceRow + x0 + to - 1) * 4, outBytes, target + col * 4, 4);
         }
-        return new Frame(w, h, outBytes, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        return new Frame(w, h, outBytes, timestampMs);
     }
 
     public void Dispose()
     {
+        _pool.FrameArrived -= OnFrameArrived;
         _session.Dispose();
         _pool.Dispose();
+        lock (_lock)
+        {
+            _latest?.Dispose();
+            _latest = null;
+        }
     }
 }
 
