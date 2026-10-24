@@ -132,7 +132,9 @@ Captured at 1740x978 on 24 October, with PaddleOCR boxes beside each frame
 ## Clash notes
 
 - With GPG idle in the background, Clash showed "Anyone there? You have been disconnected due to
-  inactivity. RELOAD GAME". PopupGuard's reload handling covers this.
+  inactivity. RELOAD GAME". PopupGuard's reload handling covers this. Esc on that dialog reloads
+  the game as its button does, and the village behind it, Blood, Battle and Build included, stays
+  readable, so a check for the plain village has to rule the dialog out by its words.
 - Esc on the village, even with a building selected, opens "Confirm Exit: Do you want to quit the
   game? Cancel / Okay". A tap on empty scenery is what deselects.
 - Esc on the army screen goes back to the attack menu, and Esc there goes back to the village.
@@ -168,6 +170,9 @@ Checked on 24 October on Blood, with the village behind the idle dialog and anot
 - After the PC restarted, a fresh start (Google Play Games not running) chose 1920x1080 again on
   the same panel. Android moved touch to the game's display within 3 s, and a tap at a gold
   bubble's centre collected it.
+- A resize is not a relaunch. In the first session the window went to 20:9 and back to 1740x978
+  between 00:00 and 00:03, and every tap after it landed: the 01:02 anchor tap, and the attack
+  menu, Find a Match and End Battle between 01:18 and 01:20 (`audit-evidence/spike/`).
 - So the app never closes the Clash window, and sends the launch link only when there is no Clash
   window. A window closed by hand still leaves the VM running, and the app's launch after that is
   the relaunch that broke input. Whether quitting Google Play Games from its tray icon gives a
