@@ -120,11 +120,11 @@ it. Returns the `width` and `height` the surface ended at; Google Play Games kee
 
 Arguments: `url`. Opens it through the shell, as `Start-Process` does. Clash's URL is
 `googleplaygames://launch/?id=com.supercell.clashofclans&lid=1&pid=1`. Google Play Games may bring
-its window to the front.
+its window to the front; a relaunch after `close` did not (`docs/gpg-spike.md`, Restarting).
 
 ### `close`
 
-Sends `WM_CLOSE` to the Clash window.
+Sends `WM_CLOSE` to the Clash window. Google Play Games hides the window and keeps its VM running.
 
 ### `power`
 

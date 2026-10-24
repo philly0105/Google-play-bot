@@ -143,7 +143,19 @@ Captured at 1740x978 on 24 October, with PaddleOCR boxes beside each frame
   straight home with the shield kept.
 - GPG draws keyboard hints on the troop bar (1, Q, W, E, R, A, S).
 
+## Restarting
+
+Checked on 24 October on Blood, with the village behind the idle dialog and another app in front:
+
+- `WM_CLOSE` to the top level hid the window within 0.25 s, with no prompt. `crosvm.exe` kept
+  running, and the relaunched window had the same top-level and `CROSVM_1` handles.
+- The URL showed the window again 6.3 s later without taking focus; the app in front stayed in
+  front throughout. The first frame was black with the Google Play Games logo at the top, and by
+  15 s Blood's village was up behind "Welcome Back Chief!".
+- The surface came back at 1860x1162 (16:10), where it had been 1740x978 (16:9), on the same
+  120 DPI panel. The HUD kept its edge anchors scaled by height, so the aspect is not fixed across
+  launches and geometry has to come from the live surface size.
+
 ## Still open
 
 - A locked PC and a sleeping display.
-- Restarting Clash: `WM_CLOSE` to the top level, then relaunch through the URL.
