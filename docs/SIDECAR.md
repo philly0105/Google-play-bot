@@ -8,6 +8,10 @@ decision stays in the phone code and the ported `AndroidTransport`.
 The app starts one sidecar at launch and starts it again if it dies. The sidecar exits when its
 standard input closes.
 
+The Gradle task `publishSidecar` publishes it self-contained, OCR models included, into the app's
+resources, so both `run` and the distributable have it at `sidecar/ClashFarmer.Native.exe` under
+the `compose.application.resources.dir` system property.
+
 ## Framing
 
 Both directions use the same frame:
