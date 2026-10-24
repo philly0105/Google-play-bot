@@ -1,12 +1,16 @@
 package local.clashfarmer.desktop.ui.calibration
 
+import local.clashfarmer.core.AttackPlanner
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.Resource
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.PhoneProfile
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -79,6 +83,76 @@ class CalibrationTest {
     fun `the next price box ends at the click`() {
         val profile = applyTarget(PhoneProfile.createDefault(), "scout_fee", Point(1000, 200))
         assertEquals(Region(916, 185, 1004, 215), profile.scoutFeeRoi)
+    }
+
+    @Test
+    fun `on a PC frame Apply draws the PC's boxes`() {
+        val pc = PhoneProfile.createDefault(1740, 978)
+        assertEquals(Region(75, 99, 243, 133), applyTarget(pc, "scout_gold", Point(80, 116)).scoutLootRois[Resource.GOLD])
+        assertEquals(Region(814, 42, 928, 80), applyTarget(pc, "scout_countdown", Point(871, 60)).scoutCountdownRoi)
+        assertEquals(Region(1580, 749, 1680, 783), applyTarget(pc, "scout_fee", Point(1675, 766)).scoutFeeRoi)
+        assertEquals(Region(1493, 22, 1713, 62), applyTarget(pc, "home_gold", Point(1603, 42)).homeResourceRois[Resource.GOLD])
+        assertEquals(Region(450, 260, 550, 290), applyTarget(pc, "gold_cost_btn", Point(500, 300)).wallConfig!!.currencies.getValue("gold").costRoi)
+        assertEquals(Region(270, 846, 345, 962), applyTarget(pc, "valkyries", Point(307, 903)).troopRois["valkyries"])
+        // A card in the corner stops at the frame's edges, as on the phone.
+        assertEquals(Region(1693, 913, 1740, 978), applyTarget(pc, "jumps", Point(1730, 970)).troopRois["jumps"])
+    }
+
+    @Test
+    fun `the PC's boxes scale with the frame's height`() {
+        val tall = PhoneProfile.createDefault(1860, 1162)
+        assertEquals(Region(94, 120, 294, 160), applyTarget(tall, "scout_gold", Point(100, 140)).scoutLootRois[Resource.GOLD])
+        assertEquals(Region(932, 49, 1068, 94), applyTarget(tall, "scout_countdown", Point(1000, 70)).scoutCountdownRoi)
+        assertEquals(Region(887, 180, 1006, 220), applyTarget(tall, "scout_fee", Point(1000, 200)).scoutFeeRoi)
+        assertEquals(Region(1569, 26, 1831, 74), applyTarget(tall, "home_gold", Point(1700, 50)).homeResourceRois[Resource.GOLD])
+        assertEquals(Region(441, 252, 559, 288), applyTarget(tall, "gold_cost_btn", Point(500, 300)).wallConfig!!.currencies.getValue("gold").costRoi)
+        assertEquals(Region(321, 1005, 410, 1143), applyTarget(tall, "valkyries", Point(365, 1073)).troopRois["valkyries"])
+        // 1565x978, the 16:10 frame sized down, is as high as 1740x978 and keeps its boxes.
+        assertEquals(Region(1405, 749, 1505, 783), applyTarget(PhoneProfile.createDefault(1565, 978), "scout_fee", Point(1500, 766)).scoutFeeRoi)
+    }
+
+    @Test
+    fun `on the PC's frames each box holds its own number and no other text`() {
+        // Each click is where the target's description says: on a loot row's first digit, in the
+        // middle of the seconds and of each balance, and just left of the coin under Next.
+        val (scout, scoutLines) = frame("geo-scout")
+        assertHolds(scoutLines, "1 193 372", applyTarget(scout, "scout_gold", Point(80, 116)).scoutLootRois[Resource.GOLD])
+        assertHolds(scoutLines, "884 775", applyTarget(scout, "scout_elixir", Point(83, 158)).scoutLootRois[Resource.ELIXIR])
+        assertHolds(scoutLines, "4 437", applyTarget(scout, "scout_dark", Point(83, 202)).scoutLootRois[Resource.DARK_ELIXIR])
+        assertHolds(scoutLines, "265", applyTarget(scout, "scout_countdown", Point(871, 59)).scoutCountdownRoi)
+        assertHolds(scoutLines, "1700", applyTarget(scout, "scout_fee", Point(1675, 766)).scoutFeeRoi)
+        // The badge band AttackPlanner reads a card's count from hangs off the card area's top.
+        val card = applyTarget(scout, "valkyries", Point(307, 903)).troopRois.getValue("valkyries")
+        assertHolds(scoutLines, "x44", AttackPlanner.badgeBand(card))
+        val (home, homeLines) = frame("geo-home")
+        assertHolds(homeLines, "30 800 805", applyTarget(home, "home_gold", Point(1595, 42)).homeResourceRois[Resource.GOLD])
+        assertHolds(homeLines, "9 693 255", applyTarget(home, "home_elixir", Point(1608, 98)).homeResourceRois[Resource.ELIXIR])
+        assertHolds(homeLines, "167 280", applyTarget(home, "home_dark", Point(1618, 154)).homeResourceRois[Resource.DARK_ELIXIR])
+        val (tall, tallLines) = frame("live-1860-home")
+        assertHolds(tallLines, "30 799 105", applyTarget(tall, "home_gold", Point(1696, 50)).homeResourceRois[Resource.GOLD])
+        assertHolds(tallLines, "9 693 255", applyTarget(tall, "home_elixir", Point(1705, 115)).homeResourceRois[Resource.ELIXIR])
+        assertHolds(tallLines, "167 280", applyTarget(tall, "home_dark", Point(1719, 181)).homeResourceRois[Resource.DARK_ELIXIR])
+    }
+
+    /** A default profile at the size of the PC frame [name] in pc-frames, and its OCR lines. */
+    private fun frame(name: String): Pair<PhoneProfile, List<Pair<String, Region>>> {
+        val json = JSONObject(javaClass.getResourceAsStream("/pc-frames/$name.json")!!.bufferedReader().readText())
+        val lines = json.getJSONArray("lines")
+        return PhoneProfile.createDefault(json.getInt("width"), json.getInt("height")) to (0 until lines.length()).map { i ->
+            val line = lines.getJSONObject(i)
+            val box = line.getJSONArray("box")
+            line.getString("text") to Region(box.getInt(0), box.getInt(1), box.getInt(2), box.getInt(3))
+        }
+    }
+
+    /** That [box] holds the middle of the line reading [text] and of no other line. */
+    private fun assertHolds(lines: List<Pair<String, Region>>, text: String, box: Region?) {
+        assertNotNull(text, box)
+        assertTrue(text, lines.any { it.first == text })
+        for ((other, at) in lines) {
+            val middle = Point((at.left + at.right) / 2, (at.top + at.bottom) / 2)
+            assertEquals("$text's box $box against '$other'", other == text, box!!.contains(middle))
+        }
     }
 
     @Test

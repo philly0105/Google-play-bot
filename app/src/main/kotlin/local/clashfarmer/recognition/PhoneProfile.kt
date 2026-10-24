@@ -2,6 +2,7 @@ package local.clashfarmer.recognition
 
 import local.clashfarmer.core.CollectionPolicy
 import local.clashfarmer.core.CollectionTarget
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
 import local.clashfarmer.core.Resource
@@ -207,15 +208,17 @@ data class PhoneProfile(
      * that the attack's card reads and the tray layout read. A tap that moved only the anchor left
      * those reads on the old card. The area is 67 px wide, as the areas measured by hand in
      * September are, and [tap] gives no height, so the top and bottom come from the slot's own
-     * area, else the Valkyries', else a card's height around the tap.
+     * area, else the Valkyries', else a card's height around the tap. On the PC's frames the area
+     * is the PC's card size ([PC_CARD_LEFT]).
      */
     fun withTroopCard(name: String, tap: Point): PhoneProfile {
         val rows = troopRois[name] ?: troopRois["valkyries"]
+        fun size(phone: Int, pc: Int) = PcGeometry.pick(viewport, phone, PcGeometry.length(viewport, pc))
         val area = Region(
-            (tap.x - CARD_LEFT).coerceAtLeast(viewport.left),
-            rows?.top ?: (tap.y - CARD_ABOVE).coerceAtLeast(viewport.top),
-            (tap.x + CARD_RIGHT).coerceAtMost(viewport.right),
-            rows?.bottom ?: (tap.y + CARD_BELOW).coerceAtMost(viewport.bottom)
+            (tap.x - size(CARD_LEFT, PC_CARD_LEFT)).coerceAtLeast(viewport.left),
+            rows?.top ?: (tap.y - size(CARD_ABOVE, PC_CARD_ABOVE)).coerceAtLeast(viewport.top),
+            (tap.x + size(CARD_RIGHT, PC_CARD_RIGHT)).coerceAtMost(viewport.right),
+            rows?.bottom ?: (tap.y + size(CARD_BELOW, PC_CARD_BELOW)).coerceAtMost(viewport.bottom)
         )
         return withTroopAnchor(name, tap).withTroopRoi(name, area)
     }
@@ -444,6 +447,19 @@ data class PhoneProfile(
         private const val CARD_RIGHT = 34
         private const val CARD_ABOVE = 50
         private const val CARD_BELOW = 52
+
+        /**
+         * The same card area on the PC, in pixels of 1740x978: the phone's 1.13 times, as the PC's
+         * cards are. Its scout tray has cards 102x134 px, 110 px apart from hero to hero, where
+         * Sweat's phone had 89x119, 97 apart (audit-evidence/spike/geo-scout.png, and the phone
+         * tree's audit-evidence/clash-18647/r4-07-sweat-scout-a.png). The count badges stay the
+         * phone's size, 25x17 px for an x5 on both, so the badge band around the area keeps the
+         * phone's offsets.
+         */
+        private const val PC_CARD_LEFT = 37
+        private const val PC_CARD_RIGHT = 38
+        private const val PC_CARD_ABOVE = 57
+        private const val PC_CARD_BELOW = 59
 
         fun createDefault(width: Int = 1600, height: Int = 720): PhoneProfile {
             return PhoneProfile(

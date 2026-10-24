@@ -1,8 +1,10 @@
 package local.clashfarmer.desktop.ui.calibration
 
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
 import local.clashfarmer.core.Resource
+import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.recognition.WallConfig
 import local.clashfarmer.recognition.WallCurrencyConfig
@@ -62,7 +64,8 @@ val CALIBRATION_TARGETS: List<CalibrationTarget> = listOf(
 /**
  * [profile] with [pt] saved for the target named [name], as the phone's Apply wrote it. The
  * collector target is not handled here: it adds to a list, under rules of its own. An unknown
- * name leaves the profile as it was.
+ * name leaves the profile as it was. On the PC's frames each box Apply draws around [pt] is the
+ * PC's size ([PC_LOOT_ROW]).
  */
 internal fun applyTarget(profile: PhoneProfile, name: String, pt: Point): PhoneProfile = when (name) {
     "vp_tl" -> profile.copy(viewport = profile.viewport.copy(left = pt.x, top = pt.y), isVerified = false)
@@ -104,11 +107,11 @@ internal fun applyTarget(profile: PhoneProfile, name: String, pt: Point): PhoneP
     "scout_elixir" -> withScoutLoot(profile, Resource.ELIXIR, pt)
     "scout_dark" -> withScoutLoot(profile, Resource.DARK_ELIXIR, pt)
     "scout_countdown" -> profile.copy(
-        scoutCountdownRoi = Region(pt.x - 50, pt.y - 16, pt.x + 50, pt.y + 18), isVerified = false
+        scoutCountdownRoi = around(profile.viewport, pt, Region(-50, -16, 50, 18), PC_COUNTDOWN), isVerified = false
     )
     // Ends at the tap so the coin, which reads as another zero, stays out.
     "scout_fee" -> profile.copy(
-        scoutFeeRoi = Region(pt.x - 84, pt.y - 15, pt.x + 4, pt.y + 15), isVerified = false
+        scoutFeeRoi = around(profile.viewport, pt, Region(-84, -15, 4, 15), PC_FEE), isVerified = false
     )
     "home_gold" -> withHomeBalance(profile, Resource.GOLD, pt)
     "home_elixir" -> withHomeBalance(profile, Resource.ELIXIR, pt)
@@ -124,7 +127,7 @@ private fun withWallButton(profile: PhoneProfile, currency: String, pt: Point): 
     val currentWc = profile.wallConfig ?: WallConfig()
     val curMap = currentWc.currencies.toMutableMap()
     val existing = curMap[currency] ?: WallCurrencyConfig(
-        costRoi = Region(pt.x - 50, pt.y - 40, pt.x + 50, pt.y - 10),
+        costRoi = around(profile.viewport, pt, WALL_COST, WALL_COST),
         buttonPoint = pt
     )
     curMap[currency] = existing.copy(buttonPoint = pt)
@@ -132,13 +135,42 @@ private fun withWallButton(profile: PhoneProfile, currency: String, pt: Point): 
 }
 
 /** A scout loot row starting at the tapped first digit, wide enough for seven digits. */
-private fun lootRow(pt: Point) = Region(pt.x - 4, pt.y - 15, pt.x + 144, pt.y + 15)
+private fun lootRow(viewport: Viewport, pt: Point) = around(viewport, pt, Region(-4, -15, 144, 15), PC_LOOT_ROW)
 
 private fun withScoutLoot(profile: PhoneProfile, resource: Resource, pt: Point) =
-    profile.copy(scoutLootRois = profile.scoutLootRois + (resource to lootRow(pt)), isVerified = false)
+    profile.copy(scoutLootRois = profile.scoutLootRois + (resource to lootRow(profile.viewport, pt)), isVerified = false)
 
 /** A goal balance, centred on the tap: 194x36 is the gold region measured on the phone. */
 private fun withHomeBalance(profile: PhoneProfile, resource: Resource, pt: Point) = profile.copy(
-    homeResourceRois = profile.homeResourceRois + (resource to Region(pt.x - 97, pt.y - 18, pt.x + 97, pt.y + 18)),
+    homeResourceRois = profile.homeResourceRois + (resource to around(profile.viewport, pt, Region(-97, -18, 97, 18), PC_BALANCE)),
     isVerified = false
 )
+
+/**
+ * A box around [pt]: [phone] holds its edges' distances from [pt] on the phone's frames, and [pc]
+ * on the PC's, in pixels of 1740x978 that scale with the frame's height ([PcGeometry]).
+ */
+private fun around(viewport: Viewport, pt: Point, phone: Region, pc: Region): Region {
+    if (!PcGeometry.isPc(viewport)) return Region(pt.x + phone.left, pt.y + phone.top, pt.x + phone.right, pt.y + phone.bottom)
+    fun scaled(pixels: Int) = PcGeometry.length(viewport, pixels)
+    return Region(pt.x + scaled(pc.left), pt.y + scaled(pc.top), pt.x + scaled(pc.right), pt.y + scaled(pc.bottom))
+}
+
+/**
+ * Apply's boxes on the PC, this and the three below, in pixels of 1740x978. The PC draws the
+ * scout's panels and the village balances about 1.13 times the phone's size there, so each is the
+ * phone's box times 1.13: its loot rows are 43 px apart where Sweat's phone had 38, and its
+ * balances 56 px apart where Blood's phone had 49 (audit-evidence/spike/geo-scout.png and
+ * geo-home.png, and the phone tree's audit-evidence/clash-18647/r4-07-sweat-scout-a.png and
+ * r4-01-blood-home.png).
+ */
+private val PC_LOOT_ROW = Region(-5, -17, 163, 17)
+private val PC_COUNTDOWN = Region(-57, -18, 57, 20)
+private val PC_FEE = Region(-95, -17, 5, 17)
+private val PC_BALANCE = Region(-110, -20, 110, 20)
+
+/**
+ * A wall price's box, above the button tapped, on both: the PC draws a selected building's buttons
+ * at the phone's pixel size at 1740x978 (core/WallPanel.kt). No wall price has been read on the PC.
+ */
+private val WALL_COST = Region(-50, -40, 50, -10)

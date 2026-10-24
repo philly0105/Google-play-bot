@@ -218,6 +218,14 @@ Calibration:
   game surface's live size when the watcher has measured it, else the phone's 1600x720. This also
   lets `captureNormalizedVillage` find the display it waits for on a new account.
 - Marks on the frame are sized in dp, not the phone's pixels.
+- On a PC frame, a landscape one from 1.3:1 to under 2:1 (`PcGeometry.isPc`), the boxes Apply
+  draws around a click are the PC's size: the phone's times 1.13 at 1740x978, scaled with the
+  frame's height. That is a loot row 168x34 px, the countdown 114x38, the fee 100x34, a balance
+  220x40 and a card area 75x116, where the phone's are 148x30, 100x34, 88x30, 194x36 and 67x102.
+  The PC draws the scout's panels, the village balances and the tray's cards that much larger
+  (`audit-evidence/spike/geo-scout.png` and `geo-home.png`). A wall price's box is the phone's
+  100x30 at 1740x978, as the PC draws a selected building's buttons at the phone's pixel size
+  there; no price has been read on the PC to confirm it. A phone frame keeps the phone's boxes.
 
 ## Wording
 
@@ -266,7 +274,7 @@ of main at b514d40):
 | --- | --- | --- |
 | `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface, and how they count toward ready, the tab dot and the primary fix | 10 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
-| `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget`, and `FrameFit` at 16:9 and 16:10 | 11 |
+| `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
 | `desktop/ui/DashboardRenderTest.kt` | `pcAccounts`, and every tab, the account editor and calibration drawn off-screen at 1100x760 into `app/build/ui-renders` | 2 |
 | `desktop/RunTrayTest.kt` | `RunNotifier` through `RunTray`, and the panel's status text, idle shape and Stop | 5 |
@@ -279,8 +287,5 @@ of main at b514d40):
   gives a clean start is untested, so the line names only the restart.
 - The remote link on the clipboard can be kept by Windows clipboard history or cloud clipboard.
   Android marked the clip sensitive; Java has no such mark.
-- Apply's fixed pixel boxes are the phone's 1600x720 sizes and do not scale with the surface: the
-  card area about 67 px, a loot row 148x30, the countdown 100x34, the fee 88x30, a balance 194x36
-  and a wall cost 100x30.
 - Every screen draws off-screen without a layout failure, but the window, the tray and the
   status panel have not been seen running.
