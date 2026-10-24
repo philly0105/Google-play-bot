@@ -30,6 +30,7 @@ import local.clashfarmer.core.sentOrHeld
 import local.clashfarmer.desktop.platform.ClashHost
 import local.clashfarmer.desktop.platform.ClasspathAssets
 import local.clashfarmer.desktop.platform.GameSurface
+import local.clashfarmer.desktop.sidecar.SidecarException
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.log.FailureSnapshot
 import local.clashfarmer.recognition.ImageMatcher
@@ -74,6 +75,10 @@ class FarmerService(
         private const val HEALTH_REFRESH_MS = 30_000L
         /** Desktop: how long a start waits for a window lookup that worked before it decides to launch Clash. */
         private const val WINDOW_LOOKUP_WAIT_MS = 10_000L
+        /** Desktop: how far a surface's aspect may stray from its profile's and still count as the same. */
+        private const val SAME_ASPECT_TOLERANCE = 0.01
+        /** Desktop: how long a resize waits for the window watcher, which looks every 500 ms, to see it. */
+        private const val RESIZE_SEEN_MS = 2_000L
 
         /** Why a start is refused while Inspect or the tray check holds Clash on screen. */
         const val INSPECTING = "The app is reading the game screen for Inspect or the tray check; try again when it ends"
@@ -830,6 +835,7 @@ class FarmerService(
                 // A hold under the shade moves the check's own deadlines on; this one allows its cap.
                 kotlinx.coroutines.withTimeout(ACCOUNT_CHECK_MS + AppSwitchLatch.HOLD_CAP_MS) {
                     ensureClashForeground()
+                    fitSurface(profile)
                     kotlin.coroutines.coroutineContext.ensureActive()
                     overlay?.updateStatus("Switching to ${target.villageName}...")
 
@@ -1152,6 +1158,7 @@ class FarmerService(
         verifiedAccountId = null
         try {
             ensureClashForeground()
+            fitSurface(profile)
             kotlin.coroutines.coroutineContext.ensureActive()
 
             // Step 1: Verify identity and switch if needed
@@ -1360,6 +1367,7 @@ class FarmerService(
         kotlin.coroutines.coroutineContext.ensureActive()
         AppLog.log("village_retry_reopening", "account" to account.villageName)
         ensureClashForeground()
+        fitSurface(profile)
         val token = runGuard.startRun(ACCOUNT_CHECK_MS, viewport, profile.resolutionWidth, profile.resolutionHeight)
         try {
             ScreenReader().use { reader ->
@@ -1401,6 +1409,7 @@ class FarmerService(
         val profile = local.clashfarmer.accounts.AccountStore(filesDir).readProfile(account.id)
             ?: throw StopException("No calibration profile for ${account.villageName}")
         ensureClashForeground()
+        fitSurface(profile)
         val token = runGuard.startRun(
             // A maintenance break on the way back is waited out under this same token.
             timeoutMs = policy.RECOVERY_TIMEOUT_MS + PopupGuard.MAINTENANCE_MAX_MS + 30_000L,
@@ -1815,6 +1824,7 @@ class FarmerService(
     suspend fun captureNormalizedVillage(profile: PhoneProfile, returnToActivityClass: Class<*>): CapturedImage {
         if (isBusy) throw IllegalStateException("A farming session is already active")
         ensureClashForeground(timeoutMs = 90_000)
+        fitSurface(profile)
         val expected = Viewport(0, 0, profile.resolutionWidth, profile.resolutionHeight)
         val rotateDeadline = System.currentTimeMillis() + 60_000L
         while (currentDisplayViewport() != expected && System.currentTimeMillis() < rotateDeadline) delay(500)
@@ -1884,6 +1894,34 @@ class FarmerService(
      */
     fun currentDisplayViewport(): Viewport? =
         host.window.value.surface?.let { Viewport(0, 0, it.width, it.height) }
+
+    /**
+     * Desktop: sizes the game surface back to the size [profile] was calibrated at, which the run
+     * guard holds the run to, so a window sized by hand or opened at another size doesn't stop the
+     * run. Google Play Games keeps the aspect it chose at launch, so a surface of another aspect is
+     * left for the guard to refuse. A resize kept taps landing in the spike, where a relaunch did
+     * not (docs/gpg-spike.md, Restarting).
+     */
+    internal suspend fun fitSurface(profile: PhoneProfile) {
+        val surface = host.window.value.surface ?: return
+        val width = profile.resolutionWidth
+        val height = profile.resolutionHeight
+        if (surface.width == width && surface.height == height) return
+        val from = "${surface.width}x${surface.height}"
+        val stray = surface.width.toDouble() / surface.height * height / width - 1
+        if (kotlin.math.abs(stray) > SAME_ASPECT_TOLERANCE) {
+            AppLog.log("surface_aspect_differs", "surface" to from, "profile" to "${width}x$height")
+            return
+        }
+        val reached = try {
+            host.resize(width, height)
+        } catch (e: SidecarException) {
+            AppLog.log("surface_resize_failed", "surface" to from, "error" to e.message)
+            return
+        }
+        AppLog.log("surface_resized", "from" to from, "to" to "${reached.width}x${reached.height}")
+        withTimeoutOrNull(RESIZE_SEEN_MS) { host.window.first { it.surface == reached } }
+    }
 
     /**
      * Desktop: always true. The PC has no lock screen a run can read; a locked or sleeping PC is

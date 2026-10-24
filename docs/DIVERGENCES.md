@@ -20,6 +20,7 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `ui/components/ResourceBar.kt` | New object holding only `FULL_AT = 0.98f`, from the companion of the `ResourceBar` View. | `HomeCards.storageFull` reads `ResourceBar.FULL_AT`. |
 | `ui/FarmerTheme.kt` | New object with the token lines 22-73 and `withAlpha` (lines 82-83). The View factories and the `dp`, `dpf` and `spf` extensions are left out. | Verbatim `Tone` and `AccountColor` read the tokens, and `AccountColorTest` reads `acctA` and `acctB`. |
 | `ui/AccountEditor.kt` | New object with only `saveEnabled`, from the companion of the `AccountEditor` sheet. | `AccountEditorTest` calls `AccountEditor.saveEnabled`; the sheet is a View. |
+| `insight/EventText.kt` | Added sentences for `surface_resized`, `surface_aspect_differs` and `surface_resize_failed`, after `gesture_held`. | `FarmerService.fitSurface` logs them when it sizes the game window back to its calibration, and `EventTextTest` requires a sentence for every logged event. |
 | `app/src/test/kotlin/local/clashfarmer/insight/EventTextTest.kt` (a test) | Line 22: `File("src/main/java")` is now `File("src/main/kotlin")`. No assertion changed. | The test reads every logged event name from the main source root, which this repo keeps in `src/main/kotlin`. See `docs/TESTS.md`. |
 
 ## Shims and platform differences
@@ -94,6 +95,14 @@ below.
     `getSystemService(Context.POWER_SERVICE)` gives a PowerManager whose `isInteractive` is always
     true. A locked or sleeping PC is left to the captures: one that fails stops or recovers the
     run. Whether capture fails on a locked PC, rather than returning black frames, is untested.
+  - Surface size: the run guard holds each run to the profile's size, as the phone did, but a PC
+    window can be resized by hand or open at another size. `fitSurface` runs after
+    `ensureClashForeground` wherever a run token follows (the account check, the switch-only run,
+    the reopening after the takeover wait, a recovery and `captureNormalizedVillage`) and sizes the
+    surface back to the profile's when the aspects agree within 1%. Google Play Games keeps the
+    aspect it chose at launch, so a surface of another aspect is left for the guard to refuse. It
+    waits up to 2 s for the window watcher to see the new size. A resize kept taps landing in the
+    spike, where a relaunch did not (`docs/gpg-spike.md`, Restarting).
   - Battery: `readDeviceHealth` returns the reading a loop started by `onServiceConnected` takes
     from `host.power()` every 30 s in `serviceScope`. The phone read a sticky broadcast on the
     spot; here each reading is a sidecar round trip, and `LocalRunner` and `RemoteServer` call

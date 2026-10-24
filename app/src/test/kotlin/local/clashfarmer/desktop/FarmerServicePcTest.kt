@@ -21,6 +21,7 @@ import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.sidecar.PowerState
 import local.clashfarmer.desktop.sidecar.SidecarException
 import local.clashfarmer.desktop.sidecar.SurfaceSize
+import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.service.FarmerService
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -44,12 +45,13 @@ private fun openWindow(width: Int = 1280, height: Int = 720, iconic: Boolean = f
 
 class FarmerServicePcTest {
 
-    /** Opens the window [opensAfterMs] after a launch. */
+    /** Opens the window [opensAfterMs] after a launch. A resize reaches its size, and the watcher sees it 300 ms later. */
     private class FakeHost(private val scope: CoroutineScope) : ClashHost {
         override val window = MutableStateFlow(WindowStatus(checked = true))
 
         @Volatile var launches = 0
         var opensAfterMs = 600L
+        val resizes = mutableListOf<SurfaceSize>()
         var battery: () -> PowerState = { PowerState(ac = true, batteryPercent = -1, saver = false) }
 
         override suspend fun launch() {
@@ -58,6 +60,15 @@ class FarmerServicePcTest {
                 delay(opensAfterMs)
                 window.value = openWindow()
             }
+        }
+
+        override suspend fun resize(width: Int, height: Int): SurfaceSize {
+            resizes += SurfaceSize(width, height)
+            scope.launch {
+                delay(300)
+                window.value = openWindow(width, height)
+            }
+            return SurfaceSize(width, height)
         }
 
         override suspend fun power(): PowerState = battery()
@@ -174,5 +185,23 @@ class FarmerServicePcTest {
         service.ensureClashForeground(timeoutMs = 10_000)
         assertEquals(FarmerService.CLASH_PACKAGE, service.getActiveForegroundPackage())
         assertEquals(0, host.launches)
+    }
+
+    @Test
+    fun `a surface of the profile's aspect at another size is sized back to it`() = runBlocking {
+        host.window.value = openWindow(1920, 1080)
+        service.fitSurface(PhoneProfile.createDefault(1740, 978))
+        assertEquals(listOf(SurfaceSize(1740, 978)), host.resizes)
+        // The run guard reads the watcher, so the resize returns once the watcher has seen it.
+        assertEquals(Viewport(0, 0, 1740, 978), service.currentDisplayViewport())
+    }
+
+    @Test
+    fun `a surface of another aspect, or already at the profile's size, is left alone`() = runBlocking {
+        host.window.value = openWindow(1860, 1162)
+        service.fitSurface(PhoneProfile.createDefault(1740, 978))
+        host.window.value = openWindow(1740, 978)
+        service.fitSurface(PhoneProfile.createDefault(1740, 978))
+        assertEquals(emptyList<SurfaceSize>(), host.resizes)
     }
 }

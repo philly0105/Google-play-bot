@@ -425,6 +425,10 @@ object EventText {
         "back_withheld" -> "Did not press Back" to Tone.NEUTRAL
         "gesture_held" -> (if (bool(e, "waited") == false) "Did not send a tap: the screen it was meant for was too old"
             else "Did not send a tap: a pause came between") to Tone.NEUTRAL
+        // Desktop: the game window, put back to the size the run was calibrated at.
+        "surface_resized" -> "Resized the game window${str(e, "from")?.let { " from $it" } ?: ""} to ${str(e, "to") ?: "its calibrated size"}" to Tone.NEUTRAL
+        "surface_aspect_differs" -> "The game window is not the shape it was calibrated at${str(e, "profile")?.let { " ($it)" } ?: ""}, so it was left as it is" to Tone.WARN
+        "surface_resize_failed" -> "The game window could not be resized to its calibration" to Tone.WARN
 
         // Readings.
         "storage_read" -> "Storage read: ${storageText(e)}" to Tone.NEUTRAL

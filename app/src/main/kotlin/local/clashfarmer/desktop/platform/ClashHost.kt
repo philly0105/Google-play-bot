@@ -3,10 +3,11 @@ package local.clashfarmer.desktop.platform
 import kotlinx.coroutines.flow.StateFlow
 import local.clashfarmer.desktop.sidecar.PowerState
 import local.clashfarmer.desktop.sidecar.Sidecar
+import local.clashfarmer.desktop.sidecar.SurfaceSize
 
 /**
  * What FarmerService asks of the PC in place of Android's system services: the Clash window,
- * starting Clash, the battery, and keeping the PC awake through a run.
+ * starting Clash, sizing its game surface, the battery, and keeping the PC awake through a run.
  */
 interface ClashHost {
     /** The Clash window as [ClashWindowWatcher] last saw it. */
@@ -14,6 +15,13 @@ interface ClashHost {
 
     /** Starts Clash through Google Play Games, which may bring its window to the front. */
     suspend fun launch()
+
+    /**
+     * Sizes the game surface to [width] by [height] without activating the window, and returns
+     * the size it ended at. Google Play Games keeps the surface's aspect, so a size of another
+     * aspect is not reached.
+     */
+    suspend fun resize(width: Int, height: Int): SurfaceSize
 
     suspend fun power(): PowerState
 
@@ -25,6 +33,8 @@ class SidecarClashHost(private val sidecar: Sidecar, watcher: ClashWindowWatcher
     override val window: StateFlow<WindowStatus> = watcher.status
 
     override suspend fun launch() = sidecar.launch(CLASH_URL)
+
+    override suspend fun resize(width: Int, height: Int): SurfaceSize = sidecar.resize(width, height)
 
     override suspend fun power(): PowerState = sidecar.power()
 
