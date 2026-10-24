@@ -36,8 +36,3 @@ object UiText {
         else String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
-
-/** Sets [value] only when it differs, so an unchanged tick does not request a layout pass. */
-fun android.widget.TextView.update(value: CharSequence) {
-    if (text.toString() != value.toString()) text = value
-}
