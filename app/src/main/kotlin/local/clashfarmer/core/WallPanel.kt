@@ -239,16 +239,16 @@ object WallPanel {
      */
     fun addOneByPitch(buttons: Map<String, PurchaseButton>, viewport: Viewport): Point? {
         val gold = buttons["gold"]?.tap ?: return null
-        return Point(gold.x - PcGeometry.pick(viewport, viewport.width * BUTTON_PITCH / 1600, viewport.width * PC_BUTTON_PITCH / 1740), gold.y)
+        return Point(gold.x - PcGeometry.pick(viewport, viewport.width * BUTTON_PITCH / 1600, PcGeometry.length(viewport, PC_BUTTON_PITCH)), gold.y)
     }
 
     private const val BUTTON_PITCH = 143
 
     /**
-     * The PC draws a selected building's buttons at the phone's own pixel size, not scaled with the
-     * frame: under the Town Hall at 1740x978 the labels centre at x 592, 732 and 872, and 1152 four
-     * buttons along (audit-evidence/spike/geo-selected.json). The bulk panel is not captured on the
-     * PC yet.
+     * The PC draws a selected building's buttons at the phone's own pixel size at 1740x978: under
+     * the Town Hall the labels centre at x 592, 732 and 872, and 1152 four buttons along
+     * (audit-evidence/spike/geo-selected.json). Like the rest of the HUD they scale with the frame's
+     * height ([PcGeometry]); that, and the bulk panel, are not captured on the PC yet.
      */
     private const val PC_BUTTON_PITCH = 140
 
@@ -397,8 +397,8 @@ object WallPanel {
      * The PC's buttons keep the phone's pixel size ([PC_BUTTON_PITCH]), and its reader puts a
      * label's top about 76 px below its button's top where the phone's put it 81-85 below. Its
      * region keeps the phone's place on the button, from 10 px above its top to 50 px into it, so
-     * the panel's title stays out of it as on the phone. An estimate: no purchase button has been
-     * read on the PC yet.
+     * the panel's title stays out of it as on the phone. All three are pixels at 1740x978, scaled
+     * with the height. An estimate: no purchase button has been read on the PC yet.
      */
     fun priceRegions(boxes: List<RecognizedBox>, viewport: Viewport): List<Region> {
         val strip = band(boxes, viewport)
@@ -406,14 +406,14 @@ object WallPanel {
         return upgradeLabels(strip, more)
             .filter { it.top >= viewport.top + viewport.height * 76 / 100 }
             .map { label ->
-            val halfWidth = PcGeometry.pick(viewport, viewport.width * 75 / 1600, viewport.width * 75 / 1740)
+            val halfWidth = PcGeometry.pick(viewport, viewport.width * 75 / 1600, PcGeometry.length(viewport, 75))
             val text = labelText(label.text)
             val x = label.left + (label.right - label.left) * (2 * text.indexOf("upgrade") + 7) / (2 * text.length)
             Region(
                 (x - halfWidth).coerceAtLeast(viewport.left),
-                (label.top - PcGeometry.pick(viewport, viewport.height * 95 / 720, viewport.height * 86 / 978)).coerceAtLeast(viewport.top),
+                (label.top - PcGeometry.pick(viewport, viewport.height * 95 / 720, PcGeometry.length(viewport, 86))).coerceAtLeast(viewport.top),
                 (x + halfWidth).coerceAtMost(viewport.right),
-                (label.top - PcGeometry.pick(viewport, viewport.height * 35 / 720, viewport.height * 26 / 978)).coerceAtMost(viewport.bottom)
+                (label.top - PcGeometry.pick(viewport, viewport.height * 35 / 720, PcGeometry.length(viewport, 26))).coerceAtMost(viewport.bottom)
             )
         }.distinct()
     }

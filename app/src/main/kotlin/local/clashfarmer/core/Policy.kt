@@ -221,7 +221,10 @@ object Policy {
         ScreenState.HOME to listOf(" battie ", " build "),
         // The PC's reader made the first t an f: "Baftle" on Blood's village under the quit
         // prompt, audit-evidence/spike/geo-after-deselect.json.
-        ScreenState.HOME to listOf(" baftle ", " build ")
+        ScreenState.HOME to listOf(" baftle ", " build "),
+        // Or the second: "Batfle" on six of Blood's village frames at 1860x1162 on 24 October,
+        // audit-evidence/live/20261024-030816-profile/00-home.json among them.
+        ScreenState.HOME to listOf(" batfle ", " build ")
     )
 
     private val AMOUNT_REGEX = Regex("^(?:[0-9]+|[0-9]{1,3}(?:[ ,][0-9]{3})+)$")
