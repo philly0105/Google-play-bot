@@ -33,6 +33,17 @@ object Builders {
     /** The builders' counter starts left of this; the goblin's starts near x 1475. */
     private const val CORNER_BUILDERS_LEFT = 1450.0 / 1600
 
+    /**
+     * The same line and split on the PC's 16:9 frames, the phone's mapped by the HUD's anchoring to
+     * the bottom-right corner at 1740x978: the builders' "0/6" at x 1576-1642, y 774-804, the
+     * goblin's "0/1" beside it near x 1680. audit-evidence/spike/geo-home.json.
+     */
+    private const val PC_CORNER_LEFT = 1569.0 / 1740
+    private const val PC_CORNER_RIGHT = 1723.0 / 1740
+    private const val PC_CORNER_TOP = 756.0 / 978
+    private const val PC_CORNER_BOTTOM = 816.0 / 978
+    private const val PC_CORNER_BUILDERS_LEFT = 1632.0 / 1740
+
     /** One glyph free, a slash, one digit total. The top bar's "O" for a zero is taken as one. */
     private val COUNT = Regex("^([0-9OoDQ])\\s*/\\s*([0-9])$")
 
@@ -103,7 +114,7 @@ object Builders {
     private fun readCorner(boxes: List<RecognizedBox>, viewport: Viewport): BuilderCount? {
         if (viewport.width <= 0 || viewport.height <= 0) return null
         val first = corner(boxes, viewport)
-            .filter { (it.left - viewport.left).toDouble() / viewport.width <= CORNER_BUILDERS_LEFT }
+            .filter { (it.left - viewport.left).toDouble() / viewport.width <= PcGeometry.pick(viewport, CORNER_BUILDERS_LEFT, PC_CORNER_BUILDERS_LEFT) }
             .minByOrNull { it.left } ?: return null
         val text = first.text.map { if (it.isWhitespace()) ' ' else it }.joinToString("")
         val token = TOKEN.find(text) ?: return null
@@ -119,6 +130,7 @@ object Builders {
         if (viewport.width <= 0 || viewport.height <= 0) return false
         val x = (box.center.x - viewport.left).toDouble() / viewport.width
         val y = (box.center.y - viewport.top).toDouble() / viewport.height
+        if (PcGeometry.isPc(viewport)) return x in PC_CORNER_LEFT..PC_CORNER_RIGHT && y in PC_CORNER_TOP..PC_CORNER_BOTTOM
         return x in CORNER_LEFT..CORNER_RIGHT && y in CORNER_TOP..CORNER_BOTTOM
     }
 

@@ -1,5 +1,6 @@
 package local.clashfarmer.recognition
 
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Policy
 import local.clashfarmer.core.Region
@@ -10,10 +11,14 @@ import java.util.Locale
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
-/** Part of the screen as fractions of the viewport, so a band means the same at any size. */
-private data class Band(val left: Double, val top: Double, val right: Double, val bottom: Double) {
+/**
+ * Part of the screen as fractions of the viewport, so a band means the same at any size. [pc], when
+ * given, replaces it on the PC's 16:9 frames ([PcGeometry]).
+ */
+private data class Band(val left: Double, val top: Double, val right: Double, val bottom: Double, val pc: Band? = null) {
     fun holds(point: Point, viewport: Viewport): Boolean {
         if (viewport.width <= 0 || viewport.height <= 0) return false
+        if (pc != null && PcGeometry.isPc(viewport)) return pc.holds(point, viewport)
         val x = (point.x - viewport.left).toDouble() / viewport.width
         val y = (point.y - viewport.top).toDouble() / viewport.height
         return x in left..right && y in top..bottom
@@ -42,9 +47,10 @@ private val HOME_ATTACK = Band(0.0, 0.8, 0.2, 1.0)
 
 /**
  * The village's Battle button as read, letters only: "Batle" and "Bale" on Blood, 14 October,
- * and "Battie" on Sweat at 10:37 UTC that day.
+ * and "Battie" on Sweat at 10:37 UTC that day. The PC's reader made it "Baftle" under the quit
+ * prompt, audit-evidence/spike/geo-after-deselect.json.
  */
-val BATTLE_READS = setOf("battle", "batle", "bale", "battie")
+val BATTLE_READS = setOf("battle", "batle", "bale", "battie", "baftle")
 
 private val RESULT_WORDS = listOf("total damage", "you got", "troops expended", "victory", "defeat")
 
@@ -130,8 +136,12 @@ private fun distance(a: Point, b: Point): Double =
  */
 private val RELOAD_WORDS = setOf("reload", "reload game", "try again")
 
-/** The takeover dialog's Reload at (790, 648), 25 September; audit-evidence/2026-09-25-takeover-now.png. */
-private val RELOAD_BUTTON = Band(0.3, 0.78, 0.7, 1.0)
+/**
+ * The takeover dialog's Reload at (790, 648), 25 September; audit-evidence/2026-09-25-takeover-now.png.
+ * On the PC the idle dialog's RELOAD GAME was read at (577, 545) of 1740x978, y 0.56, so the band
+ * starts at mid-height. Neither that dialog nor the takeover one has a saved PC capture yet.
+ */
+private val RELOAD_BUTTON = Band(0.3, 0.78, 0.7, 1.0, pc = Band(0.25, 0.5, 0.75, 1.0))
 
 /**
  * Where to tap Reload, or null. Clash ends a connection with a dialog whose one button reconnects:
@@ -220,12 +230,18 @@ private fun scaled(viewport: Viewport, fx: Double, fy: Double) = Point(
  * The builder counter, "1/6" over the builder's face. Until Clash 18.647 it sat in the top bar at
  * (790, 42); since 14 October it sits above Build at (1430, 553), with the goblin's "1/2" beside
  * it at (1493, 553). It opens the upgrade list. The open list covers it, so it never closes the
- * list again: [upgradeListClosePoint] does.
+ * list again: [upgradeListClosePoint] does. On the PC the "0/6" reads at x 1576-1642, y 774-804
+ * of 1740x978 (audit-evidence/spike/geo-home.json).
  */
-fun builderCounterPoint(viewport: Viewport): Point = scaled(viewport, 1430.0 / 1600, 553.0 / 720)
+fun builderCounterPoint(viewport: Viewport): Point = PcGeometry.pick(viewport,
+    scaled(viewport, 1430.0 / 1600, 553.0 / 720), scaled(viewport, 1609.0 / 1740, 789.0 / 978))
 
-/** The open list's red X, top right of its panel at (1520, 28); audit-evidence/clash-18647/12-now.png. */
-fun upgradeListClosePoint(viewport: Viewport): Point = scaled(viewport, 1520.0 / 1600, 28.0 / 720)
+/**
+ * The open list's red X, top right of its panel at (1520, 28); audit-evidence/clash-18647/12-now.png.
+ * On the PC it reads at x 1690-1732, y 10-47 of 1740x978 (audit-evidence/spike/geo-list-top.json).
+ */
+fun upgradeListClosePoint(viewport: Viewport): Point = PcGeometry.pick(viewport,
+    scaled(viewport, 1520.0 / 1600, 28.0 / 720), scaled(viewport, 1711.0 / 1740, 28.0 / 978))
 
 /**
  * Since Clash 18.647 the list is a full-height panel down the right edge, x 1118-1545, with its
@@ -248,12 +264,16 @@ fun builderPanelShowing(boxes: List<RecognizedBox>, viewport: Viewport): Boolean
  * 578-1054, and is recognised by a price ending near x 1040. The coin before a price often reads
  * as a letter ("O 5 000 000", "e8 000 000"); one such glyph either side still makes it a price, or
  * a Blood frame with every coin read that way falls back to the narrow popup and loses its names.
- * Since Clash 18.647 the panel is x 1118-1545, y 60-625, on both accounts.
+ * Since Clash 18.647 the panel is x 1118-1545, y 60-625, on both accounts. On the PC it runs to the
+ * frame's right edge, x 1272-1740, with rows from y 61 to 856 and its tabs from y 917 at
+ * 1740x978 (audit-evidence/spike/geo-list-*.json).
  */
 fun upgradePopupRegion(viewport: Viewport, boxes: List<RecognizedBox> = emptyList()): Region {
     if (builderPanelShowing(boxes, viewport)) {
-        val topLeft = scaled(viewport, 1118.0 / 1600, 60.0 / 720)
-        val bottomRight = scaled(viewport, 1545.0 / 1600, 625.0 / 720)
+        val topLeft = PcGeometry.pick(viewport,
+            scaled(viewport, 1118.0 / 1600, 60.0 / 720), scaled(viewport, 1272.0 / 1740, 63.0 / 978))
+        val bottomRight = PcGeometry.pick(viewport,
+            scaled(viewport, 1545.0 / 1600, 625.0 / 720), scaled(viewport, 1740.0 / 1740, 873.0 / 978))
         return Region(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y)
     }
     val wider = boxes.any {
@@ -289,8 +309,13 @@ fun upgradeListSwipe(viewport: Viewport, towardsBottom: Boolean): Pair<Point, Po
     return if (towardsBottom) low to high else high to low
 }
 
-/** The bot's own floating panel, top-left; whatever it says is not the game's. */
+/**
+ * The bot's own floating panel, top-left; whatever it says is not the game's. The PC's panel is a
+ * window of its own that the capture never holds, and the corner holds Clash's text there: the
+ * player's name, the clan, the scout's loot.
+ */
 fun isOwnOverlay(box: RecognizedBox, viewport: Viewport): Boolean {
+    if (PcGeometry.isPc(viewport)) return false
     val limit = scaled(viewport, 600.0 / 1600, 105.0 / 720)
     return box.center.x < limit.x && box.center.y < limit.y
 }
