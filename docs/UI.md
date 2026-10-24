@@ -77,6 +77,12 @@ again; the log replays its history only on the first call, so that is harmless.
 The controller never sets `FarmerService.helperActivityVisible` and never touches the overlay's
 visibility. The overlay is its own window, and the PC bot works the game in the background.
 
+The PC runs only Blood. `pcAccounts` drops every other account from what the controller reads,
+both the tick it binds and its starts, so Sweat's calibration and wall lines never sit in Setup
+or Activity, Home has no second-account card, and Run greys out Both. Sweat's record and files
+stay on disk. `Main.kt` selects Blood at each start, and calibration falls back to Blood. The
+built-in "Both accounts" preset is kept and refused with "Both needs two accounts".
+
 ## Actions
 
 Every action but `stop`, `pause`, `edit:` and `history` is refused while a run or an inspection
@@ -258,6 +264,8 @@ of main at b514d40):
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget`, and `FrameFit` at 16:9 and 16:10 | 11 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
+| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts`, and every tab, the account editor and calibration drawn off-screen at 1100x760 into `app/build/ui-renders` | 2 |
+| `desktop/RunTrayTest.kt` | `RunNotifier` through `RunTray`, and the panel's status text, idle shape and Stop | 5 |
 
 ## Open points
 
@@ -275,4 +283,5 @@ of main at b514d40):
 - Apply's fixed pixel boxes are the phone's 1600x720 sizes and do not scale with the surface: the
   card area about 67 px, a loot row 148x30, the countdown 100x34, the fee 88x30, a balance 194x36
   and a wall cost 100x30.
-- Compiled and unit tested, not yet seen running.
+- Every screen draws off-screen without a layout failure, but the window, the tray and the
+  status panel have not been seen running.

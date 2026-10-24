@@ -40,6 +40,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * [loaded] with only the account the PC runs, Blood. Every screen and every start reads the accounts
+ * through this, so Sweat's checks never sit in Setup or Activity; its record and files stay where
+ * AccountStore keeps them, and FarmerService refuses it whatever asks.
+ */
+internal fun pcAccounts(loaded: DashboardLoader.Accounts) = loaded.copy(
+    accounts = loaded.accounts.filter { it.id == AccountStore.BLOOD_ID },
+    profiles = loaded.profiles.filterKeys { it == AccountStore.BLOOD_ID }
+)
+
 /** A message at the foot of the window, the phone's Toast. A class, so two equal texts are two toasts. */
 class ToastMessage(val text: String, val long: Boolean)
 
@@ -143,7 +153,7 @@ class FarmerController(
             toast(BUSY)
             return
         }
-        val id = accountId ?: runCatching { accountStore.selectedId() }.getOrNull() ?: AccountStore.SWEAT_ID
+        val id = accountId ?: runCatching { accountStore.selectedId() }.getOrNull() ?: AccountStore.BLOOD_ID
         calibration?.close()
         calibration = CalibrationModel(this, id, onBack = ::closeCalibration)
     }
@@ -319,7 +329,7 @@ class FarmerController(
 
     private fun bindTick(tick: DashboardLoader.Tick) {
         val service = FarmerService.instance
-        val accounts = tick.accounts
+        val accounts = pcAccounts(tick.accounts)
         profile = accounts.selectedId?.let { accounts.profiles[it] }
         val busy = service?.isBusy == true
         val frame = service?.latestFrame?.store?.snapshot
@@ -410,7 +420,7 @@ class FarmerController(
             toast(NOT_RUNNING)
             return
         }
-        val loaded = loader.accounts()
+        val loaded = pcAccounts(loader.accounts())
         val account = loaded.selected ?: throw IllegalStateException("Selected account not found")
         val prof = loaded.profiles[account.id]
             ?: throw IllegalStateException("Please calibrate the profile first.")
@@ -435,7 +445,7 @@ class FarmerController(
         val service = FarmerService.instance
             ?: throw IllegalStateException(NOT_RUNNING)
         val plan = RunPlan.fromJson(JSONObject(json)) ?: throw IllegalArgumentException("That run could not be read")
-        val loaded = loader.accounts()
+        val loaded = pcAccounts(loader.accounts())
         val now = System.currentTimeMillis()
         ComposerState.readiness(plan, loaded.accounts, loaded.profiles, connected = true, busy = service.isBusy,
             selectedId = loaded.selectedId, nowMs = now).firstOrNull()?.let { throw IllegalStateException(it) }
