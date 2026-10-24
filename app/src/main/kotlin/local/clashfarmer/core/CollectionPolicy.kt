@@ -1,5 +1,6 @@
 package local.clashfarmer.core
 
+import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.recognition.RecognizedBox
 import java.util.Locale
 
@@ -50,6 +51,16 @@ object CollectionPolicy {
     private const val CORNER_LEFT = 0.39
     private const val CORNER_RIGHT = 0.74
 
+    /**
+     * The PC's [CORNER_LEFT], an x at 1740x978 kept from the left edge ([PcGeometry]). The event bar
+     * along the bottom left ends at x 636 there and at 1565x978 alike (audit-evidence/spike/geo-home.png,
+     * audit-evidence/live/20261024-025818-resize/1740x978-got-1565x978.png). At 1565x978 the phone's
+     * fraction falls at x 610, inside the "<" that folds the bar, and would leave the bar's last 26 px
+     * to a collection tap. 679 is the phone's fraction of 1740, so on a 16:9 frame the line stays
+     * within a pixel of the phone's.
+     */
+    private const val PC_CORNER_LEFT = 679
+
     /** The strip a selected building's name and buttons are drawn in, as the wall panel's. */
     private const val PANEL_TOP = 0.62
     private const val PANEL_BOTTOM = 0.88
@@ -88,7 +99,8 @@ object CollectionPolicy {
         if (fx !in LEFT..RIGHT || fy !in TOP..BOTTOM) return false
         if (fx < OVERLAY_RIGHT && fy < OVERLAY_BOTTOM) return false
         if (fx >= BALANCES_LEFT && fy < BALANCES_BOTTOM) return false
-        return !(fy > CORNERS_TOP && (fx < CORNER_LEFT || fx > CORNER_RIGHT))
+        val cornerLeft = PcGeometry.pick(viewport, CORNER_LEFT, PcGeometry.xFraction(viewport, PC_CORNER_LEFT, Anchor.LEFT))
+        return !(fy > CORNERS_TOP && (fx < cornerLeft || fx > CORNER_RIGHT))
     }
 
     /** A selected building: Info, or a "(Level n)" title, in the strip its panel occupies. */

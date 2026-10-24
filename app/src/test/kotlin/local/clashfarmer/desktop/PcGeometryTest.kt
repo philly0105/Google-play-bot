@@ -2,6 +2,7 @@ package local.clashfarmer.desktop
 
 import local.clashfarmer.core.BuilderCount
 import local.clashfarmer.core.Builders
+import local.clashfarmer.core.CollectionPolicy
 import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.core.Point
@@ -410,6 +411,21 @@ class PcGeometryTest {
         for ((word, anchor) in listOf("Battle" to Anchor.LEFT, "Build" to Anchor.RIGHT, "0/6" to Anchor.RIGHT)) {
             val at = named(home, word).center
             assertInside("$word at 1565x978", named(resizedHud, word), PcGeometry.point(resized, at.x, at.y, anchor))
+        }
+    }
+
+    /**
+     * The event bar along the bottom left ends at x 636, y 884-960, on geo-home.png and on the
+     * 1565x978 frame alike, with the "<" that folds it at about x 590-615 (measured on the images;
+     * OCR reads none of it). A collection tap is never sent onto it, and the ground past it is still
+     * the village's. At 1860x1162 the bar is where the left edge's rule puts it.
+     */
+    @Test fun aCollectionTapKeepsOffTheEventBar() {
+        for (viewport in listOf(pc, resized, wide)) {
+            val onBar = PcGeometry.point(viewport, 630, 920, Anchor.LEFT)
+            val pastIt = PcGeometry.point(viewport, 700, 920, Anchor.LEFT)
+            assertFalse("$viewport $onBar", CollectionPolicy.inVillage(onBar, viewport))
+            assertTrue("$viewport $pastIt", CollectionPolicy.inVillage(pastIt, viewport))
         }
     }
 
