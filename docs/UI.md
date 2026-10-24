@@ -94,7 +94,7 @@ Sweat".
 | Action | What it does |
 | --- | --- |
 | `stop` | `FarmerService.stop(UserStop.DASHBOARD)` |
-| `pause` | Resumes when paused; otherwise pauses, and only while a run is busy. Logs `pause_button` |
+| `pause` | Resumes when paused, through `FarmerService.resumeFromNotification("dashboard")`; otherwise pauses, and only while a run is busy. Logs `pause_button` |
 | `settings` | Opens Setup. The phone opened Android's accessibility settings |
 | `launch_clash` | New. `FarmerService.launchClash()`, sent by the Game window line's fix |
 | `calibrate` | Opens calibration for the selected account |
@@ -195,8 +195,10 @@ Tray check:
 Inspect and captures:
 
 - `inspect`, the tray check and calibration capture the window where it is, without the phone's
-  return-to-activity step. Resume only resumes: the phone brought Clash to the front and resumed
-  1.5 s later, and the PC never takes focus.
+  return-to-activity step.
+- Resume: the phone brought Clash to the front and resumed 1.5 s later. The PC never brings the
+  window forward; it starts Clash only when the window is gone, as the tray's Resume does, and
+  resumes 1.5 s later.
 - The inspect report shows in a monospace alert.
 
 Account editor:
@@ -274,10 +276,6 @@ of main at b514d40):
   still read as found, and the line shows "Open" for a window nobody can see. The fix is not
   offered then, which avoids the relaunch that broke input, but the line is wrong. A `visible`
   flag from `find` would let it say the window is closed and how to start clean.
-- Resume. The dashboard's Resume calls `runGuard.resume()` and nothing else, as the brief asked.
-  Main's `FarmerService.resumeFromNotification()`, public for the tray, first starts Clash when
-  its window is gone and resumes after a wait. So a run paused with the window gone resumes into
-  a missing window from the dashboard but not from the tray.
 - The remote link on the clipboard can be kept by Windows clipboard history or cloud clipboard.
   Android marked the clip sensitive; Java has no such mark.
 - Apply's fixed pixel boxes are the phone's 1600x720 sizes and do not scale with the surface: the

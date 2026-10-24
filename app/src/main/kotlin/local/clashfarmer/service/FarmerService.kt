@@ -615,11 +615,13 @@ class FarmerService(
      * Resume does, and lets the run continue once the game has had time to draw. Only the
      * person's own pause is resumed; the shade's hold lets go by itself when the shade closes.
      *
-     * Desktop: public, for the tray. Clash is started only when its window is gone, since Google
-     * Play Games may bring the game it starts to the front, and the start is a sidecar call, so it
-     * runs at the head of the wait rather than before it.
+     * Desktop: public, for the tray, and the dashboard's Resume too, logged as [source]
+     * "dashboard": the phone's brought Clash to the front first, and on the PC the only way back
+     * is this same start. Clash is started only when its window is gone, since Google Play Games
+     * may bring the game it starts to the front, and the start is a sidecar call, so it runs at
+     * the head of the wait rather than before it.
      */
-    fun resumeFromNotification() {
+    fun resumeFromNotification(source: String = "notification") {
         if (!isBusy || !runGuard.isPaused() || isHeldBySystemWindow) return
         // A newer Resume replaces one still waiting for Clash to draw.
         notificationResume?.cancel()
@@ -640,10 +642,10 @@ class FarmerService(
                     val active = getActiveForegroundPackage()
                     val covered = AppSwitchLatch.shadeOver(active, isDeviceUnlocked())
                     if (!covered) runGuard.resume()
-                    AppLog.log("pause_button", "paused" to false, "source" to "notification")
+                    AppLog.log("pause_button", "paused" to false, "source" to source)
                     // Starting Clash may leave the shade down, and a run resumed under it fails its
                     // next capture; the hold takes the pause instead and lets go when the shade closes.
-                    if (covered) holdForSystemWindow(active, "notification resume")
+                    if (covered) holdForSystemWindow(active, "$source resume")
                 }
             }
         }

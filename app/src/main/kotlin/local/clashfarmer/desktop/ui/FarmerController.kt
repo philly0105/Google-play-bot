@@ -242,11 +242,11 @@ class FarmerController(
                 action == "stop" -> service?.stop(UserStop.DASHBOARD)
                 action == "pause" -> service?.runGuard?.let { guard ->
                     if (guard.isPaused()) {
-                        // The phone brought Clash to the front and resumed 1.5 s later, so the next
-                        // capture found it in front. The PC bot works the window in the background
-                        // and never takes focus, so Resume only resumes.
-                        guard.resume()
-                        AppLog.log("pause_button", "paused" to guard.isPaused(), "source" to "dashboard")
+                        // Clash must be there before the run takes its next capture, or the
+                        // foreground check stops the run the user just asked to continue. The
+                        // phone brought it to the front; the PC starts it only when its window is
+                        // gone, as the tray's Resume does, and resumes 1.5 s later.
+                        service?.resumeFromNotification(source = "dashboard")
                     } else if (service?.isBusy == true) {
                         // With nothing running a Pause is ignored, as the notification's is: kept
                         // between runs, it held the next Start with no Resume shown (UO-21

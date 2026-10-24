@@ -139,7 +139,8 @@ below.
     and the new `stopFromNotification` stops with the reason the control receiver gave, all for
     the tray. Resume calls `host.launch()` only when there is no Clash window, since Google Play
     Games may bring the window it starts to the front, and does so inside its job before the
-    wait, since the call suspends.
+    wait, since the call suspends. Its new `source` parameter, "notification" by default, goes in
+    the `pause_button` line and the hold's reason; the dashboard's Resume passes "dashboard".
   - Left out: `onAccessibilityEvent`, `announcedForegroundPackage`, `onInterrupt`, the screen-off
     receiver (Windows has no matching broadcast; a sleeping PC fails the next capture instead),
     the notification control receiver, `awaitImmersiveClash`, `clashCoversDisplay`,
