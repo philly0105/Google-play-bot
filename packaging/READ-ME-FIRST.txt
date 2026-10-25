@@ -28,22 +28,24 @@ Install
 4. Windows may say "Windows protected your PC". The app isn't signed, so this is expected:
    click More info, then Run anyway. You only do this once.
    If Smart App Control blocks it with no Run anyway button, this PC can't run unsigned apps.
-5. If you use Tailscale, Windows may ask whether to let the app through the firewall. Allowing it
-   turns on the remote control page on your tailnet. Cancel is fine: the bot runs either way.
+5. If you use Tailscale, Windows may ask whether to let the app through the firewall. Allowing
+   it lets your other devices open the remote control page over Tailscale. Cancel is fine: the
+   bot runs either way.
 
 
 First run
 ---------
 1. Open Clash of Clans in Google Play Games.
 2. In Clash Farmer, open Setup and fix what it marks in red, and the amber lines you can fix.
-   The Account line stays amber until the first supervised attack (step 4) reads your village,
-   and on Windows 10 the Windows line stays amber.
+   The Account and Calibration lines stay amber until the first supervised attack (step 4),
+   and on Windows 10 the Windows line stays amber. Walls stays amber until you enter your
+   storage sizes (see "While it plays").
 3. Calibrate when Setup asks you to. Press "Start from the standard positions", then check
    each troop card against your own battle tray, press "Not in my army" on any hero or the jump
    spell if you don't have it, and press "Save calibration". The army needs one spell, such
    as Rage, for the bot to cast five times inside the base, so bring five of it: that card
    can't be left out. The card right of the main troop should not be another troop with a
-   count of x5 or more, because the bot takes that for an event card in front of the tray.
+   count of x5 or more, because the bot can take that for an event card in front of the tray.
 4. Start one supervised attack and watch it all the way through before you leave it alone.
 
 Closing the window keeps Clash Farmer running in the notification area (next to the clock; if
@@ -61,8 +63,9 @@ While it plays
   it, or move it to a larger screen. A maximized window is fine; only full screen is not.
 - Don't close Clash's window while Google Play Games is still open. If you do, restart the PC
   before the next run: until then the game ignores the bot's taps.
-- Don't open Clash on your phone or another device during a run. The run then waits 10 minutes
-  and takes the village back, and does that each time until you stop the run on this PC.
+- Don't open Clash on your phone or another device during a run. An unattended run then waits
+  10 minutes and takes the village back, each time, until you stop it or its time limit ends
+  it. A supervised attack just stops.
 - If a run stops because Clash needs an update, update it in Google Play Games. If that closes
   Clash's window, restart the PC before the next run, as above.
 - It never spends gems and never signs you in or out.
