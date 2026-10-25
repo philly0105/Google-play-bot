@@ -2,7 +2,9 @@ package local.clashfarmer.accounts
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import local.clashfarmer.core.PresetStore
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.RunPlan
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONArray
@@ -40,10 +42,17 @@ object PcAccount {
     /** An unattended start can't open Settings to learn the account, so it waits for a watched one. */
     const val ENROL_FIRST = "Run one supervised attack first so the bot can read your account."
 
-    /** The Settings tab opened, but no name and tag could be read off it. */
+    /**
+     * The Settings tab opened, but no name and tag could be read off it. The strip shows them only
+     * for an account linked to a Supercell ID; the language is checked on its own ([NOT_ENGLISH]).
+     */
     const val IDENTITY_UNREADABLE =
-        "Could not read your village name and tag in Clash's Settings. Make sure the account is linked to a " +
-            "Supercell ID and Clash is in English, then try again."
+        "Could not read your village name and tag in Clash's Settings. They show only when the account is " +
+            "linked to a Supercell ID: in Clash, open Settings and connect Supercell ID, then run one supervised " +
+            "attack again."
+
+    /** Settings shows a language other than English, and the bot reads Clash's English words. */
+    const val NOT_ENGLISH = "Set Clash's language to English (Settings > Language). The bot reads English text."
 
     /** Settings is open, but neither the strip nor the name is the village read on the first run. */
     const val NOT_THE_READ_VILLAGE =
@@ -70,6 +79,30 @@ object PcAccount {
         record.validate()
         val json = JSONObject().put("selectedId", ID).put("accounts", JSONArray().put(record.toJson()))
         atomicWrite(index, json.toString(2).toByteArray(Charsets.UTF_8))
+        return true
+    }
+
+    /**
+     * The presets a fresh install starts with. The phone's seeds build walls, which a new account
+     * has not set up, and one runs "Both accounts", which a PC with one account can't start.
+     */
+    val FRESH_PRESETS: List<RunPlan> = listOf(
+        PresetStore.SEEDS[0].copy(walls = false, name = "Farm 40"),
+        PresetStore.SEEDS[1].copy(walls = false, name = "2 h")
+    )
+
+    /**
+     * Swaps the phone's seeded presets for [FRESH_PRESETS] when there is no presets.json yet, and
+     * says whether it did. It goes through PresetStore's own calls, so that copied file stays as
+     * it was. The new presets are saved before the seeds go, so a stop half way leaves too many
+     * presets rather than none. An existing file, the owner's, is left alone.
+     */
+    fun seedPresetsIfFresh(filesDir: File): Boolean {
+        if (File(filesDir, "presets.json").exists()) return false
+        val store = PresetStore(filesDir)
+        val seeds = store.presets()
+        FRESH_PRESETS.forEach { store.save(it) }
+        seeds.mapNotNull { it.name }.filter { name -> FRESH_PRESETS.none { it.name == name } }.forEach { store.delete(it) }
         return true
     }
 
@@ -159,6 +192,37 @@ object PcAccount {
         val name = read.villageName.trim()
         if (!TAG.matches(tag) || name.isBlank() || AccountIdentityParser.normalizeTag(name).replace(" ", "") == tag) return null
         return SettingsIdentity(name, "#$tag")
+    }
+
+    /**
+     * Whether the Settings tab's language row reads English: false when it names another language,
+     * null when the row is not read (no Language label, or nothing under it yet, as while the tab
+     * slides in). The value is the box right under the label. OCR mixes case ("ENglisH") and can
+     * misread a letter, and a wrong stop would block the owner's read, so a value that shares four
+     * letters in order with ENGLISH counts as English. The other languages' own names (Deutsch,
+     * Español, Français, Nederlands and the rest) share at most three.
+     */
+    fun englishLanguage(boxes: List<RecognizedBox>): Boolean? {
+        val label = boxes.firstOrNull { AccountIdentityParser.normalize(it.text) == "LANGUAGE" } ?: return null
+        val height = label.bottom - label.top
+        val value = boxes.filter {
+            it !== label && it.top >= label.bottom - height / 2 && it.top <= label.bottom + height * 2 &&
+                it.right > label.left && it.left < label.right
+        }.minByOrNull { it.top } ?: return null
+        val letters = value.text.filter { it.isLetter() }.uppercase()
+        if (letters.length < 2) return null
+        return inOrder(letters, "ENGLISH") >= 4
+    }
+
+    /** How many letters [a] and [b] share in the same order (their longest common subsequence). */
+    private fun inOrder(a: String, b: String): Int {
+        var previous = IntArray(b.length + 1)
+        for (x in a) {
+            val row = IntArray(b.length + 1)
+            for (j in b.indices) row[j + 1] = if (x == b[j]) previous[j] + 1 else maxOf(previous[j + 1], row[j])
+            previous = row
+        }
+        return previous[b.length]
     }
 
     private val TAG = Regex("^[0-9A-Z]{4,14}$")

@@ -1,7 +1,9 @@
 package local.clashfarmer.accounts
 
 import android.graphics.Bitmap
+import local.clashfarmer.core.PresetStore
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.RunPlan
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONObject
@@ -55,6 +57,29 @@ class PcAccountTest {
         assertFalse(PcAccount.seedIfFresh(dir))
         assertArrayEquals(before, index.readBytes())
         assertEquals(2, AccountStore(dir).load().size)
+    }
+
+    @Test
+    fun `a fresh install's presets build no walls and run the one account`() {
+        assertTrue(PcAccount.seedPresetsIfFresh(dir))
+        val presets = PresetStore(dir).presets()
+        assertEquals(listOf("Farm 40", "2 h"), presets.map { it.name })
+        assertTrue(presets.none { it.walls })
+        assertTrue(presets.all { it.accountIds == listOf(RunPlan.SELECTED) })
+        assertEquals(PresetStore.SEEDS[0].length, presets[0].length)
+        assertEquals(PresetStore.SEEDS[1].length, presets[1].length)
+        assertNull(PresetStore(dir).last())
+        assertFalse(PcAccount.seedPresetsIfFresh(dir))
+    }
+
+    @Test
+    fun `existing presets are left byte for byte`() {
+        val file = File(dir, "presets.json")
+        PresetStore(dir).presets()
+        val before = file.readBytes()
+        assertFalse(PcAccount.seedPresetsIfFresh(dir))
+        assertArrayEquals(before, file.readBytes())
+        assertEquals(PresetStore.SEEDS, PresetStore(dir).presets())
     }
 
     @Test
@@ -190,6 +215,34 @@ class PcAccountTest {
     @Test
     fun `the PC's account keeps the slot the owner's files are in`() {
         assertEquals(AccountStore.BLOOD_ID, PcAccount.ID)
+    }
+
+    @Test
+    fun `the language row reads English as OCR gives it, and stops on another language`() {
+        // Where the Settings tab at 1740x978 has the row (pc-frames, 24 October).
+        fun row(value: String) = listOf(
+            RecognizedBox("Music", 597, 309, 685, 348),
+            RecognizedBox("LaNguage", 805, 472, 944, 510),
+            RecognizedBox(".", 65, 488, 113, 517),
+            RecognizedBox(value, 826, 522, 927, 559),
+            RecognizedBox("Consent Choices", 1184, 605, 1359, 638)
+        )
+        assertEquals(true, PcAccount.englishLanguage(row("ENglisH")))
+        assertEquals(true, PcAccount.englishLanguage(row("EN9lisH")))
+        for (other in listOf("Deutsch", "Français", "Español", "Nederlands", "Svenska", "Italiano", "Polski")) {
+            assertEquals(other, false, PcAccount.englishLanguage(row(other)))
+        }
+        // Not read yet: no label, or nothing under it.
+        assertNull(PcAccount.englishLanguage(row("ENglisH").filter { it.text != "LaNguage" }))
+        assertNull(PcAccount.englishLanguage(row("ENglisH").filter { it.text != "ENglisH" }))
+        assertNull(PcAccount.englishLanguage(emptyList()))
+    }
+
+    @Test
+    fun `the language and identity refusals say what to do in Clash`() {
+        assertEquals("Set Clash's language to English (Settings > Language). The bot reads English text.", PcAccount.NOT_ENGLISH)
+        assertTrue(PcAccount.IDENTITY_UNREADABLE.contains("Supercell ID"))
+        assertTrue(PcAccount.IDENTITY_UNREADABLE.endsWith("then run one supervised attack again."))
     }
 
     private fun box(text: String, top: Int) = RecognizedBox(text, 50, top, 250, top + 30)

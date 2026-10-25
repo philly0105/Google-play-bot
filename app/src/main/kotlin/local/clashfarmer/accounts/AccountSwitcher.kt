@@ -381,6 +381,10 @@ class AccountSwitcher(
                 val observation = screenReader.observe(frame.bitmap, acquisitionTimeMs = frame.timestampMs)
                 val screen = Viewport(0, 0, frame.bitmap.width, frame.bitmap.height)
                 val region = identityRegion(screen)
+                // Desktop: the bot reads Clash's English words, so another language stops the read.
+                if (settingsTabShowing(observation.rawText) && PcAccount.englishLanguage(observation.boxes) == false) {
+                    throw StopException(PcAccount.NOT_ENGLISH)
+                }
                 val identity = if (!settingsTabShowing(observation.rawText)) null
                     else PcAccount.readIdentity(screenReader.observeRegion(frame.bitmap, region, scale = 5).boxes)
                 if (identity != null) {
