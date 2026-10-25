@@ -142,6 +142,10 @@ object Policy {
         // audit-evidence/clash-18647/50-result-claim.png.
         ScreenState.RESULT to listOf("claim reward", "you got"),
         ScreenState.RESULT to listOf("claim reward", "troops expended"),
+        // The PC's reader at 1860x1162 makes Return's t an f, "RefurN HoMe", and a result waited
+        // out the transition twice in thirteen minutes on 25 October. Home is still read, and with
+        // the loot line under it nothing but a result (or a replay's end, left the same way) matches.
+        ScreenState.RESULT to listOf(" home ", "troops expended"),
         // Matchmaking offers Return Home to call the search off, so this screen answers the
         // result rule word for word. On 18 September every search that took more than a couple
         // of seconds ended the run as an unexpected result screen. "Searching for opponents"

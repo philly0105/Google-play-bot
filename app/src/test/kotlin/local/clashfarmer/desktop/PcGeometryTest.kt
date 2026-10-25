@@ -400,6 +400,23 @@ class PcGeometryTest {
     }
 
     /**
+     * At 1860x1162 the reader makes Return's t an f, as it does Battle's: "RefurN HoMe" on two
+     * results in the first thirteen minutes of an unattended run on 25 October, and each waited out
+     * the transition (captures failure-transition_timeout-20261025-132904 and -133728). The real
+     * 16:10 result, its button read that way, is still a result, and Home is tapped.
+     */
+    @Test fun aResultWhoseReturnReadsRefurnIsStillAResult() {
+        val boxes = frame("live-1860-result", wide).map {
+            if (it.text == "RetuRN HoMe") it.copy(text = "RefurN HoMe") else it
+        }
+        assertEquals(ScreenState.RESULT, classifyScreen(boxes, wide))
+        assertEquals(named(boxes, "RefurN HoMe").center, returnHomeTarget(boxes, wide, null))
+        // The loot lines alone, with no button read, are not enough.
+        val noButton = boxes.filter { it.text != "RefurN HoMe" }
+        assertEquals(ScreenState.UNKNOWN, classifyScreen(noButton, wide))
+    }
+
+    /**
      * A selected building's buttons stand 140 px apart at 1740x978 (geo-selected: GuaRdians, then
      * IteMs), so Add Wall +1 is taken that far left of the gold button, scaled by the height.
      */
