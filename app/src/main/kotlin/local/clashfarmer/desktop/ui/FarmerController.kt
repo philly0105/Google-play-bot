@@ -287,7 +287,7 @@ class FarmerController(
                 // Setup's Game window line, when no Clash window is open.
                 action == "launch_clash" -> {
                     if (service == null) {
-                        toast(NOT_RUNNING)
+                        toast(NOT_RUNNING, long = true)
                     } else {
                         service.launchClash()
                     }
@@ -446,7 +446,7 @@ class FarmerController(
     private fun startToolRun(walls: Boolean) {
         val service = FarmerService.instance
         if (service == null) {
-            toast(NOT_RUNNING)
+            toast(NOT_RUNNING, long = true)
             return
         }
         val loaded = pcAccounts(loader.accounts())
@@ -505,7 +505,7 @@ class FarmerController(
     private fun startSwitchOnlyRun(account: AccountRecord) {
         val service = FarmerService.instance
         if (service == null) {
-            toast(NOT_RUNNING)
+            toast(NOT_RUNNING, long = true)
             return
         }
         toast("Switching to ${account.displayName}...")

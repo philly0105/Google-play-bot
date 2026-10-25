@@ -216,12 +216,8 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
                 }
             }
             Spacer(Modifier.width(8.dp))
-            val (word, tone) = when {
-                state.busy && state.paused -> "Paused" to Tone.WARN
-                state.busy -> "Running" to Tone.OK
-                else -> gameChip(window)
-            }
-            val needsYou = !state.busy && (tone == Tone.WARN || tone == Tone.BAD)
+            val (word, tone) = headerChip(state.busy, state.paused, state.connected, window)
+            val needsYou = !state.busy && state.connected && (tone == Tone.WARN || tone == Tone.BAD)
             Chip(word, tone, if (needsYou) Modifier.hoverClick(shape = RoundedCornerShape(percent = 50)) {
                 host.openTab(Tab.SETUP)
             } else Modifier, dot = true)
@@ -532,6 +528,18 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
          */
         const val FALLBACK_RATIO = 16f / 9f
     }
+}
+
+/**
+ * Home's header chip: the run's state while one is going, "Starting" while Clash Farmer itself
+ * is not up yet (the game window is not the news then, and Setup cannot fix it), and otherwise
+ * the game window's [gameChip]. Only that last one, amber or red, opens Setup.
+ */
+internal fun headerChip(busy: Boolean, paused: Boolean, connected: Boolean, window: WindowStatus): Pair<String, Tone> = when {
+    busy && paused -> "Paused" to Tone.WARN
+    busy -> "Running" to Tone.OK
+    !connected -> "Starting" to Tone.WARN
+    else -> gameChip(window)
 }
 
 /**

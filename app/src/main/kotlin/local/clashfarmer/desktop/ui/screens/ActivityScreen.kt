@@ -506,8 +506,9 @@ class ActivityScreen(private val host: DashboardHost) : DashboardScreen {
 
 /**
  * The problems Clear resolved hides: past events, not the calibration and settings findings. Those
- * are true until fixed and leave on their own then, so clearing one would hide it for 30 days
- * while it still stops runs.
+ * are true until fixed and leave on their own then, so clearing them in bulk would hide them for
+ * 30 days while still true, an incomplete calibration's while it stops runs. Each still has its
+ * own Dismiss in the Problems view, for an advisory one such as uneven card spacing.
  */
 internal fun clearable(problems: List<Problem>): List<Problem> =
     problems.filter { it.dismissible && it.action != Problem.Action.OPEN_SETUP }

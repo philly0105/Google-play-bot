@@ -11,6 +11,7 @@ import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.ui.screens.gameChip
+import local.clashfarmer.desktop.ui.screens.headerChip
 import local.clashfarmer.desktop.ui.screens.shownPresets
 import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.ui.Tab
@@ -112,5 +113,14 @@ class StartFixTest {
         assertEquals("Clash minimized" to Tone.OK, gameChip(WindowStatus(checked = true, window = window.copy(iconic = true))))
         assertEquals("Clash open" to Tone.OK, gameChip(WindowStatus(checked = true, window = window)))
         assertEquals("Clash not found" to Tone.BAD, gameChip(WindowStatus(checked = true, error = "sidecar down")))
+    }
+
+    @Test
+    fun `Home's chip says Starting before the game window while Clash Farmer is not up`() {
+        val open = WindowStatus(checked = true, window = ClashWindow(1, 2, "Clash of Clans", false, 1600, 900, foreground = false, monitorDpi = 96))
+        assertEquals("Starting" to Tone.WARN, headerChip(busy = false, paused = false, connected = false, window = open))
+        assertEquals("Clash open" to Tone.OK, headerChip(busy = false, paused = false, connected = true, window = open))
+        assertEquals("Running" to Tone.OK, headerChip(busy = true, paused = false, connected = true, window = WindowStatus()))
+        assertEquals("Paused" to Tone.WARN, headerChip(busy = true, paused = true, connected = true, window = WindowStatus()))
     }
 }
