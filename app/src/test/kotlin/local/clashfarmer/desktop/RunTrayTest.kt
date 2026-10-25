@@ -6,6 +6,7 @@ import local.clashfarmer.service.LiveStatus
 import local.clashfarmer.service.RunNotice
 import local.clashfarmer.service.RunNotifier
 import local.clashfarmer.service.RunTray
+import local.clashfarmer.service.plainStatus
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,6 +43,35 @@ class RunTrayTest {
     }
 
     @Test
+    fun `a stop notice shows the plain line under the running account`() {
+        val panel = RunNotifier.shown(RunNotice.stopped(null, UserStop.FLOATING_PANEL), "Blood")
+        assertEquals(RunNotice(RunNotice.Kind.STOPPED, "Blood: Run stopped", "You pressed Stop on the status panel."), panel)
+        val crash = RunNotifier.shown(RunNotice.stopped(null, "Run error: java.lang.IllegalStateException: boom"), null)
+        assertEquals(RunNotice.Kind.NEEDS_YOU, crash.kind)
+        assertEquals("Run needs you", crash.title)
+        assertEquals("Something went wrong; the Technical log on the Activity tab has the details.", crash.text)
+        assertFalse(crash.text.contains("Exception"))
+    }
+
+    @Test
+    fun `notices already written for people show as they are`() {
+        val notices = listOf(
+            RunNotice.finished("Blood", 3, 0, 0, 0),
+            RunNotice.deviceGuard("Blood", "Battery low: 14% and not charging (limit 15%)"),
+            RunNotice.takeoverWait("Blood", 10),
+            RunNotice(RunNotice.Kind.NEEDS_YOU, "Scheduled start did not run", "Farm at 07:00: Clash is busy")
+        )
+        for (notice in notices) assertEquals(notice, RunNotifier.shown(notice, "Blood"))
+    }
+
+    @Test
+    fun `the tray gets the plain stop line`() {
+        RunTray.supported = true
+        RunNotifier().post(RunNotice.stopped(null, UserStop.NOTIFICATION))
+        assertEquals("You chose Stop from the tray icon.", RunTray.notices.tryReceive().getOrNull()?.text)
+    }
+
+    @Test
     fun `without a notification area no notice waits for the tray`() {
         RunNotifier().post(RunNotice.stopped(null, UserStop.DASHBOARD))
         assertTrue(RunTray.notices.tryReceive().isFailure)
@@ -69,6 +99,23 @@ class RunTrayTest {
         assertFalse(overlay.panel.value.expanded)
         overlay.dismiss()
         assertFalse(overlay.panel.value.visible)
+    }
+
+    @Test
+    fun `the panel shows the runner's phone phrasing in plain words`() {
+        assertEquals("Stopped: you pressed Stop on the status panel", plainStatus("Stopped: ${UserStop.FLOATING_PANEL}"))
+        assertEquals("Stopped: something went wrong; the Technical log on the Activity tab has the details",
+            plainStatus("Stopped: Run error: java.lang.NullPointerException"))
+        assertEquals("Session complete: 1 attack", plainStatus("Session Complete: 1 attacks"))
+        assertEquals("Session complete: 40 attacks", plainStatus("Session Complete: 40 attacks"))
+        assertEquals("Waiting for the Clash window...", plainStatus("Waiting for Clash foreground..."))
+        assertEquals("Remote start: 2 h farming for Blood...", plainStatus("Remote start (farm2h) for Blood..."))
+        assertEquals("Switching to Blood...", plainStatus("Switching to Blood..."))
+        val overlay = FarmerOverlay(onStopRequested = {}, onPauseToggled = {})
+        overlay.updateStatus("Session Complete: 3 attacks")
+        SwingUtilities.invokeAndWait {}
+        assertEquals("Session complete: 3 attacks", overlay.panel.value.phase)
+        overlay.dismiss()
     }
 
     @Test

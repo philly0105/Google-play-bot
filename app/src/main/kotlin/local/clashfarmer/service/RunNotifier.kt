@@ -3,6 +3,7 @@ package local.clashfarmer.service
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import local.clashfarmer.insight.EventText
 import local.clashfarmer.log.AppLog
 
 /**
@@ -28,13 +29,28 @@ class RunNotifier {
 
         /** Whether [withdraw] may take [notice] down while [shown] is the result notice last posted. */
         internal fun withdraws(shown: RunNotice?, notice: RunNotice): Boolean = shown == notice
+
+        /**
+         * What [notice] says in a Windows notification. FarmerService's stop notice carries the
+         * stop reason as logged ("Stopped from floating panel", "Run error: ..."), with no account;
+         * it shows the plain line the Activity tab gives that reason instead, under [account], the
+         * account that was running, when known. Every other notice is already written for people
+         * and names its account, so it shows as it is.
+         */
+        internal fun shown(notice: RunNotice, account: String?): RunNotice {
+            if (notice.kind == RunNotice.Kind.FINISHED || RunNotice.stopped(null, notice.text) != notice) return notice
+            val line = EventText.stopLine(notice.text).replaceFirstChar { it.uppercase() }
+            return RunNotice.stopped(account, notice.text).copy(text = "$line.")
+        }
     }
 
     /** The ongoing notice as last shown, or null when none is showing. */
     private var live: LiveStatus? = null
     private var liveHeldUntil = 0L
 
-    fun post(notice: RunNotice) {
+    fun post(posted: RunNotice) {
+        val context = AppLog.runContextSnapshot()
+        val notice = shown(posted, context.currentAccountName ?: context.activeAccountName)
         synchronized(this) {
             liveHeldUntil = System.currentTimeMillis() + LIVE_HOLD_MS
             cancelLive()
@@ -44,8 +60,9 @@ class RunNotifier {
             return
         }
         RunTray.notices.trySend(notice)
+        // The raw reason is logged, so the Technical log keeps what the plain line replaced.
         AppLog.log("notification_posted", "kind" to notice.kind.key, "title" to notice.title,
-            "reason" to notice.text.take(300))
+            "reason" to posted.text.take(300))
     }
 
     /** Windows keeps a notification once shown, and Java has no call to take one back, so nothing is withdrawn. */
