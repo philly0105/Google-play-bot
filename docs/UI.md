@@ -3,7 +3,8 @@
 The phone's Android UI (file class 4 in `docs/PLAN.md`) is ported to Compose for Desktop under
 `app/src/main/kotlin/local/clashfarmer/desktop/ui/`. It uses Compose Foundation only, no Material,
 and adds no dependencies: Compose Desktop 1.8.2 and `kotlinx-coroutines-swing` are already on the
-build. None of it has been compiled or run yet; the agent sandbox that wrote it blocks Gradle.
+build. It compiles and runs, and `DashboardRenderTest` draws every tab, the account editor and
+calibration off-screen (see Tests).
 
 Every screen, sheet, editor, chart, chip, number and action of the phone UI is kept, with the
 phone's wording except where it names Android things (see Wording). Nothing in
@@ -287,5 +288,6 @@ of main at b514d40):
   gives a clean start is untested, so the line names only the restart.
 - The remote link on the clipboard can be kept by Windows clipboard history or cloud clipboard.
   Android marked the clip sensitive; Java has no such mark.
-- Every screen draws off-screen without a layout failure, but the window, the tray and the
-  status panel have not been seen running.
+- Every screen draws off-screen without a layout failure. The window has run on this PC since 24
+  October, and runs posted their notifications through the tray, but nobody has looked at the tray
+  icon or the status panel (which shows only during a run) on the screen.
