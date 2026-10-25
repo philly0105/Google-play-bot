@@ -39,8 +39,10 @@ data class WindowStatus(
  *
  * Google Play Games hides the window when it is closed by hand and keeps the game running. Opening
  * Clash again shows the same game in the same process, and the bot's input stopped landing after
- * that in the spike (docs/gpg-spike.md, Restarting). So a hidden window shown again by the process
- * it had is flagged; a window from a new process clears the flag.
+ * that in the spike (docs/gpg-spike.md, Restarting). So a window the same process showed, hid and
+ * then showed again is flagged; a window from a new process clears the flag. A window first seen
+ * hidden is not enough: a freshly started Google Play Games may create its window hidden and show
+ * it once the game has loaded, and a false flag would refuse every run until the next restart.
  */
 class ClashWindowWatcher(
     private val find: suspend () -> ClashWindow?,
@@ -53,8 +55,12 @@ class ClashWindowWatcher(
     private val state = MutableStateFlow(WindowStatus())
     val status: StateFlow<WindowStatus> = state
 
-    /** The process behind the window last seen, and whether that window was hidden. */
+    /**
+     * The process behind the window last seen, whether that process has shown the window, and
+     * whether the window was hidden when last seen.
+     */
     private var owner: Pair<Long, Long?>? = null
+    private var shown = false
     private var hidden = false
     private var reopened = false
 
@@ -98,20 +104,23 @@ class ClashWindowWatcher(
     }
 
     /**
-     * Only a hidden window shown again counts. A lookup that misses the window for a moment, as
-     * while Google Play Games lays it out, leaves what was last seen as it was.
+     * Only a shown window hidden and then shown again counts. A lookup that misses the window for
+     * a moment, as while Google Play Games lays it out, leaves what was last seen as it was.
      */
     private fun noteOwner(window: ClashWindow?) {
         window ?: return
         val pid = window.ownerPid
         if (pid != null) {
             val seen = pid to window.ownerStartedMs
-            val last = owner
             when {
-                last != null && last != seen -> reopened = false
-                last != null && hidden && window.visible -> reopened = true
+                owner != seen -> {
+                    reopened = false
+                    shown = false
+                }
+                shown && hidden && window.visible -> reopened = true
             }
             owner = seen
+            if (window.visible) shown = true
         }
         hidden = !window.visible
     }

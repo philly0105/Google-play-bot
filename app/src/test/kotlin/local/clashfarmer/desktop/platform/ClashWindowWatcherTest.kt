@@ -73,8 +73,25 @@ class ClashWindowWatcherTest {
     }
 
     @Test
-    fun `the flag stays through a missed lookup, and a hidden window found first counts too`() = runBlocking {
-        assertTrue(watch(owned(10, 100, visible = false), null, owned(10, 100)).status.value.reopenedInRunningVm)
+    fun `the flag stays through a missed lookup`() = runBlocking {
+        val watcher = watch(owned(10, 100), owned(10, 100, visible = false), null, owned(10, 100), null)
+        assertTrue(watcher.status.value.reopenedInRunningVm)
+    }
+
+    @Test
+    fun `a new game whose window starts hidden and then shows is not flagged`() = runBlocking {
+        assertFalse(watch(owned(10, 100, visible = false), owned(10, 100)).status.value.reopenedInRunningVm)
+        assertFalse(watch(owned(10, 100, visible = false), null, owned(10, 100, visible = false), owned(10, 100))
+            .status.value.reopenedInRunningVm)
+        // The old process's hidden window, then a new one shown: the new process is not flagged either.
+        assertFalse(watch(owned(10, 100), owned(10, 100, visible = false), owned(11, 200, visible = false), owned(11, 200))
+            .status.value.reopenedInRunningVm)
+    }
+
+    @Test
+    fun `a new game shown, hidden and shown again is flagged`() = runBlocking {
+        val watcher = watch(owned(10, 100, visible = false), owned(10, 100), owned(10, 100, visible = false), owned(10, 100))
+        assertTrue(watcher.status.value.reopenedInRunningVm)
     }
 
     @Test
