@@ -115,6 +115,21 @@ internal fun inspectReport(observation: Observation, imageName: String): String 
     ).joinToString("\n")
 }
 
+/**
+ * What Inspect reads off [bitmap]: the screen, and each village balance as "gold=29303105", or no
+ * balances without a calibration. The calibration is moved onto the frame's size first, as the
+ * tray check moves it ([TrayCheckSheet.profileAt]): as saved, a 1740x978 calibration cut a
+ * 1860x1162 village to its top-left corner, without the Battle button, and read the balances
+ * where 16:9 draws them.
+ */
+internal suspend fun inspectFrame(bitmap: Bitmap, profile: PhoneProfile?, timestampMs: Long): Pair<Observation, List<String>?> {
+    val here = profile?.let { TrayCheckSheet.profileAt(it, bitmap.width, bitmap.height).first }
+    return ScreenReader().use { reader ->
+        reader.observe(bitmap, here?.viewport, timestampMs) to
+            here?.homeResourceRois?.map { (r, roi) -> "${r.key}=${reader.readBalance(bitmap, roi)}" }
+    }
+}
+
 /** A message at the foot of the window, the phone's Toast. A class, so two equal texts are two toasts. */
 class ToastMessage(val text: String, val long: Boolean)
 
@@ -452,10 +467,7 @@ class FarmerController(
                 }
 
                 val (observation, balances) = withContext(Dispatchers.IO) {
-                    ScreenReader().use { reader ->
-                        reader.observe(captured.bitmap, profile?.viewport, captured.timestampMs) to
-                            profile?.homeResourceRois?.map { (r, roi) -> "${r.key}=${reader.readBalance(captured.bitmap, roi)}" }
-                    }
+                    inspectFrame(captured.bitmap, profile, captured.timestampMs)
                 }
                 captured.bitmap.recycle()
 
