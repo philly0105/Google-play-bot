@@ -1889,8 +1889,9 @@ class LocalRunner(
         val detector = stallDetector ?: return
         val since = deployedAt?.let { SystemClock.elapsedRealtime() - it } ?: return
         val damage = BattleDamage.overallPercent(obs.rawText)
-        // The 8 October logs could not say why Blood's damage missed on 19 of 25 samples.
-        if (damage == null) AppLog.log("stall_damage_unreadable", "text" to obs.rawText.takeLast(80))
+        // The 8 October logs could not say why Blood's damage missed on 19 of 25 samples. The result
+        // screen sweeping in is no miss, and is left out so the count stays the reader's.
+        if (damage == null && !BattleDamage.resultWipe(obs.rawText)) AppLog.log("stall_damage_unreadable", "text" to obs.rawText.takeLast(80))
         val loot = if (profile.scoutLootRois.isEmpty()) emptyMap() else stallLoot(runToken)
         val decision = detector.feed(since, damage, loot) ?: return
         AppLog.log("stall_would_surrender",

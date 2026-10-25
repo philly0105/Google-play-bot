@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1822 tests, 1637 copied
-from the phone and the PC's 185, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1842 tests, 1637 copied
+from the phone and the PC's 205, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -47,9 +47,9 @@ are also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-185 `@Test` methods in 25 files under `desktop/`. Their fixtures are in
+205 `@Test` methods in 28 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
-at 1740x978 and 1860x1162, and a few PNG crops.
+at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, and a few PNG crops.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
@@ -57,7 +57,10 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but Blood, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, and `LatestFrame.heightFor` | 22 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
-| `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |
+| `PcBuildersCornerTest` | The builders' counter read again from an upscaled crop of a village frame, through a fake OCR backend | 7 |
+| `PcUpgradeListTest` | The builder panel's mangled timers, the prices beside them, and a card's name read line by line | 5 |
+| `PcReplayTest` | Return Home on a replay's end screen | 5 |
+| `PcBattleDamageTest` | The battle's damage with the PC's End Battle label, or a star's stray glyph, between the word and the value, and the result screen sweeping in | 5 |
 | `PcBattleResultTest` | The result screen's loot rows and stars at the PC's lengths | 3 |
 | `PcRatePromptTest` | LATER on Play's rating dialog | 3 |
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |

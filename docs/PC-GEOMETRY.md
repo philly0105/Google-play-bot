@@ -165,20 +165,36 @@ x 759-984, y 799-888 on `live-1740-result`.
 
 ## Readers that still fail
 
-1. The builders' counter reads as "0/6" on only 2 of 39 village frames, `geo-home` and
-   `live-1860-counter`. The goblin's "0/1" reads on none. It needs a second, upscaled read of
-   `PC_CORNER`, as `AndroidWallDevice` does with `observeRegion(scale = 3)`.
-2. Countdown misreads such as "8H", "10 9H", "Gd 9H", "4d0", "40M 0s" and "Id B8H" pass for prices
-   on rows in progress, never on Wall rows. `isCountdown` needs a looser pattern that takes an
-   upper-case H or M on its own, I, B, S and G for digits, and missing spaces.
-3. A second line "983", 27 px under "ElixiR CollectoR x 7" on `geo-list-end`, joins the name. A Wall
-   row's count still parses, since `WALL_ROW` stops at the space.
-4. A replay's end screen at 1860x1162 has RetuRN and HoMe at the bottom left, so it reads as RESULT
-   with no Return Home target. The bot never watches replays.
+The five below were fixed on 25 October from captures and logs. None of the fixes has run live yet.
+
+1. The builders' counter read from the whole frame on 3 of the 65 captures that show it. When a
+   village frame reads no count, `ScreenReader.observe` now reads `Builders.pcCornerRegion`,
+   `PC_CORNER` grown by 12 px, again at x3. Run offline through the sidecar's recogniser, that crop
+   read the count on 62 of the 65 at both sizes. The other three are the two army screens and one
+   village that read "076", which reads as no count. The `corner-*` fixtures are those crops.
+   Since the whole frame almost never reads the count, nearly every village frame on the PC now
+   costs this second read.
+2. Countdown misreads such as "8H", "10 9H", "Gd 9H", "4d0", "40M 0s" and "Id B8H" passed for prices
+   and dropped the real price on the line below. `UpgradeListReader.isTimer` takes them on the PC:
+   text with a digit, no run of three digits, and a word shaped like a timer.
+3. A card's second line joined its name sorted by x, so "983", 27 px under "ElixiR CollectoR x 7"
+   on `geo-list-end`, started the name, and subtitles 2-4 px left of "CRafting StatioN" came before
+   it. On the PC a card's lines now keep their order, and a second line's letterless boxes at the
+   left are left out.
+4. A replay's end screen at 1860x1162 has RetuRN and HoMe at the bottom left and reads as RESULT.
+   `returnHomeTarget` now taps those two on the PC when the result button did not read, rather than
+   the calibrated point, which is bare village there. The bot never opens replays.
+5. A star beside the battle's damage reads as a lone "e", "d" or "*", which hid the value 18 times
+   in the 25 October run. `BattleDamage` skips up to two such tokens on each side of the label,
+   but never one that could be a digit, a 1 read as |, !, [, ], t or j, or the sign.
+   The result screen's "Total damage: 0%" sweeping in is no longer logged as
+   `stall_damage_unreadable`. `waiting_unrecognized` stays as the phone logs it, a neutral event.
+   Unlike fixes 1-4, neither change takes the frame's size, so both apply on the phone too.
 
 ## Tests
 
-`app/src/test/kotlin/local/clashfarmer/desktop/PcGeometryTest.kt` replays the captures above. The
+`app/src/test/kotlin/local/clashfarmer/desktop/PcGeometryTest.kt` replays the captures above, and
+`PcUpgradeListTest`, `PcReplayTest` and `PcBuildersCornerTest` beside it replay some of them. The
 `geo-*` fixtures are byte copies of `audit-evidence/spike/`. The `live-*` fixtures come from:
 
 | Fixture | Source |
@@ -189,6 +205,19 @@ x 759-984, y 799-888 on `live-1740-result`.
 | `live-1860-home` | `audit-evidence/live/20261024-030816-profile/00-home.json` |
 | `live-1860-village` | `audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.json` |
 | `live-1860-counter` | `audit-evidence/live/20261024-034034-dragmeasure/4a-right150.json` |
+| `live-1860-replay` | `audit-evidence/live/20261024-033349-look/frame.json`, the attacker's name replaced |
+
+The `corner-*` fixtures hold the lines the sidecar's recogniser read, offline, from the x3 crop of
+`Builders.pcCornerRegion` on a saved PNG. Each also has the crop's region and scale.
+`PcBuildersCornerTest` hands them back through a fake OCR backend.
+
+| Fixture | Crop of |
+| --- | --- |
+| `corner-1740-village` | `audit-evidence/spike/geo-home-3.png` |
+| `corner-1740-one-free` | `audit-evidence/live/20261024-171712-look/frame.png` |
+| `corner-1740-misread` | `audit-evidence/live/20261024-133057-taps/2-after-557-551.png` |
+| `corner-1860-village` | `audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.png` |
+| `corner-1860-dragged` | `audit-evidence/live/20261024-034034-dragmeasure/1a-down300.png` |
 
 Some inputs are built in the test rather than captured. The 1565x978 HUD boxes come from the image
 by correlation. The 16:10 list, army and result screens are the 1740x978 captures moved by the
