@@ -525,4 +525,40 @@ class FarmerServicePcTest {
             local.clashfarmer.core.Region(745, 171, 1020, 264))
         service.startFarmingAccount(account)
     }
+
+    @Test
+    fun `after the first read the account check shows the village read, not the placeholder`() {
+        service.connectTransport()
+        host.window.value = openWindow(1740, 978)
+        PcAccount.seedIfFresh(filesDir)
+        val store = AccountStore(filesDir)
+        // The dashboard loads the account before the check reads it.
+        val started = store.ensureMigrated().single()
+        assertEquals(PcAccount.FRESH_VILLAGE_NAME, started.villageName)
+        // Saved and returned, as AccountSwitcher.enrolAndCheck does.
+        service.switchOnlyCheck = { _, _, _ ->
+            started.copy(villageName = "Farmland", playerTag = "#TEST2468").also { store.update(it) }
+        }
+        val overlay = local.clashfarmer.service.FarmerOverlay(onStopRequested = {}, onPauseToggled = {})
+        service.overlay = overlay
+        service.startSwitchOnly(started, readAccount = true)
+        waitFor { !service.isBusy }
+        javax.swing.SwingUtilities.invokeAndWait {}
+        assertEquals("Verified: Farmland", overlay.panel.value.phase)
+        overlay.dismiss()
+    }
+
+    @Test
+    fun `after the first read a run's finish notice names the village read, not the placeholder`() {
+        PcAccount.seedIfFresh(filesDir)
+        val store = AccountStore(filesDir)
+        // The record the run started with, loaded before its account check read the village.
+        val started = store.ensureMigrated().single()
+        store.update(started.copy(villageName = "Farmland", playerTag = "#TEST2468"))
+        val snapshot = local.clashfarmer.core.SessionSnapshot()
+        val finished = local.clashfarmer.core.RunOutcome(1, local.clashfarmer.core.CompletionReason.QUOTA_REACHED)
+        assertEquals("Farmland: Run finished", service.sessionEndNotice(started, false, finished, snapshot).title)
+        val guarded = local.clashfarmer.core.RunOutcome(0, local.clashfarmer.core.CompletionReason.DEVICE_GUARD)
+        assertEquals("Farmland: Battery or heat guard", service.sessionEndNotice(started, false, guarded, snapshot).title)
+    }
 }

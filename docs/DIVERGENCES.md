@@ -173,6 +173,12 @@ below.
     (`FarmerController`), so the remote page's switch, with nobody watching, refuses such an
     account before it starts; the dashboard's reads it. `startCombinedRun` and an unsupervised
     `startGuardedAccountSession` refuse such an account before they start, with the same text.
+    The record a start is given was loaded before that read, so what shows after it takes the
+    name from the read: `startSwitchOnly`'s "Verified:" line and `switch_only_completed` use the
+    record `enrolAndCheck` returns, through the internal `switchOnlyCheck`, which tests replace,
+    and `startGuardedAccountSession`'s finish and battery-guard notices come from the internal
+    `sessionEndNotice`, which reads the name from the account store. `overlay`'s setter is
+    internal, for tests.
   - Battery: `readDeviceHealth` returns the reading a loop started by `onServiceConnected` takes
     from `host.power()` every 30 s in `serviceScope`. The phone read a sticky broadcast on the
     spot; here each reading is a sidecar round trip, and `LocalRunner` and `RemoteServer` call
