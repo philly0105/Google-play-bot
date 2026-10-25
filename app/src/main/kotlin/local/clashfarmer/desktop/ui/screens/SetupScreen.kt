@@ -25,6 +25,10 @@ import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.BuilderReading
 import local.clashfarmer.core.BuilderStore
 import local.clashfarmer.core.DeviceHealth
+import local.clashfarmer.desktop.BuildInfo
+import local.clashfarmer.desktop.RemotePage
+import local.clashfarmer.desktop.sidecar.Hello
+import local.clashfarmer.desktop.sidecar.SidecarStatus
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
 import local.clashfarmer.desktop.ui.PcChecklist
@@ -50,9 +54,11 @@ import local.clashfarmer.ui.TabBadge
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.screens.CheckLine
 import local.clashfarmer.ui.screens.SetupChecklist
+import java.awt.Desktop
 import java.awt.SystemTray
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
+import java.io.File
 
 /**
  * Setup (spec 2.6): one checklist for this PC and each account, the worst fix as the screen's
@@ -72,9 +78,9 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     /** The row whose findings sheet is open. */
     private var detail: CheckLine? by mutableStateOf(null)
 
-    /** Tray, battery and Tailscale address: system calls, read on IO at most every 30 s. */
+    /** Tray, battery, text reader and remote page: system calls, read on IO at most every 30 s. */
     private data class Machine(val connected: Boolean, val tray: Boolean, val battery: DeviceHealth?,
-                               val serviceOn: Boolean, val address: String?)
+                               val serviceOn: Boolean, val remote: RemotePage.Status?, val textReader: Hello?)
     private var machine: Machine? by mutableStateOf(null)
     private var machineAtMs = 0L
     private var readingMachine = false
@@ -141,7 +147,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             SectionHeader("This PC")
             Card {
                 list.machine.forEach { LineRow(it, busy) }
-                if (list.machine.last().tone == Tone.OK) {
+                if (list.machine.any { it.key == PcChecklist.REMOTE && it.tone == Tone.OK }) {
                     SecondaryButton("Copy link", Modifier.padding(top = 8.dp), enabled = !trayCheckRunning, compact = true) {
                         copyRemoteLink()
                     }
@@ -178,6 +184,11 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                 size = FarmerTheme.LABEL, color = FarmerColors.warn)
             Label("Runs on this PC. The network is used only for the remote control page, which answers on Tailscale alone.",
                 Modifier.padding(top = 8.dp), size = FarmerTheme.LABEL, color = FarmerColors.faint)
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Label(BuildInfo.about(host.filesDir), Modifier.weight(1f).padding(end = 12.dp),
+                    size = FarmerTheme.LABEL, color = FarmerColors.faint)
+                SecondaryButton("Open logs folder", compact = true) { openLogsFolder() }
+            }
         }
 
         detail?.let { DetailSheet(it, state.busy) }
@@ -250,14 +261,15 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         }
     }
 
-    /** The rows above the accounts: the game window and tray, the battery and the remote control. */
+    /** The rows above the accounts: the game window, the text reader and tray, the battery and the remote page. */
     private fun checklist(state: DashboardState): Checklist {
         val m = machine
         val machineLines = listOf(
             PcChecklist.gameWindow(windowStatus),
+            PcChecklist.textReader(m?.textReader),
             m?.let { PcChecklist.trayIcon(it.tray) } ?: notRead(PcChecklist.TRAY_ICON, "Tray icon"),
             m?.let { SetupChecklist.battery(it.battery) } ?: notRead("battery", "Battery and heat"),
-            m?.let { SetupChecklist.remote(it.serviceOn, it.address) } ?: notRead("remote", "Remote control")
+            m?.let { PcChecklist.remote(it.serviceOn, it.remote) } ?: notRead(PcChecklist.REMOTE, "Remote page")
         )
         val findings = health(state)
         val accounts = state.accounts.map { account ->
@@ -288,7 +300,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     }
 
     /**
-     * Reads the tray, the battery and the Tailscale address on IO when the last reading is 30 s
+     * Reads the tray, the battery, the text reader and the remote page on IO when the last reading is 30 s
      * old or the service came or went since. The rows show the reading when it arrives.
      */
     private fun readMachine(connected: Boolean) {
@@ -318,7 +330,9 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             // The service reads the battery through the sidecar in the background; this is its last reading.
             battery = runCatching { service?.readDeviceHealth() }.getOrNull(),
             serviceOn = serviceOn,
-            address = if (serviceOn) runCatching { RemoteServer.tailscaleAddress() }.getOrNull() else null
+            remote = if (serviceOn) FarmerService.remotePage?.status else null,
+            // DesktopServices asks the sidecar; this is its last answer.
+            textReader = SidecarStatus.hello
         )
     }
 
@@ -395,7 +409,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
      */
     private fun copyRemoteLink() {
         val service = FarmerService.instance
-        val address = machine?.address
+        val address = machine?.remote?.takeIf { it.listening }?.tailscale
         if (service == null || address == null) {
             host.toast("Remote control is not available.")
             return
@@ -405,6 +419,15 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                 .setContents(StringSelection("http://$address:${RemoteServer.PORT}/?key=${service.remoteKey}"), null)
         }.isSuccess
         host.toast(if (copied) "Link copied. Keep it private; the key in it is the password." else "Could not copy the link.")
+    }
+
+    /** Opens the logs folder in Explorer, off the UI thread: Desktop.open can wait on the shell. */
+    private fun openLogsFolder() {
+        val logs = File(host.filesDir, "logs")
+        host.scope.launch {
+            val opened = withContext(Dispatchers.IO) { runCatching { logs.mkdirs(); Desktop.getDesktop().open(logs) }.isSuccess }
+            if (!opened) host.toast("Could not open ${logs.path}", long = true)
+        }
     }
 
     private companion object {
