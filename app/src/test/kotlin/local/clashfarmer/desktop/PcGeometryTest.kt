@@ -25,6 +25,7 @@ import local.clashfarmer.recognition.builderPanelShowing
 import local.clashfarmer.recognition.classifyScreen
 import local.clashfarmer.recognition.nextButtonTarget
 import local.clashfarmer.recognition.reloadTarget
+import local.clashfarmer.recognition.returnHomeTarget
 import local.clashfarmer.recognition.surrenderTarget
 import local.clashfarmer.recognition.upgradeListClosePoint
 import local.clashfarmer.recognition.upgradeListSwipe
@@ -372,6 +373,30 @@ class PcGeometryTest {
         val scout = frame("geo-scout")
         assertEquals(Point(1641, 723), nextButtonTarget(scout, pc, null))
         assertEquals(Point(105, 767), surrenderTarget(scout, pc, null))
+    }
+
+    /**
+     * A won battle's result screen at 1740x978 keeps the phone's fractions of the height: Total
+     * damage, You got and Return Home read at y 0.125, 0.41 and 0.84 here and on the phone. Its
+     * words and its button are in their bands, and Return Home is tapped on its own words.
+     */
+    @Test fun theResultScreenReadsWithReturnHomeInItsBand() {
+        val result = frame("live-1740-result")
+        assertEquals(ScreenState.RESULT, classifyScreen(result, pc))
+        val returnWord = named(result, "RetURN").center
+        assertEquals(returnWord, returnHomeTarget(result, pc, null))
+        // An anchor nearer Home picks Home, as the live run did at (872, 851). A phone profile's
+        // anchor, (801, 606), lies above the band on this frame and is not used.
+        assertEquals(named(result, "Home").center, returnHomeTarget(result, pc, Point(870, 848)))
+        assertEquals(returnWord, returnHomeTarget(result, pc, Point(801, 606)))
+        // Synthetic: the screen scaled about the centre onto both 16:10 frames, by the height or by
+        // the width. No result screen has been captured at 16:10.
+        for (viewport in listOf(wide, resized)) for (byHeight in listOf(true, false)) {
+            val at = "$viewport by the ${if (byHeight) "height" else "width"}"
+            val boxes = centred(result, viewport, byHeight)
+            assertEquals(at, ScreenState.RESULT, classifyScreen(boxes, viewport))
+            assertInside(at, named(boxes, "RetURN"), returnHomeTarget(boxes, viewport, null))
+        }
     }
 
     /**
