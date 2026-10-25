@@ -25,7 +25,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.StopException
 import local.clashfarmer.core.TrayCheck
+import local.clashfarmer.desktop.PcProfiles
+import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.Chip
 import local.clashfarmer.desktop.ui.components.Divider
@@ -36,6 +39,7 @@ import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.desktop.ui.theme.ink
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.recognition.ImageMatcher
+import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.recognition.ScreenReader
 import local.clashfarmer.service.FarmerService
 import local.clashfarmer.ui.DashboardState
@@ -66,6 +70,17 @@ object TrayCheckSheet {
     )
 
     /**
+     * The calibration on a frame of [width]x[height], moved as a run moves it ([PcProfiles.derive]),
+     * so the check reads the card areas where Clash draws them on a game area of another size or
+     * shape; or the calibration as saved and why the frame can't be checked.
+     */
+    internal fun profileAt(profile: PhoneProfile, width: Int, height: Int): Pair<PhoneProfile, String?> = try {
+        PcProfiles.derive(profile, SurfaceSize(width, height), emptySet()) to null
+    } catch (e: StopException) {
+        profile to e.message
+    }
+
+    /**
      * Checks the tray for the account picked on Home. [checking] hears true when the check starts
      * and false when it ends, on the UI thread; [onResult] hears what it found, before the false.
      */
@@ -94,15 +109,16 @@ object TrayCheckSheet {
                     try {
                         val file = save(bitmap, host.filesDir)
                         ScreenReader().use { reader ->
-                            val seen = reader.observe(bitmap, profile.viewport, captured.timestampMs).state
-                            val problem = TrayCheck.frameProblem(seen, bitmap.width, bitmap.height, profile)
+                            val (here, sizeProblem) = profileAt(profile, bitmap.width, bitmap.height)
+                            val seen = reader.observe(bitmap, here.viewport, captured.timestampMs).state
+                            val problem = sizeProblem ?: TrayCheck.frameProblem(seen, bitmap.width, bitmap.height, here)
                             // Logged as an inspection, which it is, tagged so a grep for "check":"tray" finds it.
                             if (problem != null) {
                                 AppLog.log("inspect_completed", "check" to "tray", "accountId" to account.id,
                                     "state" to seen.name, "width" to bitmap.width, "height" to bitmap.height, "file" to file.name)
                                 Outcome(account, file, problem, null, emptyList())
                             } else {
-                                val report = TrayCheck.check(profile, { reader.readTrayBadge(bitmap, it) },
+                                val report = TrayCheck.check(here, { reader.readTrayBadge(bitmap, it) },
                                     { ImageMatcher.meanSaturation(bitmap, it) })
                                 AppLog.log("inspect_completed", "check" to "tray", "state" to seen.name, "accountId" to account.id,
                                     "layout" to report.layout.name.lowercase(), "wrong" to report.wrong, "blank" to report.blank,
