@@ -6,12 +6,15 @@ import local.clashfarmer.core.Point
 import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.core.WallCursor
+import local.clashfarmer.desktop.PcProfiles
 import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.insight.CalibrationHealth
 import local.clashfarmer.recognition.PhoneProfile
+import local.clashfarmer.recognition.WallConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -55,6 +58,34 @@ class StarterProfileTest {
         assertEquals(starter.stateAnchors["attack"], next.stateAnchors["attack"])
         assertEquals(starter.troopAnchors, next.troopAnchors)
         assertEquals(starter.perimeterSegments, next.perimeterSegments)
+    }
+
+    @Test
+    fun `at another size the account's own points move with the standard positions, not vanish`() {
+        val starter = StarterProfile.load()
+        val walls = WallConfig(bulkButton = Point(870, 800), removeButton = Point(700, 800))
+        // A saved 1740x978 calibration under a frame captured at 1920x1080.
+        val current = PhoneProfile.createDefault(1740, 978).copy(
+            stateAnchors = mapOf("village_neutral" to Point(900, 500)),
+            wallConfig = walls,
+            wallCursor = WallCursor(2, 3),
+            collectionTargets = listOf(CollectionTarget("collector 1", Point(800, 400))),
+            isVerified = true
+        )
+        val size = SurfaceSize(1920, 1080)
+        val next = StarterProfile.onto(starter, current, size)
+        val own = PcProfiles.derive(current, size, emptySet())
+        assertEquals(1920 to 1080, next.resolutionWidth to next.resolutionHeight)
+        assertFalse(next.isVerified)
+        assertEquals(own.stateAnchors["village_neutral"], next.stateAnchors["village_neutral"])
+        assertNotEquals(Point(900, 500), next.stateAnchors["village_neutral"])
+        assertNotNull(next.wallConfig)
+        assertEquals(own.wallConfig, next.wallConfig)
+        assertEquals(WallCursor(2, 3), next.wallCursor)
+        // Collectors belong to the camera reference at the old size, so they go, as on a capture.
+        assertTrue(next.collectionTargets.isEmpty())
+        assertEquals(PcProfiles.derive(starter, size, emptySet()).troopAnchors, next.troopAnchors)
+        next.validate()
     }
 
     @Test
