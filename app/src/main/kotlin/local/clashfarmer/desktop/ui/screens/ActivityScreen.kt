@@ -38,7 +38,6 @@ import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.Divider
 import local.clashfarmer.desktop.ui.components.Dot
 import local.clashfarmer.desktop.ui.components.Gap
-import local.clashfarmer.desktop.ui.components.PrimaryButton
 import local.clashfarmer.desktop.ui.components.ScreenPage
 import local.clashfarmer.desktop.ui.components.ScreenTitle
 import local.clashfarmer.desktop.ui.components.SecondaryButton
@@ -52,6 +51,7 @@ import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.desktop.ui.theme.ink
 import local.clashfarmer.insight.ActivityProblems
 import local.clashfarmer.insight.EventText
+import local.clashfarmer.insight.Finding
 import local.clashfarmer.insight.Format
 import local.clashfarmer.insight.Problem
 import local.clashfarmer.insight.Problems
@@ -73,6 +73,7 @@ import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import local.clashfarmer.insight.Tone as InsightTone
 
 /**
@@ -144,7 +145,7 @@ class ActivityScreen(private val host: DashboardHost) : DashboardScreen {
         ScreenPage(scroll = scroll) {
             ScreenTitle("Activity")
             val count = m?.problems?.size ?: 0
-            Segmented(listOf("Everything", if (count > 0) "Problems $count" else "Problems"), if (problemsOnly) 1 else 0) { picked ->
+            Segmented(listOf("Everything", if (count > 0) "Problems ($count)" else "Problems"), if (problemsOnly) 1 else 0) { picked ->
                 problemsOnly = picked == 1
             }
             Gap(16.dp)
@@ -270,8 +271,11 @@ class ActivityScreen(private val host: DashboardHost) : DashboardScreen {
                 }
             }
         }
-        if (problems.any { it.dismissible }) {
-            PrimaryButton("Clear resolved", Modifier.fillMaxWidth()) { dismiss(problems) }
+        val clearable = clearable(problems)
+        if (clearable.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
+                SecondaryButton("Clear resolved", compact = true) { dismiss(clearable) }
+            }
         }
         Gap(16.dp)
     }
@@ -313,10 +317,17 @@ class ActivityScreen(private val host: DashboardHost) : DashboardScreen {
         }
     }
 
-    /** The problem's own action: a pending marker is cleared only through the existing village check. */
+    /**
+     * The problem's own action: a pending marker is cleared only through the existing village
+     * check, and a finding goes straight to where it is fixed.
+     */
     private fun action(p: Problem): RowAction? = when (p.action) {
         Problem.Action.CHECK_VILLAGE -> p.accountId?.let { id -> RowAction("Check village") { host.act("acknowledge_wall:$id") } }
-        Problem.Action.OPEN_SETUP -> RowAction("Open Setup") { host.openTab(Tab.SETUP) }
+        Problem.Action.OPEN_SETUP -> when (findingFix(p)) {
+            FindingFix.CALIBRATE -> RowAction("Calibrate") { host.openCalibration(p.accountId) }
+            FindingFix.SUPERVISED_ATTACK -> RowAction("Open Run") { host.openTab(Tab.RUN) }
+            else -> RowAction("Open Setup") { host.openTab(Tab.SETUP) }
+        }
         Problem.Action.DISMISS -> if (p.dismissible) RowAction("Dismiss") { dismiss(listOf(p)) } else null
     }
 
@@ -490,5 +501,32 @@ class ActivityScreen(private val host: DashboardHost) : DashboardScreen {
         const val MAX_LINES = 120
         const val TECH_PAGE = 150
         val FILE_LOCK = Any()
+    }
+}
+
+/**
+ * The problems Clear resolved hides: past events, not the calibration and settings findings. Those
+ * are true until fixed and leave on their own then, so clearing one would hide it for 30 days
+ * while it still stops runs.
+ */
+internal fun clearable(problems: List<Problem>): List<Problem> =
+    problems.filter { it.dismissible && it.action != Problem.Action.OPEN_SETUP }
+
+/** Where a calibration or settings finding is fixed. */
+internal enum class FindingFix { CALIBRATE, SUPERVISED_ATTACK, SETUP }
+
+/**
+ * The fix for a problem that came from a finding, read from its key (`health:<account>:<kind>`):
+ * calibration opens on the account, an unverified one goes to Run's supervised attack, and the
+ * goal and wall setup to Setup. Null for any other problem.
+ */
+internal fun findingFix(p: Problem): FindingFix? {
+    if (!p.key.startsWith("health:")) return null
+    val kind = p.key.split(':').getOrNull(2)?.uppercase(Locale.ROOT) ?: return FindingFix.SETUP
+    return when (kind) {
+        Finding.Kind.NOT_CALIBRATED.name, Finding.Kind.ATTACK_INCOMPLETE.name, Finding.Kind.WALLS_INCOMPLETE.name,
+        Finding.Kind.COPIED_ANCHORS.name, Finding.Kind.UNEVEN_SPACING.name -> FindingFix.CALIBRATE
+        Finding.Kind.NOT_VERIFIED.name -> FindingFix.SUPERVISED_ATTACK
+        else -> FindingFix.SETUP
     }
 }
