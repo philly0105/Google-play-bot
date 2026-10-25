@@ -114,7 +114,7 @@ object HomeCards {
         }
         if (last?.completionReason == CompletionReason.DEVICE_GUARD.key) {
             return Attention(Kind.DEVICE_GUARD, Tone.WARN, RunNotice.deviceGuard(null, stop).title,
-                "The guard ended the last run at home. Let the phone cool or charge before the next one.")
+                "The battery guard ended the last run at home. Plug the laptop in before the next one.")
         }
         return null
     }

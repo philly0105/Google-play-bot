@@ -27,6 +27,7 @@ import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.desktop.ui.theme.farmerStyle
 import local.clashfarmer.desktop.ui.theme.ink
+import local.clashfarmer.insight.Format
 import local.clashfarmer.ui.FarmerTheme
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.components.ValueFit
@@ -43,7 +44,8 @@ data class Tile(
 /**
  * A big number over a small label, with an optional chip. [Tile.valueTone] colours the number
  * (null keeps it white). Long values start smaller and shrink further to fit the tile's width,
- * so "13.6M/h" fits whole.
+ * so "13.6M/h" fits whole. A value not read yet ([Format.UNKNOWN]) is a small faint dash, not a
+ * big hyphen that looks like a broken layout.
  */
 @Composable
 fun StatTile(tile: Tile, modifier: Modifier = Modifier) {
@@ -69,12 +71,16 @@ fun StatTile(tile: Tile, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 14.dp)
     ) {
         Box(Modifier.fillMaxWidth().onSizeChanged { room = it.width }) {
-            Label(value, size = sp, color = tile.valueTone?.ink ?: FarmerColors.text, bold = true, maxLines = 1)
+            if (value == Format.UNKNOWN) Label(NOT_READ_DASH, size = FarmerTheme.BODY, color = FarmerColors.faint, bold = true, maxLines = 1)
+            else Label(value, size = sp, color = tile.valueTone?.ink ?: FarmerColors.text, bold = true, maxLines = 1)
         }
         Label(tile.label, Modifier.padding(top = 6.dp), size = FarmerTheme.SMALL, color = FarmerColors.muted, maxLines = 2)
         if (tile.chip != null) Chip(tile.chip, tile.chipTone ?: Tone.NEUTRAL, Modifier.padding(top = 8.dp))
     }
 }
+
+/** What a tile shows in place of a value not read yet: an em dash. */
+const val NOT_READ_DASH = "—"
 
 /** A row of up to three equal tiles with 8 dp gaps, the same height, 12 dp below. */
 @Composable

@@ -45,7 +45,7 @@ class SetupChecklistTest {
         ok.row("calibration").let {
             assertEquals(Tone.OK, it.tone)
             assertEquals("OK", it.chip)
-            assertEquals("Verified on this phone", it.detail)
+            assertEquals("Verified on this PC", it.detail)
             assertNull(it.fix)
         }
         assertEquals("6 cards, spacing 97 px", ok.row("tray").detail)

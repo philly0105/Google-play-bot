@@ -221,6 +221,7 @@ private fun Panel(width: Dp, content: @Composable ColumnScope.() -> Unit) {
             .padding(24.dp)
             .widthIn(max = width)
             .fillMaxWidth()
+            .trackKeyboardNav()
             .clip(shape)
             .background(FarmerColors.background)
             .border(1.dp, FarmerColors.line, shape),

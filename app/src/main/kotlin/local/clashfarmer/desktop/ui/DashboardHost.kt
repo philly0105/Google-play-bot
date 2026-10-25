@@ -50,6 +50,7 @@ interface DashboardScreen {
 
 /**
  * The phone's "Enable Accessibility Service first!" and "Turn on the accessibility service in
- * Setup", where the UI says it: the PC service has no switch; it runs from the app's start.
+ * Setup", where the UI says it: the PC service has no switch; it runs from the app's start, so
+ * it is missing only while the app starts or after it failed to.
  */
-const val NOT_RUNNING = "The bot service is not running."
+const val NOT_RUNNING = "Clash Farmer is still starting. If this stays, quit it from the tray icon and open it again."

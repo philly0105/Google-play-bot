@@ -13,6 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import local.clashfarmer.desktop.ui.theme.FarmerColors
@@ -21,8 +26,22 @@ import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.ui.FarmerTheme
 
 /**
+ * The option Left ([direction] -1) or Right (+1) moves to from [selected]: the nearest one that
+ * way that [enabled] allows, or null at the end of the track.
+ */
+internal fun nextOption(selected: Int, count: Int, direction: Int, enabled: (Int) -> Boolean): Int? {
+    var i = selected + direction
+    while (i in 0 until count) {
+        if (enabled(i)) return i
+        i += direction
+    }
+    return null
+}
+
+/**
  * Two to four mutually exclusive options on one track. A disabled option stays visible, faint,
- * and ignores clicks. As on the phone, clicking the selected option calls [onPick] again.
+ * and ignores clicks. As on the phone, clicking the selected option calls [onPick] again. With
+ * an option focused, Left and Right pick the previous or next one that is enabled.
  */
 @Composable
 fun Segmented(
@@ -36,6 +55,15 @@ fun Segmented(
     val track = RoundedCornerShape(14.dp)
     Row(
         modifier = modifier
+            .onPreviewKeyEvent { e ->
+                val direction = when (e.key) {
+                    Key.DirectionLeft -> -1
+                    Key.DirectionRight -> 1
+                    else -> return@onPreviewKeyEvent false
+                }
+                if (e.type == KeyEventType.KeyDown) nextOption(selected, options.size, direction, enabled)?.let(onPick)
+                true
+            }
             .fillMaxWidth()
             .height(FarmerSize.CONTROL)
             .clip(track)
@@ -54,7 +82,7 @@ fun Segmented(
                     .fillMaxHeight()
                     .clip(segment)
                     .then(if (on) Modifier.background(FarmerColors.gold) else Modifier)
-                    .hoverClick(usable, segment) { onPick(index) }
+                    .hoverClick(usable, segment, if (on) FarmerColors.text else FarmerColors.gold) { onPick(index) }
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center
             ) {

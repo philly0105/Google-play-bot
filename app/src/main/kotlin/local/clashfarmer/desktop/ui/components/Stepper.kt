@@ -3,8 +3,10 @@ package local.clashfarmer.desktop.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -21,6 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
@@ -64,19 +72,43 @@ fun Stepper(
     }
 
     // A disabled stepper fades as a whole; its buttons then keep full alpha so it fades only once.
-    Row(modifier.alpha(if (enabled) 1f else .45f), verticalAlignment = Alignment.CenterVertically) {
+    // With a button focused, Up and Down step as + and - do. One step a key press: the Run
+    // tab's steppers read only the direction of a change, so a jump of ten would be one step.
+    Row(
+        modifier
+            .alpha(if (enabled) 1f else .45f)
+            .onPreviewKeyEvent { e ->
+                val direction = stepKey(e.key)
+                if (direction == 0 || !enabled) return@onPreviewKeyEvent false
+                if (e.type == KeyEventType.KeyDown) nudge(direction)
+                true
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         StepButton("-", "Decrease", enabled && shown > min, faded = enabled && shown <= min) { nudge(-1) }
         Label(format(shown), Modifier.weight(1f), size = FarmerTheme.TITLE, bold = true, maxLines = 1, align = TextAlign.Center)
         StepButton("+", "Increase", enabled && shown < max, faded = enabled && shown >= max) { nudge(1) }
     }
 }
 
-/** A 56 dp glass button that steps on press and keeps stepping while held. */
+/** Which way a key steps a stepper: Up +1, Down -1, anything else 0. */
+internal fun stepKey(key: Key): Int = when (key) {
+    Key.DirectionUp -> 1
+    Key.DirectionDown -> -1
+    else -> 0
+}
+
+/**
+ * A 56 dp glass button that steps on press and keeps stepping while held. Tab reaches it, Enter
+ * or Space steps once, and a gold ring shows while the keyboard is on it.
+ */
 @Composable
 private fun StepButton(symbol: String, description: String, usable: Boolean, faded: Boolean, nudge: () -> Boolean) {
     val shape = RoundedCornerShape(FarmerSize.BUTTON_RADIUS)
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
+    val focused by source.collectIsFocusedAsState()
+    val ring = focused && KeyboardNav.active
     var pressed by remember { mutableStateOf(false) }
     val canStep by rememberUpdatedState(usable)
     val step by rememberUpdatedState(nudge)
@@ -94,7 +126,13 @@ private fun StepButton(symbol: String, description: String, usable: Boolean, fad
             .clip(shape)
             .background(FarmerColors.surfaceStrong)
             .background(wash)
-            .border(1.dp, FarmerColors.line, shape)
+            .border(if (ring) FOCUS_RING else 1.dp, if (ring) FarmerColors.gold else FarmerColors.line, shape)
+            .onKeyEvent { e ->
+                if (e.key != Key.Enter && e.key != Key.NumPadEnter && e.key != Key.Spacebar) return@onKeyEvent false
+                if (e.type == KeyEventType.KeyDown && canStep) step()
+                true
+            }
+            .focusable(interactionSource = source)
             .hoverable(source)
             .then(if (usable) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
             .pointerInput(Unit) {

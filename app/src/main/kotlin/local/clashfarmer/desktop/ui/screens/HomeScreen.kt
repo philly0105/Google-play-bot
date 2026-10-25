@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -41,8 +40,11 @@ import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.core.Resource
 import local.clashfarmer.core.RunPlan
 import local.clashfarmer.core.StorageReading
+import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
+import local.clashfarmer.desktop.ui.PcChecklist
+import local.clashfarmer.desktop.ui.StartFix
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.Chip
 import local.clashfarmer.desktop.ui.components.DangerButton
@@ -56,10 +58,13 @@ import local.clashfarmer.desktop.ui.components.ScreenPage
 import local.clashfarmer.desktop.ui.components.SecondaryButton
 import local.clashfarmer.desktop.ui.components.SectionHeader
 import local.clashfarmer.desktop.ui.components.Sheet
+import local.clashfarmer.desktop.ui.components.StartReason
 import local.clashfarmer.desktop.ui.components.StatTileRow
+import local.clashfarmer.desktop.ui.components.StickyFooter
 import local.clashfarmer.desktop.ui.components.TextLink
 import local.clashfarmer.desktop.ui.components.Tile
 import local.clashfarmer.desktop.ui.components.ToneCard
+import local.clashfarmer.desktop.ui.components.hoverClick
 import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.FarmerSize
 import local.clashfarmer.desktop.ui.theme.Label
@@ -187,9 +192,14 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
         if (pickerOpen) AccountPicker(state)
     }
 
-    /** The account picker while idle, the account in the game while running, and the service chip. */
+    /**
+     * The account picker while idle, the account in the game while running, and a chip: the run's
+     * state while one is going, else whether Clash's window is open. A window chip that needs the
+     * user opens Setup, where its line says what to do.
+     */
     @Composable
     private fun Header(state: DashboardState) {
+        val window by host.windowStatus.collectAsState()
         val shown = state.shownAccount
         Row(
             modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FarmerSize.PRIMARY).padding(bottom = 12.dp),
@@ -206,13 +216,11 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
                 }
             }
             Spacer(Modifier.width(8.dp))
-            val (word, tone) = when {
-                state.busy && state.paused -> "Paused" to Tone.WARN
-                state.busy -> "Running" to Tone.OK
-                state.connected -> "Service on" to Tone.OK
-                else -> "Service off" to Tone.WARN
-            }
-            Chip(word, tone, dot = true)
+            val (word, tone) = headerChip(state.busy, state.paused, state.connected, window)
+            val needsYou = !state.busy && state.connected && (tone == Tone.WARN || tone == Tone.BAD)
+            Chip(word, tone, if (needsYou) Modifier.hoverClick(shape = RoundedCornerShape(percent = 50)) {
+                host.openTab(Tab.SETUP)
+            } else Modifier, dot = true)
         }
     }
 
@@ -336,7 +344,7 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
         val dark = reading?.values?.get(Resource.DARK_ELIXIR)
         Card {
             SectionHeader(if (account != null && busy) "Storage (${account.villageName})" else "Storage",
-                action = reading?.let { "read ${Format.time(it.atMs, zone)}" })
+                action = reading?.let { "read ${Format.time(it.atMs, zone)}" }, top = 0.dp)
             if (busy) {
                 Label("Gold ${Format.ofCapacity(gold, capacities[Resource.GOLD])}  ·  " +
                     "Elixir ${Format.ofCapacity(elixir, capacities[Resource.ELIXIR])}", size = FarmerTheme.SMALL + 1, maxLines = 2)
@@ -390,37 +398,43 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
         }
     }
 
-    /** Start (or why not) and Change run while idle; Pause or Resume beside Stop while running. */
+    /**
+     * Start (or why not, with a link to the fix) and Change run while idle; Pause or Resume beside
+     * Stop while running. The supervised attack lives on Run, so its link opens Run.
+     */
     @Composable
     private fun Actions(state: DashboardState, last: RunPlan?, now: Long) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier
-                    .widthIn(max = PAGE_MAX_WIDTH)
-                    .fillMaxWidth()
-                    .padding(start = FarmerSize.GUTTER, top = 10.dp, end = FarmerSize.GUTTER, bottom = 12.dp)
-            ) {
-                if (state.busy) {
-                    Row(Modifier.fillMaxWidth()) {
-                        SecondaryButton(if (state.paused) "Resume" else "Pause", Modifier.weight(1f)) { host.act("pause") }
-                        Spacer(Modifier.width(10.dp))
-                        DangerButton("Stop", Modifier.weight(2f)) { host.act("stop") }
-                    }
-                } else {
-                    val reason = last?.let {
-                        ComposerState.readiness(it, state.accounts, state.profiles, state.connected, state.busy, state.selectedId,
-                            now, zone).firstOrNull()
-                    }
-                    // Starts the plan the button names, so a reload landing between draw and click cannot change it.
-                    PrimaryButton(HomeCards.startLabel(last, state.accounts, state.selectedId), Modifier.fillMaxWidth(),
-                        enabled = reason == null) {
-                        if (last == null) host.openTab(Tab.RUN) else host.act("plan:${last.toJson()}")
-                    }
-                    if (reason != null) {
-                        Label(reason, Modifier.padding(top = 6.dp), size = FarmerTheme.SMALL, color = FarmerColors.warn, maxLines = 2)
-                    }
-                    if (last != null) TextLink("Change run >", Modifier.padding(top = 4.dp)) { host.openTab(Tab.RUN) }
+        StickyFooter(PAGE_MAX_WIDTH) {
+            if (state.busy) {
+                Row(Modifier.fillMaxWidth()) {
+                    SecondaryButton(if (state.paused) "Resume" else "Pause", Modifier.weight(1f)) { host.act("pause") }
+                    Spacer(Modifier.width(10.dp))
+                    DangerButton("Stop", Modifier.weight(2f)) { host.act("stop") }
                 }
+            } else {
+                val reason = last?.let {
+                    ComposerState.readiness(it, state.accounts, state.profiles, state.connected, state.busy, state.selectedId,
+                        now, zone).firstOrNull()
+                }
+                // Starts the plan the button names, so a reload landing between draw and click cannot change it.
+                PrimaryButton(HomeCards.startLabel(last, state.accounts, state.selectedId), Modifier.fillMaxWidth(),
+                    enabled = reason == null) {
+                    if (last == null) host.openTab(Tab.RUN) else host.act("plan:${last.toJson()}")
+                }
+                StartFix.plainReason(reason)?.let {
+                    val fix = last?.let { plan ->
+                        StartFix.of(plan, state.accounts, state.profiles, state.selectedId, state.connected, state.busy, reason)
+                    }
+                    StartReason(it, fix?.label) {
+                        when (fix) {
+                            is StartFix.Calibrate -> host.openCalibration(fix.accountId)
+                            is StartFix.SupervisedAttack -> host.openTab(Tab.RUN)
+                            is StartFix.Open -> host.openTab(fix.tab)
+                            null -> {}
+                        }
+                    }
+                }
+                if (last != null) TextLink("Change run >", Modifier.padding(top = 4.dp)) { host.openTab(Tab.RUN) }
             }
         }
     }
@@ -514,4 +528,33 @@ class HomeScreen(private val host: DashboardHost) : DashboardScreen {
          */
         const val FALLBACK_RATIO = 16f / 9f
     }
+}
+
+/**
+ * Home's header chip: the run's state while one is going, "Starting" while Clash Farmer itself
+ * is not up yet (the game window is not the news then, and Setup cannot fix it), and otherwise
+ * the game window's [gameChip]. Only that last one, amber or red, opens Setup.
+ */
+internal fun headerChip(busy: Boolean, paused: Boolean, connected: Boolean, window: WindowStatus): Pair<String, Tone> = when {
+    busy && paused -> "Paused" to Tone.WARN
+    busy -> "Running" to Tone.OK
+    !connected -> "Starting" to Tone.WARN
+    else -> gameChip(window)
+}
+
+/**
+ * Home's idle chip: whether Clash's window is open, in the tone Setup's game window line gives
+ * it, so the two never disagree. Amber and red send the user to that line.
+ */
+internal fun gameChip(status: WindowStatus): Pair<String, Tone> {
+    val tone = PcChecklist.gameWindow(status).tone
+    val word = when {
+        !status.checked -> "Looking for Clash"
+        status.error != null -> "Clash not found"
+        status.window == null -> "Clash not open"
+        !status.window.visible -> "Clash closed"
+        status.window.iconic -> "Clash minimized"
+        else -> "Clash open"
+    }
+    return word to tone
 }

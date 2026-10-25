@@ -12,6 +12,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import local.clashfarmer.core.SessionSnapshot
 import local.clashfarmer.core.UserStop
+import local.clashfarmer.insight.EventText
+import local.clashfarmer.insight.Format
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.log.RunContextSnapshot
 import org.json.JSONObject
@@ -171,10 +173,14 @@ class FarmerOverlay(
     /** The panel's Stop. */
     fun pressStop() = onStopRequested(UserStop.FLOATING_PANEL)
 
-    /** Shows [status] in place of the phase for five seconds, then the run's own phase returns. */
+    /**
+     * Shows [status] in place of the phase for five seconds, then the run's own phase returns.
+     * The panel and the tray tooltip show it in [plainStatus]'s words.
+     */
     fun updateStatus(status: String) {
+        val text = plainStatus(status)
         scope.launch {
-            transient = status
+            transient = text
             clearTransient?.cancel()
             clearTransient = launch {
                 delay(TRANSIENT_MS)
@@ -207,6 +213,37 @@ class FarmerOverlay(
     private companion object {
         const val TRANSIENT_MS = 5_000L
         val NO_CONTEXT = RunContextSnapshot()
+    }
+}
+
+/** What the remote page's start modes are called on the panel. */
+private val REMOTE_MODE_NAMES = mapOf(
+    "attacks" to "attacks only", "farm" to "farming", "attacks40" to "40 attacks", "farm40" to "farm 40",
+    "farm2h" to "2 h farming", "event" to "event troops", "supervised" to "supervised attack",
+    "walls" to "walls only", "switch" to "account switch"
+)
+
+private val SESSION_COMPLETE = Regex("""^Session Complete: (\d+) attacks$""")
+private val REMOTE_START = Regex("""^Remote start \(([a-z0-9]+)\) for (.+)$""")
+
+/**
+ * A status line in the PC's words. The verbatim runner and remote server still say the phone's
+ * "Stopped: <raw reason>", "Session Complete: 3 attacks", "Waiting for Clash foreground..." and
+ * "Remote start (farm2h) for Blood..."; these read as the Activity tab does. Anything else is
+ * already plain and passes through.
+ */
+internal fun plainStatus(status: String): String {
+    if (status.startsWith("Stopped: ")) return "Stopped: " + EventText.stopLine(status.removePrefix("Stopped: "))
+    SESSION_COMPLETE.find(status)?.let { return "Session complete: " + Format.count(it.groupValues[1].toInt(), "attack") }
+    REMOTE_START.find(status)?.let {
+        val mode = REMOTE_MODE_NAMES[it.groupValues[1]] ?: it.groupValues[1]
+        return "Remote start: $mode for ${it.groupValues[2]}"
+    }
+    return when (status) {
+        "Waiting for Clash foreground..." -> "Waiting for the Clash window..."
+        // FarmerService's hold for a window over Clash; the PC has no notification shade.
+        "Paused: notification shade open" -> "Paused until Clash is back in front"
+        else -> status
     }
 }
 

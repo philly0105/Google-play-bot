@@ -215,7 +215,7 @@
       <summary>More tools</summary>
       <div class="muted" id="toolsFor"></div>
       <div class="grid" style="margin-top:8px">
-        <button data-mode="supervised" data-label="Test one attack">Test one attack</button>
+        <button data-mode="supervised" data-label="Supervised attack">Supervised attack</button>
         <button data-mode="walls" data-label="Walls only">Walls only</button>
         <button data-mode="switch" data-label="Switch account">Switch account</button>
       </div>
@@ -259,7 +259,7 @@ async function call(path, body) {
     : { method: "POST", headers: { "X-Key": key, "Content-Type": "application/x-www-form-urlencoded" }, body };
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(res.status === 401 ? "Wrong or missing key. Open the page from the link in the app." : (data.error || "The phone answered " + res.status));
+  if (!res.ok) throw new Error(res.status === 401 ? "Wrong or missing key. Open the page from the link in the app." : (data.error || "The PC answered " + res.status));
   return data;
 }
 
@@ -304,7 +304,7 @@ function renderStatus(s) {
   $("pause").hidden = !s.running;
   $("pause").textContent = s.paused ? "Resume" : "Pause";
   $("phone").hidden = s.screenOn && s.unlocked;
-  $("phone").textContent = !s.screenOn ? "The phone's screen is off. Runs cannot start." : "The phone is locked. Runs cannot start.";
+  $("phone").textContent = !s.screenOn ? "The PC's screen is off. Runs cannot start." : "The PC is locked. Runs cannot start.";
   renderProgress();
   renderStorage(s.storage);
 
@@ -721,7 +721,7 @@ async function refreshTimeline() {
       return li;
     }));
     d.append(sum, list);
-    if (g.earlier) d.append(el("div", "muted", g.earlier + (g.earlier === 1 ? " earlier line is" : " earlier lines are") + " on the phone's Activity screen."));
+    if (g.earlier) d.append(el("div", "muted", g.earlier + (g.earlier === 1 ? " earlier line is" : " earlier lines are") + " on the Activity tab in Clash Farmer on the PC."));
     return d;
   }));
   if (!t.groups.length) $("groups").replaceChildren(el("div", "muted", "Nothing logged yet."));

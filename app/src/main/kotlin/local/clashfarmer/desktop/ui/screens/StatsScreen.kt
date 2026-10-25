@@ -42,6 +42,7 @@ import local.clashfarmer.desktop.ui.components.Gap
 import local.clashfarmer.desktop.ui.components.HBarChart
 import local.clashfarmer.desktop.ui.components.HBarRow
 import local.clashfarmer.desktop.ui.components.ScreenPage
+import local.clashfarmer.desktop.ui.components.ScreenTitle
 import local.clashfarmer.desktop.ui.components.SecondaryButton
 import local.clashfarmer.desktop.ui.components.SectionHeader
 import local.clashfarmer.desktop.ui.components.Segmented
@@ -122,14 +123,8 @@ class StatsScreen(private val host: DashboardHost) : DashboardScreen {
             onDispose { visible = false }
         }
         ScreenPage(scroll = scroll) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Label("Stats", Modifier.weight(1f), size = FarmerTheme.HEADLINE, bold = true)
-                SecondaryButton("Export CSV", compact = true) { export() }
-            }
-            status?.let {
-                Label(it, Modifier.padding(top = 4.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.muted)
-            }
-            Segmented(SessionStats.Period.entries.map { it.label }, period.ordinal, Modifier.padding(top = 12.dp)) { i ->
+            ScreenTitle("Stats", status, action = { SecondaryButton("Export CSV", compact = true) { export() } })
+            Segmented(SessionStats.Period.entries.map { it.label }, period.ordinal) { i ->
                 period = SessionStats.Period.entries[i]
                 shownSessions = PAGE
                 render()
@@ -141,11 +136,14 @@ class StatsScreen(private val host: DashboardHost) : DashboardScreen {
         raids?.let { row -> key(row.sessionId) { RaidsSheet(row, zone) { raids = null } } }
     }
 
-    /** "All" plus up to three accounts, the most a Segmented row holds. */
+    /**
+     * "All" plus up to three accounts, the most a Segmented row holds. With one account, All and
+     * that account are the same battles, so there is no filter.
+     */
     @Composable
     private fun AccountFilter() {
         val shown = accounts.take(MAX_FILTER_ACCOUNTS)
-        if (shown.isEmpty()) return
+        if (shown.size < 2) return
         val ids = shown.map { it.id }
         val selected = accountId?.let { ids.indexOf(it) + 1 } ?: 0
         Segmented(listOf("All") + shown.map { it.displayName }, selected, Modifier.padding(top = 8.dp)) { i ->

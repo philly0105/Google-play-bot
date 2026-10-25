@@ -57,7 +57,7 @@ data class RunNotice(val kind: Kind, val title: String, val text: String) {
                 reason.startsWith(DeviceGuard.LOW_BATTERY_PREFIX) -> DeviceGuard.LOW_BATTERY_PREFIX
                 else -> "Battery or heat guard"
             }
-            return RunNotice(Kind.NEEDS_YOU, title(account, what), reason ?: "The run ended at home to protect the phone")
+            return RunNotice(Kind.NEEDS_YOU, title(account, what), reason ?: "The run ended at home to save the battery")
         }
 
         fun takeoverWait(account: String?, waitMinutes: Int): RunNotice = RunNotice(

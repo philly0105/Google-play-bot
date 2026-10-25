@@ -22,6 +22,7 @@ import local.clashfarmer.core.Resource
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.Divider
 import local.clashfarmer.desktop.ui.components.Gap
+import local.clashfarmer.desktop.ui.components.SectionHeader
 import local.clashfarmer.desktop.ui.components.Sheet
 import local.clashfarmer.desktop.ui.components.hoverClick
 import local.clashfarmer.desktop.ui.theme.FarmerColors
@@ -112,7 +113,10 @@ private fun Cells(values: List<String>, header: Boolean, modifier: Modifier = Mo
     }
 }
 
-/** One battle's facts, each value selectable so an id can be copied. */
+/**
+ * One battle's facts, each value selectable. Its ids sit apart under Details: they mean nothing
+ * to read, and are there to copy into a bug report.
+ */
 @Composable
 private fun BattleSheet(
     session: SessionStats.SessionRow,
@@ -131,20 +135,33 @@ private fun BattleSheet(
         "Stars" to raid.stars,
         "Damage" to raid.damage,
         "Bases skipped" to raid.skips,
-        "Gold spent searching" to Format.amount(b.searchGold),
-        "Battle id" to b.id,
-        "Session id" to b.sessionId
+        "Gold spent searching" to Format.amount(b.searchGold)
     )
     Sheet("Battle at ${raid.time}", onClose) {
-        Card(Modifier.padding(top = 8.dp)) {
-            SelectionContainer {
-                Column {
-                    facts.forEachIndexed { i, (name, value) ->
-                        if (i > 0) Divider()
-                        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-                            DisableSelection {
-                                Label(name, size = FarmerTheme.LABEL, color = FarmerColors.muted, medium = true)
-                            }
+        Facts(facts, Modifier.padding(top = 8.dp))
+        SectionHeader("Details")
+        Label("For a bug report: select an id to copy it.", Modifier.padding(bottom = 8.dp), size = FarmerTheme.SMALL,
+            color = FarmerColors.muted)
+        Facts(listOf("Battle id" to b.id, "Session id" to b.sessionId), small = true)
+    }
+}
+
+/** A card of name and value lines, the values selectable; [small] values are faint monospace. */
+@Composable
+private fun Facts(facts: List<Pair<String, String>>, modifier: Modifier = Modifier, small: Boolean = false) {
+    Card(modifier) {
+        SelectionContainer {
+            Column {
+                facts.forEachIndexed { i, (name, value) ->
+                    if (i > 0) Divider()
+                    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+                        DisableSelection {
+                            Label(name, size = FarmerTheme.LABEL, color = FarmerColors.muted, medium = true)
+                        }
+                        if (small) {
+                            Label(value, Modifier.padding(top = 4.dp), size = FarmerTheme.SMALL, color = FarmerColors.muted,
+                                monospace = true)
+                        } else {
                             Label(value, Modifier.padding(top = 4.dp), size = FarmerTheme.BODY)
                         }
                     }

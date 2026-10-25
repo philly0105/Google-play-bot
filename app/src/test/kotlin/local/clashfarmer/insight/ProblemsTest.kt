@@ -57,7 +57,7 @@ class ProblemsTest {
     fun deviceGuardStopIsAnAmberEntry() {
         val p = collect(listOf(shaped("device_guard_stop"))).single()
         assertEquals(Tone.WARN, p.tone)
-        assertEquals("Sweat: ended early to protect the phone", p.title)
+        assertEquals("Sweat: ended early to save the battery", p.title)
         assertTrue(p.detail, p.detail.contains("battery 12%, not charging, 36.5 C"))
     }
 

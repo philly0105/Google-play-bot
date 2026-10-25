@@ -74,7 +74,7 @@ object CalibrationHealth {
         val profile = profiles[account.id]
         if (profile == null) {
             out += Finding(Finding.Kind.NOT_CALIBRATED, Finding.Area.CALIBRATION, Tone.BAD, "Not calibrated",
-                "$name has no calibration on this phone. Calibrate it before running.")
+                "$name has no calibration on this PC. Calibrate it in Setup.")
         } else {
             if (!profile.isVerified) {
                 out += Finding(Finding.Kind.NOT_VERIFIED, Finding.Area.CALIBRATION, Tone.WARN, "Needs one supervised attack",
@@ -213,11 +213,11 @@ object CalibrationHealth {
 
     // ----- Setup row lines -----
 
-    /** "Verified on this phone", "Needs one supervised attack" or "Not calibrated". */
+    /** "Verified on this PC", "Needs one supervised attack" or "Not calibrated". */
     fun calibrationLine(profile: PhoneProfile?): String = when {
         profile == null -> "Not calibrated"
         !profile.isVerified -> "Needs one supervised attack"
-        else -> "Verified on this phone"
+        else -> "Verified on this PC"
     }
 
     /** "7 cards, spacing 97 px"; "No tray taps saved" when there are none. */

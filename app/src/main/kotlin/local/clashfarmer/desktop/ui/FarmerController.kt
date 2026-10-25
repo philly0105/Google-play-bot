@@ -50,6 +50,33 @@ internal fun pcAccounts(loaded: DashboardLoader.Accounts) = loaded.copy(
     profiles = loaded.profiles.filterKeys { it == AccountStore.BLOOD_ID }
 )
 
+/** What an action names an account that is no longer in the store. */
+internal const val ACCOUNT_GONE = "That account is gone. Choose one on Home."
+
+/** What a failure the controller did not word itself says: no exception text. */
+internal const val SOMETHING_WENT_WRONG = "Something went wrong. The Technical log on the Activity tab has the details."
+
+/**
+ * The alert's title and message when [action] fails with [error]. The controller and the checks
+ * it calls throw IllegalStateException and IllegalArgumentException with sentences meant for the
+ * user, which show as they are; any other exception is a fault, logged in full by the caller,
+ * and the alert sends the user to the Technical log instead of showing its text.
+ */
+internal fun actionFailure(action: String, error: Throwable): Pair<String, String> {
+    val title = when {
+        action.startsWith("acknowledge_wall:") -> "Could not clear the marker"
+        action.startsWith("select:") || action.startsWith("switch_only:") -> "Could not choose that account"
+        action.startsWith("plan:") || action == "supervised" || action == "walls" -> "Could not start the run"
+        else -> "Something went wrong"
+    }
+    val worded = (error is IllegalStateException || error is IllegalArgumentException) && !error.message.isNullOrBlank()
+    val message = if (worded) error.message!!.trim().let { if (it.last() in ".!?") it else "$it." } else SOMETHING_WENT_WRONG
+    return title to message
+}
+
+/** A screen state's enum name as a word for the inspect report: "VILLAGE_HOME" reads "village home". */
+internal fun readableState(name: String): String = name.lowercase(Locale.ROOT).replace('_', ' ')
+
 /** A message at the foot of the window, the phone's Toast. A class, so two equal texts are two toasts. */
 class ToastMessage(val text: String, val long: Boolean)
 
@@ -260,7 +287,7 @@ class FarmerController(
                 // Setup's Game window line, when no Clash window is open.
                 action == "launch_clash" -> {
                     if (service == null) {
-                        toast(NOT_RUNNING)
+                        toast(NOT_RUNNING, long = true)
                     } else {
                         service.launchClash()
                     }
@@ -284,7 +311,7 @@ class FarmerController(
                 action.startsWith("acknowledge_wall:") -> {
                     val id = action.removePrefix("acknowledge_wall:")
                     val acc = accountStore.load().firstOrNull { it.id == id }
-                        ?: throw IllegalArgumentException("Unknown account")
+                        ?: throw IllegalArgumentException(ACCOUNT_GONE)
                     alerts += Alert(
                         title = "Acknowledge pending purchase",
                         message = "Check ${acc.villageName} in Clash before clearing this marker. Has the purchase been checked?",
@@ -299,7 +326,8 @@ class FarmerController(
             }
         } catch (e: Exception) {
             AppLog.log("handle_action_error", "action" to action, "error" to (e.message ?: e.toString()))
-            alerts += Alert("Could not start", e.message.orEmpty(), "Close")
+            val (title, message) = actionFailure(action, e)
+            alerts += Alert(title, message, "Close")
         }
         refreshStatus()
     }
@@ -401,7 +429,7 @@ class FarmerController(
                 refreshStatus()
             } catch (e: Exception) {
                 AppLog.log("inspect_failed", "error" to e.message)
-                toast("Inspect failed: ${e.message}", long = true)
+                toast("Inspect could not read the game window. Make sure Clash is open, then try again.", long = true)
             } finally {
                 inspectionRunning = false
                 service.inspecting = false
@@ -411,27 +439,33 @@ class FarmerController(
     }
 
     /**
-     * More tools' "Test one attack" and "Walls only" for the selected account. Both go through
-     * [FarmerService.startPlan] with the launch the old buttons ran.
+     * More tools' "Supervised attack" and "Walls only" for the selected account. Both go through
+     * [FarmerService.startPlan] with the launch the old buttons ran. A calibration the validator
+     * refuses says so in Run's words, not the validator's, which name anchors and ROIs.
      */
     private fun startToolRun(walls: Boolean) {
         val service = FarmerService.instance
         if (service == null) {
-            toast(NOT_RUNNING)
+            toast(NOT_RUNNING, long = true)
             return
         }
         val loaded = pcAccounts(loader.accounts())
-        val account = loaded.selected ?: throw IllegalStateException("Selected account not found")
+        val account = loaded.selected ?: throw IllegalStateException(ACCOUNT_GONE)
+        val name = account.villageName
         val prof = loaded.profiles[account.id]
-            ?: throw IllegalStateException("Please calibrate the profile first.")
+            ?: throw IllegalStateException("$name is not calibrated. Open Setup and calibrate it first.")
         if (walls) {
-            prof.validateForWalls()
+            runCatching { prof.validateForWalls() }.exceptionOrNull()?.let {
+                throw IllegalStateException("$name wall calibration is incomplete; finish it in Setup.")
+            }
             account.settings.wallCapacityProblem()?.let { throw IllegalStateException(it) }
-            service.overlay?.updateStatus("Starting wall phase for ${account.displayName}...")
+            service.overlay?.updateStatus("Starting walls only on ${account.displayName}...")
             service.startPlan(account, Launch.wallsOnly(account))
         } else {
-            prof.validateForAttack()
-            service.overlay?.updateStatus("Starting supervised 1-attack session for ${account.displayName}...")
+            runCatching { prof.validateForAttack() }.exceptionOrNull()?.let {
+                throw IllegalStateException("$name calibration is incomplete; finish it in Setup.")
+            }
+            service.overlay?.updateStatus("Starting a supervised attack on ${account.displayName}...")
             service.startPlan(account, Launch.supervised(account))
         }
         refreshStatus()
@@ -449,7 +483,7 @@ class FarmerController(
         val now = System.currentTimeMillis()
         ComposerState.readiness(plan, loaded.accounts, loaded.profiles, connected = true, busy = service.isBusy,
             selectedId = loaded.selectedId, nowMs = now).firstOrNull()?.let { throw IllegalStateException(it) }
-        fun account(id: String) = loaded.accounts.firstOrNull { it.id == id } ?: throw IllegalStateException("Account not found")
+        fun account(id: String) = loaded.accounts.firstOrNull { it.id == id } ?: throw IllegalStateException(ACCOUNT_GONE)
         when (val launch = plan.launch(loaded.accounts, now, loaded.selectedId)) {
             is Launch.Single -> {
                 val account = account(launch.accountId)
@@ -471,7 +505,7 @@ class FarmerController(
     private fun startSwitchOnlyRun(account: AccountRecord) {
         val service = FarmerService.instance
         if (service == null) {
-            toast(NOT_RUNNING)
+            toast(NOT_RUNNING, long = true)
             return
         }
         toast("Switching to ${account.displayName}...")
@@ -481,7 +515,7 @@ class FarmerController(
 
     private fun showInspectReport(observation: Observation, captureFile: File) {
         val report = """
-            Screen Analysis:
+            The game shows: ${readableState(observation.state.name)}
             ------------------------------------
             State: ${observation.state.name}
             Viewport: [${observation.viewport.left}, ${observation.viewport.top}, ${observation.viewport.right}, ${observation.viewport.bottom}]
@@ -491,7 +525,7 @@ class FarmerController(
             OCR Text:
             ${observation.rawText.take(400)}${if (observation.rawText.length > 400) "..." else ""}
         """.trimIndent()
-        alerts += Alert("Inspect Result: ${observation.state.name}", report, "OK", monospace = true)
+        alerts += Alert("What the bot sees", report, "OK", monospace = true)
     }
 
     private companion object {

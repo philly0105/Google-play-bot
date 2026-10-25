@@ -4,8 +4,8 @@ import androidx.compose.foundation.ContextMenuArea
 import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +41,7 @@ import local.clashfarmer.core.RunPlan
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
 import local.clashfarmer.desktop.ui.NOT_RUNNING
+import local.clashfarmer.desktop.ui.StartFix
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.Chip
 import local.clashfarmer.desktop.ui.components.DangerButton
@@ -53,12 +53,14 @@ import local.clashfarmer.desktop.ui.components.SecondaryButton
 import local.clashfarmer.desktop.ui.components.SectionHeader
 import local.clashfarmer.desktop.ui.components.Segmented
 import local.clashfarmer.desktop.ui.components.Sheet
+import local.clashfarmer.desktop.ui.components.StartReason
 import local.clashfarmer.desktop.ui.components.Stepper
+import local.clashfarmer.desktop.ui.components.StickyFooter
 import local.clashfarmer.desktop.ui.components.TextInput
 import local.clashfarmer.desktop.ui.components.TimeDialog
 import local.clashfarmer.desktop.ui.components.ToggleRow
+import local.clashfarmer.desktop.ui.components.Tooltip
 import local.clashfarmer.desktop.ui.theme.FarmerColors
-import local.clashfarmer.desktop.ui.theme.FarmerSize
 import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.insight.Format
 import local.clashfarmer.service.FarmerService
@@ -117,7 +119,11 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
         val startAtLine: String?,
         val tools: List<Tool>,
         /** An idle screen is not rebound on a clock, so an end or start time counts down on one here. */
-        val clock: Boolean
+        val clock: Boolean,
+        /** How many accounts there are: with fewer than two, nothing offers a choice or Both. */
+        val accountCount: Int,
+        /** The link under a Start that is off, or null. */
+        val fix: StartFix?
     )
 
     /** One More tools row: what it does, its button, and why it is off (null when it is on). */
@@ -156,12 +162,14 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
         Column(Modifier.fillMaxSize()) {
             ScreenPage(Modifier.weight(1f), scroll, maxWidth = FORM_MAX_WIDTH) {
                 ScreenTitle("New run")
-                PresetRow(shown.plan)
+                PresetRow(shown.plan, shown.accountCount)
 
-                SectionHeader("Account")
+                // One account has nothing to choose: the summary names it, and Both cannot run.
                 if (s.accountOptions.isEmpty()) {
+                    SectionHeader("Account")
                     Label("No account yet. Add one in Setup.", size = FarmerTheme.BODY, color = FarmerColors.muted)
-                } else {
+                } else if (shown.accountCount >= 2) {
+                    SectionHeader("Account")
                     Segmented(
                         s.accountOptions,
                         s.accountIndex,
@@ -201,21 +209,14 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
                 SectionHeader("More tools", action = if (toolsOpen) "Hide" else "Show", onAction = { toolsOpen = !toolsOpen })
                 if (toolsOpen) shown.tools.forEach { ToolRow(it) }
             }
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                Column(
-                    Modifier
-                        .widthIn(max = FORM_MAX_WIDTH)
-                        .fillMaxWidth()
-                        .padding(start = FarmerSize.GUTTER, top = 10.dp, end = FarmerSize.GUTTER, bottom = 12.dp)
-                ) {
-                    PrimaryButton(
-                        if (shown.at == null) "Start run" else "Start at ${Format.time(shown.at, zone)}",
-                        Modifier.fillMaxWidth(),
-                        enabled = s.startEnabled && shown.atProblem == null
-                    ) { start() }
-                    s.startReason?.let {
-                        Label(it, Modifier.padding(top = 6.dp), size = FarmerTheme.SMALL, color = FarmerColors.warn, maxLines = 2)
-                    }
+            StickyFooter(FORM_MAX_WIDTH) {
+                PrimaryButton(
+                    if (shown.at == null) "Start run" else "Start at ${Format.time(shown.at, zone)}",
+                    Modifier.fillMaxWidth(),
+                    enabled = s.startEnabled && shown.atProblem == null
+                ) { start() }
+                StartFix.plainReason(s.startReason)?.let { reason ->
+                    StartReason(reason, shown.fix?.label) { shown.fix?.let(::fix) }
                 }
             }
         }
@@ -239,21 +240,25 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
 
     /**
      * The presets, wrapped onto as many lines as they need (the phone scrolled them sideways),
-     * then "+ Save". A click loads one; a right-click offers rename and delete, the phone's long press.
+     * then "+ Save". A click loads one; a right-click offers rename and delete, the phone's long
+     * press, which a tooltip names. With fewer than two accounts the Both presets are left out:
+     * they could only be refused.
      */
     @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
     @Composable
-    private fun PresetRow(plan: RunPlan) {
+    private fun PresetRow(plan: RunPlan, accountCount: Int) {
         FlowRow(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            presets.forEach { preset ->
+            shownPresets(presets, accountCount).forEach { preset ->
                 val name = preset.name.orEmpty()
                 ContextMenuArea(items = { listOf(ContextMenuItem("Rename or delete") { editing = preset }) }) {
-                    if (preset.name != null && preset == plan) PrimaryButton(name, compact = true) { load(preset) }
-                    else SecondaryButton(name, compact = true) { load(preset) }
+                    TooltipArea(tooltip = { Tooltip("Right-click to rename or delete") }, delayMillis = 700) {
+                        if (preset.name != null && preset == plan) PrimaryButton(name, compact = true) { load(preset) }
+                        else SecondaryButton(name, compact = true) { load(preset) }
+                    }
                 }
             }
             SecondaryButton("+ Save", compact = true) { saving = plan }
@@ -275,7 +280,7 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
             Label(it.first, Modifier.padding(top = 8.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.muted)
         }
         if (s.attackCountEnabled) {
-            Stepper(s.attacks ?: Policy.LONG_RUN_ATTACKS, 1, RunPlan.MAX_ATTACKS, Modifier.padding(top = 4.dp).widthIn(max = STEPPER_WIDTH),
+            Stepper(s.attacks ?: Policy.LONG_RUN_ATTACKS, 1, RunPlan.MAX_ATTACKS, Modifier.padding(top = 4.dp),
                 format = { Format.count(it, "attack") }) { next ->
                 edit { p ->
                     p.copy(length = Length.Attacks(ComposerState.stepAttacks((p.length as? Length.Attacks)?.n ?: next, next)), name = null)
@@ -284,7 +289,7 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
         }
         names?.let {
             Label(it.second, Modifier.padding(top = 8.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.muted)
-            Stepper(s.secondAttacks ?: Policy.LONG_RUN_ATTACKS, 1, RunPlan.MAX_ATTACKS, Modifier.padding(top = 4.dp).widthIn(max = STEPPER_WIDTH),
+            Stepper(s.secondAttacks ?: Policy.LONG_RUN_ATTACKS, 1, RunPlan.MAX_ATTACKS, Modifier.padding(top = 4.dp),
                 format = { Format.count(it, "attack") }) { next ->
                 edit { p -> p.copy(secondAttacks = ComposerState.stepAttacks(p.secondAttacks ?: next, next), name = null) }
             }
@@ -292,7 +297,7 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
                 size = FarmerTheme.SMALL, color = FarmerColors.muted)
         }
         s.minutes?.let { minutes ->
-            Stepper(minutes, 5, RunPlan.MAX_MINUTES, Modifier.padding(top = 8.dp).widthIn(max = STEPPER_WIDTH),
+            Stepper(minutes, 5, RunPlan.MAX_MINUTES, Modifier.padding(top = 8.dp),
                 format = { Format.minutes(it) }) { next ->
                 edit { p ->
                     val prev = (p.length as? Length.Minutes)?.m ?: next
@@ -441,8 +446,29 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
             pending = pending,
             startAtLine = startAtLine(pending, at, atProblem, now),
             tools = tools(state, selectedId),
-            clock = (s.endBy != null || at != null || pending != null) && !state.busy
+            clock = (s.endBy != null || at != null || pending != null) && !state.busy,
+            accountCount = state.accounts.size,
+            fix = StartFix.of(plan, state.accounts, state.profiles, selectedId, state.connected, state.busy, s.startReason)
         )
+    }
+
+    /**
+     * Follows the link under Start. The supervised attack is under More tools on this page, so it
+     * opens them and scrolls down to them.
+     */
+    private fun fix(fix: StartFix) {
+        when (fix) {
+            is StartFix.Calibrate -> host.openCalibration(fix.accountId)
+            is StartFix.Open -> host.openTab(fix.tab)
+            is StartFix.SupervisedAttack -> {
+                toolsOpen = true
+                host.scope.launch {
+                    // A frame for the opened tools to lay out, so the page's end is below them.
+                    delay(50)
+                    scroll.animateScrollTo(scroll.maxValue)
+                }
+            }
+        }
     }
 
     /** The line under Start at: the start already set, the time picked, or nothing. */
@@ -495,7 +521,10 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
         }
     }
 
-    /** More tools, each with why it is off, as the phone's showTools set them. */
+    /**
+     * More tools, each with why it is off, as the phone's showTools set them. With one account
+     * there is nothing to switch to, so the switch tool is left out.
+     */
     private fun tools(state: DashboardState, selectedId: String?): List<Tool> {
         val account = state.accounts.firstOrNull { it.id == selectedId }
         val profile = selectedId?.let { state.profiles[it] }
@@ -515,12 +544,13 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
         val wallError = profile?.takeIf { runCatching { it.validateForWalls() }.isFailure }
             ?.let { "Wall calibration is incomplete; finish it in Setup" }
             ?: account?.settings?.wallCapacityProblem()
-        return listOf(
-            Tool("Test one attack (supervised)", "Start", off ?: calibration ?: attackError) { host.act("supervised") },
+        return listOfNotNull(
+            Tool("Supervised attack (one attack you watch)", "Start", off ?: calibration ?: attackError) { host.act("supervised") },
             Tool("Walls only, up to ${Format.minutes(Launch.WALLS_ONLY_MINUTES)}", "Start", off ?: calibration ?: wallError) {
                 host.act("walls")
             },
-            Tool("Switch account in Clash", "Switch", off ?: if (account == null) "Choose an account first" else null) {
+            if (state.accounts.size < 2) null
+            else Tool("Switch account in Clash", "Switch", off ?: if (account == null) "Choose an account first" else null) {
                 this.state?.selectedId?.let { host.act("switch_only:$it") }
             },
             Tool("Inspect the game screen", "Inspect", off) { host.act("inspect") }
@@ -632,7 +662,9 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
 
     private companion object {
         const val CLOCK_TICK_MS = 30_000L
-        /** A stepper as wide as the form spreads its buttons apart; this keeps them near the value. */
-        val STEPPER_WIDTH = 360.dp
     }
 }
+
+/** The presets Run offers: with fewer than two accounts a Both preset could only be refused, so it is left out. */
+internal fun shownPresets(presets: List<RunPlan>, accountCount: Int): List<RunPlan> =
+    if (accountCount < 2) presets.filterNot { it.isBoth } else presets

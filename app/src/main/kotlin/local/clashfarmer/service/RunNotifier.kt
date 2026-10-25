@@ -3,6 +3,7 @@ package local.clashfarmer.service
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import local.clashfarmer.insight.EventText
 import local.clashfarmer.log.AppLog
 
 /**
@@ -28,13 +29,50 @@ class RunNotifier {
 
         /** Whether [withdraw] may take [notice] down while [shown] is the result notice last posted. */
         internal fun withdraws(shown: RunNotice?, notice: RunNotice): Boolean = shown == notice
+
+        /**
+         * What [notice] says in a Windows notification. FarmerService's stop notice carries the
+         * stop reason as logged ("Stopped from floating panel", "Run error: ..."), with no account;
+         * it shows the plain line the Activity tab gives that reason instead, under [account], the
+         * account that was running, when known. A start set for later that did not run keeps its
+         * "Farm at 07:00: " and gives the reason in PC words ([scheduledReason]). Every other
+         * notice is already written for people and names its account, so it shows as it is.
+         */
+        internal fun shown(notice: RunNotice, account: String?): RunNotice {
+            if (notice.title == SCHEDULED_TITLE) {
+                val m = SCHEDULED_TEXT.find(notice.text) ?: return notice
+                return notice.copy(text = "${m.groupValues[1]}: ${scheduledReason(m.groupValues[2])}")
+            }
+            if (notice.kind == RunNotice.Kind.FINISHED || RunNotice.stopped(null, notice.text) != notice) return notice
+            val line = EventText.stopLine(notice.text).replaceFirstChar { it.uppercase() }
+            return RunNotice.stopped(account, notice.text).copy(text = "$line.")
+        }
+
+        /** FarmerService's title for a start set for later that did not run. */
+        private const val SCHEDULED_TITLE = "Scheduled start did not run"
+        /** "<label> at HH:MM: <reason>", as FarmerService writes it. */
+        private val SCHEDULED_TEXT = Regex("""^(.*? at \d{2}:\d{2}): (.*)$""", RegexOption.DOT_MATCHES_ALL)
+
+        /**
+         * Why a start set for later did not run, in PC words. FarmerService's own reasons name
+         * the phone's helper service and a sleeping phone; the rest are written for people
+         * already, a refused calibration included (FarmerService words it as Run does).
+         */
+        internal fun scheduledReason(reason: String): String = when (reason) {
+            "The helper stopped before the start time", "The helper service shut down" ->
+                "Clash Farmer was closed before the start time; set the start again"
+            "The phone was asleep at the start time" -> "The PC was asleep at the start time; set the start again"
+            else -> reason
+        }
     }
 
     /** The ongoing notice as last shown, or null when none is showing. */
     private var live: LiveStatus? = null
     private var liveHeldUntil = 0L
 
-    fun post(notice: RunNotice) {
+    fun post(posted: RunNotice) {
+        val context = AppLog.runContextSnapshot()
+        val notice = shown(posted, context.currentAccountName ?: context.activeAccountName)
         synchronized(this) {
             liveHeldUntil = System.currentTimeMillis() + LIVE_HOLD_MS
             cancelLive()
@@ -44,8 +82,9 @@ class RunNotifier {
             return
         }
         RunTray.notices.trySend(notice)
+        // The raw reason is logged, so the Technical log keeps what the plain line replaced.
         AppLog.log("notification_posted", "kind" to notice.kind.key, "title" to notice.title,
-            "reason" to notice.text.take(300))
+            "reason" to posted.text.take(300))
     }
 
     /** Windows keeps a notification once shown, and Java has no call to take one back, so nothing is withdrawn. */

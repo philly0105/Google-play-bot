@@ -103,7 +103,7 @@ class EventTextTest {
         assertEquals("Stopped: storage full, nothing left to spend it on", stop.text)
         assertEquals(Tone.BAD, stop.tone)
         val user = EventText.describe(event("2026-10-08T07:00:00Z", "run_stopped", "reason" to "Stopped from floating panel"))!!
-        assertEquals("Stopped: you pressed Stop on the floating panel", user.text)
+        assertEquals("Stopped: you pressed Stop on the status panel", user.text)
         assertEquals(Tone.NEUTRAL, user.tone)
     }
 
@@ -115,7 +115,7 @@ class EventTextTest {
             CompletionReason.STORAGE_FULL to "Finished: storage full after 12 attacks",
             CompletionReason.WALL_PENDING to "Finished: an earlier wall purchase still needs checking after 12 attacks",
             CompletionReason.TIME_LIMIT to "Finished: time limit reached after 12 attacks",
-            CompletionReason.DEVICE_GUARD to "Finished early to protect the phone after 12 attacks"
+            CompletionReason.DEVICE_GUARD to "Finished early to save the battery after 12 attacks"
         )
         assertEquals(CompletionReason.entries.toSet(), expected.keys)
         for ((reason, sentence) in expected) {
@@ -125,7 +125,7 @@ class EventTextTest {
         assertEquals("Finished: storage full after 1 attack; no wall left to buy", text(real))
         val hot = event("2026-10-08T07:00:00Z", "session_finished", "completed" to 3, "reason" to "device_guard",
             "detail" to "Phone too hot: 41.2 C (limit 41.0 C)")
-        assertEquals("Finished early to protect the phone after 3 attacks: phone too hot, 41.2 C (limit 41.0 C)", text(hot))
+        assertEquals("Finished early to save the battery after 3 attacks: phone too hot, 41.2 C (limit 41.0 C)", text(hot))
     }
 
     @Test
@@ -168,12 +168,12 @@ class EventTextTest {
         val shapedExpected = mapOf(
             "account_handoff" to "Sweat done after 40 attacks (complete); handing over to Blood",
             "walls_off_builders_busy" to "Walls paused for this run: every builder is busy",
-            "device_guard_stop" to "Ending at home to protect the phone: battery 12%, not charging, 36.5 C",
+            "device_guard_stop" to "Ending at home to save the battery: battery 12%, not charging, 36.5 C",
             "popup_blocked_premium" to "A gem offer is in the way; nothing was bought",
             "connection_lost" to "Clash lost its server connection",
             "maintenance_break" to "Clash is in a maintenance break; waiting it out",
             "game_update_required" to "Clash needs an update from the store",
-            "remote_start_refused" to "Remote start refused for Blood: the phone was locked",
+            "remote_start_refused" to "Remote start refused for Blood: Windows was locked",
             "failure_snapshot" to "Saved the screen and log for the stop"
         )
         for ((name, sentence) in shapedExpected) assertEquals(name, sentence, text(shaped(name)))
@@ -355,14 +355,14 @@ class EventTextTest {
     fun stopReasonsFromRealLogsReadPlainly() {
         // Every distinct run_stopped and run_cancelled reason in the saved logs.
         val reasons = mapOf(
-            "Stopped from floating panel" to "you pressed Stop on the floating panel",
+            "Stopped from floating panel" to "you pressed Stop on the status panel",
             "Stopped from dashboard" to "you pressed Stop in the app",
             "Stopped from remote" to "you pressed Stop on the remote page",
-            "Overlay Stop clicked" to "you pressed Stop on the floating panel",
-            "Service destroyed" to "the helper service shut down",
-            "Screenshot capture failed: Internal error (1)" to "the screen could not be captured",
-            "Active session interrupted: app switched to com.android.vending" to "Clash left the screen",
-            "Run error: Clash is not in foreground (detected: local.clashfarmer)" to "Clash left the screen",
+            "Overlay Stop clicked" to "you pressed Stop on the status panel",
+            "Service destroyed" to "Clash Farmer closed",
+            "Screenshot capture failed: Internal error (1)" to "the Clash window could not be captured",
+            "Active session interrupted: app switched to com.android.vending" to "the Clash window could not be found",
+            "Run error: Clash is not in foreground (detected: local.clashfarmer)" to "the Clash window could not be found",
             "Current account identity is unreadable or is not one of the enrolled accounts" to "the signed-in village could not be confirmed",
             "Cannot verify account identity because the village home screen is not visible" to "the signed-in village could not be confirmed",
             "Run error: StandaloneCoroutine was cancelled" to "the run was cancelled",
@@ -388,6 +388,39 @@ class EventTextTest {
         assertEquals("no reason given", EventText.stopLine(null))
         assertEquals("missing calibrated attack button anchor", EventText.stopLine("Missing calibrated attack button anchor"))
         assertEquals("unknown state during phase home", EventText.clean("UNKNOWN_STATE during phase HOME."))
+    }
+
+    @Test
+    fun thePcsOwnStopsSayWhatToDoNext() {
+        val reasons = mapOf(
+            "The Clash window was closed, and Google Play Games keeps the game running hidden. Opening it again stops " +
+                "the bot's taps from reaching the game, so restart the PC, then start again."
+                to "the Clash window was closed; restart the PC, then start again",
+            "No calibration profile for Blood" to "Blood is not calibrated; calibrate it in Setup",
+            "Run error: No calibration profile for Blood" to "Blood is not calibrated; calibrate it in Setup",
+            "Clash of Clans could not be started through Google Play Games: launcher missing"
+                to "Google Play Games did not open Clash; open Clash by hand, then start again",
+            "Clash of Clans was still drawing a blank screen after 30000ms"
+                to "Clash stayed on a blank screen; wait for it to load, then start again",
+            "The village is not on screen (read SHOP); open it with nothing selected"
+                to "Clash was not on the village; close any open window in Clash, then start again",
+            "Timed out waiting for Clash of Clans (com.supercell.clashofclans) to enter foreground (read: x)"
+                to "the Clash window did not open in time; open Clash, then start again",
+            "Device is locked" to "Windows was locked",
+            "Stopped from notification" to "you chose Stop from the tray icon"
+        )
+        for ((reason, line) in reasons) assertEquals(reason, line, EventText.stopLine(reason))
+    }
+
+    @Test
+    fun aCrashSaysWhereTheDetailsAreNotTheExceptionText() {
+        val line = "something went wrong; the Technical log on the Activity tab has the details"
+        assertEquals(line, EventText.stopLine("Run error: java.lang.IllegalStateException: index 3 out of bounds"))
+        assertEquals(line, EventText.stopLine("Switch error: null"))
+        // A crash whose message is a known stop still reads as that stop.
+        assertEquals("the run was cancelled", EventText.stopLine("Run error: StandaloneCoroutine was cancelled"))
+        // An unknown reason that is not a crash is still shown as it is.
+        assertEquals("missing calibrated attack button anchor", EventText.stopLine("Missing calibrated attack button anchor"))
     }
 
     @Test
@@ -417,8 +450,8 @@ class EventTextTest {
         assertEquals("Paused while the notification shade was open", text(held))
         assertEquals(Tone.IDLE, EventText.describe(held)!!.tone)
         assertEquals("Resumed once Clash was back in front", text(event("2026-10-14T07:58:09Z", "run_hold_released")))
-        assertEquals("you pressed Stop in the notification", EventText.stopLine("Stopped from notification"))
-        assertEquals("you pressed Stop in the notification", EventText.stopLine("Session is stopped: Stopped from notification"))
+        assertEquals("you chose Stop from the tray icon", EventText.stopLine("Stopped from notification"))
+        assertEquals("you chose Stop from the tray icon", EventText.stopLine("Session is stopped: Stopped from notification"))
     }
 
     @Test

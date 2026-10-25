@@ -41,6 +41,14 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `recognition/BattleDamage.kt` | `OVERALL` skips one battle-button label between "Overall Damage" and the value: a word of seven to ten letters starting with s, or a word starting with e followed by one starting with b. | The PC's recogniser returns lines in reading order, so the button's "SURReNdeR" or "End Battle" stood between the word and the value on all nine damage readings of the 24 October attack, and none read (`audit-evidence/live/20261024-163029-supervised/events.jsonl`). Without a damage the early end at a damage and the stall watcher's damage go unused. |
 | `recognition/BattleResultReader.kt` | On a PC frame `lootRegions` hangs the rows at `PC_ROW_LEFT`, `PC_ROW_RIGHT`, `PC_ROW_OFFSETS` and `PC_ROW_HEIGHT`, `starCentres` samples `PC_STAR_OFFSETS`, and a new `glyphCount(roi, viewport, pixel)` counts with `PC_GLYPH_GAP`, `PC_WIDE_GLYPH` and `PC_EDGE`, all in pixels of 1740x978 scaled by `PcGeometry.length`. The phone's `glyphCount(roi, pixel)` stays and keeps its lengths. | The phone's lengths are pixels of 1600x720. On both result screens of 24 October they put the elixir and dark rows between the digits, so no row read, and their star points fell off the stars, so both battles recorded 0 stars. The PC's digits are also wider (up to 24 px) and further apart (17 px). With the PC values all seven result frames of the second battle read 1 346 371, 474 889 and 4 314 on every cut with the anchor moved up to 11 px, and 2 stars (`audit-evidence/live/20261024-165200-result`). The damage region is unchanged: it read 70% on every mask of every frame. A defeat's result screen has not been seen on the PC. |
 | `recognition/ScreenReader.kt` | `readResultLoot` passes the frame's size to `BattleResultReader.glyphCount`. | So that a PC frame's rows are counted at the PC's lengths (row above). |
+| `insight/EventText.kt` | `stopLine`: the panel's Stop reads "on the status panel", the tray's "from the tray icon", "Service destroyed" "Clash Farmer closed", a lost capture "the Clash window could not be captured", Clash not in front "the Clash window could not be found", and "Device is locked" "Windows was locked". New branches for the PC's own stops in `FarmerService` (`CLASH_CLOSED`, "No calibration profile for", Google Play Games not opening Clash, a blank screen, the village not on screen, Clash not opening in time), each ending with what to do. "Switch error: " is stripped like "Run error: ", and a crash's reason that no branch knows reads "something went wrong; the Technical log on the Activity tab has the details" in place of the exception text. Elsewhere "Phone:" is "PC:", the battery guard's lines say "to save the battery" and "Battery guard", and `service_connected` and `service_destroyed` read "Clash Farmer started" and "Clash Farmer closed". | A PC user has no floating panel, notification, helper service or phone. The stop line is what the timeline, Problems, Home, the raids sheet, the panel and the notifications show for a stop. The PC has no temperature reading (`tempC` is null), so only the battery guard can fire. The screen-off and notification-shade lines are left: neither can fire on the PC. Viewport and account-identity reasons are left to their own changes. |
+| `insight/Problems.kt` | The battery guard's entry reads "ended early to save the battery" and "Plug the laptop in before the next run."; the remote refusal's ends "check who can reach this PC." | Phone wording; the PC's guard is the battery's alone. |
+| `insight/CalibrationHealth.kt` | "on this phone" is "on this PC" in the no-calibration finding and in `calibrationLine`'s "Verified on this PC"; the finding ends "Calibrate it in Setup." | Phone wording on a friend's first screens. |
+| `core/Policy.kt` | `verificationRequired` says "on this PC". | As above. |
+| `ui/screens/HomeCards.kt` | The battery guard's card reads "The battery guard ended the last run at home. Plug the laptop in before the next one." | As for `Problems.kt`. |
+| `service/RunNotice.kt` | `deviceGuard`'s text without a reason reads "The run ended at home to save the battery". | As above. |
+| Tests: `insight/EventTextTest.kt`, `TimelineTest.kt`, `ProblemsTest.kt`, `CalibrationHealthTest.kt`, `ui/SetupChecklistTest.kt` | The assertions on the lines above take their PC wording; `EventTextTest` adds cases for each new `stopLine` branch. | They assert the phone's text the rows above change. |
+| `resources/remote.html` | The supervised button reads "Supervised attack" (its `data-label` too), an HTTP error reads "The PC answered", the screen-off and locked lines say "The PC", and the earlier-lines note points to "the Activity tab in Clash Farmer on the PC". | The page opens on the user's phone but talks about the farming machine, which is the PC; the app calls the one-attack run "supervised attack" everywhere else. The screen-off and locked lines cannot show on the PC today, but now read right if they do. The battery line already hides when the PC sends no level. |
 
 ## Shims and platform differences
 
@@ -181,6 +189,9 @@ below.
   - Every call to `RunNotifier` and `FarmerOverlay` is kept.
     Failures only the PC has (keeping awake, the Resume launch, Setup's launch) print to
     `System.err`, since `insight/EventText.kt` describes no event for them.
+  - A start set for later checks its plan through `ComposerState.readiness` rather than
+    `RunPlan.readiness`, so a refused calibration reaches its notice in Run's words, not the
+    validator's, which name anchors and ROIs.
   - Added `launchClash()`, Setup's Open Clash of Clans: it starts Clash and returns at once, and
     sends nothing while a run is active or a Clash window exists. `captureNormalizedVillage`'s
     `returnToActivityClass` defaults to null, as `captureClashGame`'s does.
@@ -193,6 +204,11 @@ below.
   notification Windows has shown. The companion's public constants and `withdraws` are the
   phone's. Left out with Android's notification plumbing: the Context parameter, the channels,
   `controlAction` and `command(Intent)`; the tray's Pause, Resume and Stop call `FarmerService`.
+  `post` shows `FarmerService.stop`'s notice through `shown`: its raw stop reason becomes
+  `EventText.stopLine`'s sentence, under the running account's name from `AppLog`'s run context.
+  `notification_posted` still logs the raw reason. The "Scheduled start did not run" notice keeps
+  its "<label> at HH:MM: " and `scheduledReason` rewrites the reasons that name the phone's helper
+  service or a sleeping phone. Every other notice is shown as built.
 - `service/FarmerOverlay.kt`: no Context parameter. The ticker, `tick`, `lastEarned`,
   `updateStatus`'s five seconds and `setVisible` are the phone's, run on the Swing thread, and
   publish a `Panel` that `desktop/ui/StatusPanel.kt` draws as an always-on-top window that never
@@ -201,6 +217,10 @@ below.
   the app instead. It also stays hidden until the tray's Status panel is ticked, which starts
   unticked at every launch, since the user found the pill in the way. The card's folded state is kept per launch, not in preferences, and
   `hideForCapture` only runs its action, since the capture is of the Clash window alone.
+  `updateStatus` passes its text through `plainStatus`, which rewrites the verbatim runner's and
+  remote server's phone phrasing: "Stopped: <reason>" takes `stopLine`, "Session Complete: N
+  attacks", "Waiting for Clash foreground..." and "Remote start (key) for X..." read plainly, and
+  `FarmerService`'s "Paused: notification shade open" reads "Paused until Clash is back in front".
   `OverlayGeometry` is verbatim (phone lines 492-533). `StatusBubble` and `PauseGlyph` are drawn in
   Compose in `StatusPanel.kt`.
 - `remote/RemoteServer.kt` is verbatim through shims (above), not ported or stubbed. It holds

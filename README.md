@@ -20,7 +20,8 @@ ban can be permanent.
   Inspect and the tray check, it sizes the game back to 1740x978, the size it was calibrated at.
 - It never spends gems and never presses a button on a dialog that shows a gem price. It runs only
   the Blood account and never signs accounts in or out.
-- The dashboard has the phone's tabs (Home, Run, Stats, Activity, Setup). The app also has a tray
+- The dashboard has the phone's tabs (Home, Run, Stats, Activity, Setup); Ctrl+1 to Ctrl+5 and
+  Ctrl+Tab move between them, and Tab moves between controls. The app also has a tray
   icon, Windows notifications, and the phone's remote page and API on port 8765. The tray menu's
   Status panel shows a small always-on-top panel during runs; it is off at every launch.
 

@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1754 tests, the phone's 1635
-and the PC's 119, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1781 tests, 1637 copied from
+the phone and the PC's 144, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -12,11 +12,12 @@ Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line
 
 | Phone path (under `android/`) | PC path | Files | Same blob as the phone |
 | --- | --- | --- | --- |
-| `app/src/test/java/` | `app/src/test/kotlin/` | 113: 110 test classes and the helpers `core/WallPhone.kt`, `insight/LogFixtures.kt`, `recognition/UpgradeListFixture.kt` | 112; `insight/EventTextTest.kt` has one edited line (below) |
+| `app/src/test/java/` | `app/src/test/kotlin/` | 113: 110 test classes and the helpers `core/WallPhone.kt`, `insight/LogFixtures.kt`, `recognition/UpgradeListFixture.kt` | 108; five are edited (below) |
 | `app/src/test/resources/` | `app/src/test/resources/` | 23: `hero-cards/` 7, `result-frames/` 15, `upgrade-list/` 1 | 23 |
 | `calibration/live-2026-09-17/phone-profile.json` | `calibration/live-2026-09-17/phone-profile.json` at the repo root | 1 | 1 |
 
-`@Test` methods: 1635 of the phone's 1635, in 110 files. Neither tree has an `@Ignore`.
+`@Test` methods: 1637 in 110 files, the phone's 1635 and two added to `insight/EventTextTest.kt`.
+Neither tree has an `@Ignore`.
 
 "Same blob" means the hash git stores for the copied file equals the phone's at `eeaadba`.
 
@@ -34,12 +35,19 @@ reads the same screenshots through the desktop shims is not written.
 
 `insight/EventTextTest.kt`, line 22: `File("src/main/java")` is now `File("src/main/kotlin")`.
 `sourceEventNames` collects every event name the app logs by scanning the main source root, which
-the phone keeps in `src/main/java` and this repo in `src/main/kotlin`. No assertion changed. The
-edit is also in `docs/DIVERGENCES.md`.
+the phone keeps in `src/main/java` and this repo in `src/main/kotlin`. That edit changed no
+assertion.
+
+The PC wording of stop reasons, the battery guard and "on this PC" in `insight/` and elsewhere
+changed what five copied tests assert: `insight/EventTextTest.kt`, `insight/TimelineTest.kt`,
+`insight/ProblemsTest.kt`, `insight/CalibrationHealthTest.kt` and `ui/SetupChecklistTest.kt` take
+the new sentences, and `EventTextTest` adds two tests: the PC's own stop reasons, and a crash's
+reason that names no exception text. These edits
+are also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-119 `@Test` methods in 18 files under `desktop/`. Their fixtures are in
+144 `@Test` methods in 23 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, and a few PNG crops.
 
@@ -54,11 +62,11 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
 | `DesktopLogTest` | The desktop log file | 1 |
-| `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 5 |
+| `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 10 |
 | `platform/ClashWindowWatcherTest` | The Clash window lookup | 4 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar | 9 |
 | `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar` | 9 |
-| `ui/` (five files) | The Compose UI; see `docs/UI.md` | 37 |
+| `ui/` (ten files) | The Compose UI; see `docs/UI.md` | 57 |
 
 ## When they run
 
