@@ -294,7 +294,9 @@ class ScreenReader : AutoCloseable {
      * A PC village frame's boxes with the builders' counter read again from an upscaled crop when
      * the whole frame missed it, so the wall phase knows whether a builder is free. The crop's
      * boxes stand in for the corner's only when they read a count; otherwise [boxes] come back as
-     * they were. The phone, and a frame that already read the count, take no second read.
+     * they were. The phone, and a frame that already read the count, take no second read. The
+     * whole frame almost never reads the count on the PC, so nearly every PC village look pays for
+     * this read, polls included.
      */
     private suspend fun withBuildersCorner(bitmap: Bitmap, boxes: List<RecognizedBox>, viewport: Viewport): List<RecognizedBox> {
         val region = Builders.pcCornerRegion(viewport) ?: return boxes

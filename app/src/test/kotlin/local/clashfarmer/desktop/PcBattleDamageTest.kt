@@ -80,6 +80,15 @@ class PcBattleDamageTest {
         assertNull(BattleDamage.overallPercent("Overall Damage B 8% "))
         assertNull(BattleDamage.overallPercent("Overall Damage End Battle 5 % "))
         assertNull(BattleDamage.overallPercent("Overall Damage End Battle e * d 48% "))
+        // A split value's leading 1 read as a bar, bracket, ! or a t or j: skipped, it would
+        // leave the rest of the value standing for too low a damage.
+        assertNull(BattleDamage.overallPercent("Overall Damage End Battle | 8% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage | 00% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage End Battle t 9% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage ! 7% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage ] 2% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage [ 2% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage j 5% "))
         // The result screen's damage is not the battle's.
         assertNull(BattleDamage.overallPercent("31 000 000 11 071 869 Total damage: 0% 174 833 VictORY End Battle "))
     }

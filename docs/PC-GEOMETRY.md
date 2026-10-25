@@ -172,6 +172,8 @@ The five below were fixed on 25 October from captures and logs. None of the fixe
    `PC_CORNER` grown by 12 px, again at x3. Run offline through the sidecar's recogniser, that crop
    read the count on 62 of the 65 at both sizes. The other three are the two army screens and one
    village that read "076", which reads as no count. The `corner-*` fixtures are those crops.
+   Since the whole frame almost never reads the count, nearly every village frame on the PC now
+   costs this second read.
 2. Countdown misreads such as "8H", "10 9H", "Gd 9H", "4d0", "40M 0s" and "Id B8H" passed for prices
    and dropped the real price on the line below. `UpgradeListReader.isTimer` takes them on the PC:
    text with a digit, no run of three digits, and a word shaped like a timer.
@@ -183,9 +185,11 @@ The five below were fixed on 25 October from captures and logs. None of the fixe
    `returnHomeTarget` now taps those two on the PC when the result button did not read, rather than
    the calibrated point, which is bare village there. The bot never opens replays.
 5. A star beside the battle's damage reads as a lone "e", "d" or "*", which hid the value 18 times
-   in the 25 October run. `BattleDamage` skips up to two such tokens on each side of the label.
+   in the 25 October run. `BattleDamage` skips up to two such tokens on each side of the label,
+   but never one that could be a digit, a 1 read as |, !, [, ], t or j, or the sign.
    The result screen's "Total damage: 0%" sweeping in is no longer logged as
    `stall_damage_unreadable`. `waiting_unrecognized` stays as the phone logs it, a neutral event.
+   Unlike fixes 1-4, neither change takes the frame's size, so both apply on the phone too.
 
 ## Tests
 
