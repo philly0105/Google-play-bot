@@ -47,9 +47,10 @@ object Builders {
     /**
      * The PC's second read of the corner: [PC_CORNER] grown by this many pixels of 1740x978 on each
      * side, cropped and upscaled [PC_CORNER_SCALE] times. A whole frame reaches the recogniser
-     * shrunk to about 0.56, which leaves the 28 px counter about 16 px tall, and it read on 3 of 65
-     * village frames in audit-evidence. The crop read the builders' count on 63 of them, at
-     * 1740x978 and 1860x1162 alike, and the goblin's "0/1" beside it on 62.
+     * shrunk to about 0.56, which leaves the 28 px counter about 16 px tall, and it read on 3 of the
+     * 65 frames in audit-evidence that show the line. The crop, read offline by the same recogniser,
+     * read the builders' count on 62 of them at 1740x978 and 1860x1162 alike: the other three are
+     * the two army screens, where only a "0/1" read, and one village that read "076".
      */
     private const val PC_CORNER_MARGIN = 12
     const val PC_CORNER_SCALE = 3

@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1754 tests, the phone's 1635
-and the PC's 119, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1774 tests, the phone's 1635
+and the PC's 139, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -39,16 +39,19 @@ edit is also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-119 `@Test` methods in 18 files under `desktop/`. Their fixtures are in
+139 `@Test` methods in 21 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
-at 1740x978 and 1860x1162, and a few PNG crops.
+at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, and a few PNG crops.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
 | `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, and refusing every account but Blood | 14 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
-| `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |
+| `PcBuildersCornerTest` | The builders' counter read again from an upscaled crop of a village frame, through a fake OCR backend | 7 |
+| `PcUpgradeListTest` | The builder panel's mangled timers, the prices beside them, and a card's name read line by line | 5 |
+| `PcReplayTest` | Return Home on a replay's end screen | 5 |
+| `PcBattleDamageTest` | The battle's damage with the PC's End Battle label, or a star's stray glyph, between the word and the value, and the result screen sweeping in | 5 |
 | `PcBattleResultTest` | The result screen's loot rows and stars at the PC's lengths | 3 |
 | `PcRatePromptTest` | LATER on Play's rating dialog | 3 |
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
