@@ -437,7 +437,9 @@ Calibration:
 - Apply refuses a click on a frame of another size than the profile being edited and says to
   press Capture game screen (`frameMismatch`), since the click is a pixel of that frame. Besides
   such a camera reference, that is the frozen.png of a capture at another size whose move was
-  never saved, which the screen shows again when it opens.
+  never saved, which the screen shows again when it opens. A collector on such a reference gets
+  the Retake note instead (`referenceMismatch`), and one on any other frame is told to press Show
+  camera reference. A refused point is dropped, so Enter reaches the button the note names.
 - Save refuses a game area a run can't use. Replacing a saved calibration of one shape with one of
   another asks first ("Save at another shape?"). A save that changes the points also deletes the
   account's surfaces.json, since the shapes in it were verified on the old points.
@@ -517,7 +519,7 @@ Phone wording remains in shared files (line numbers as of 3c438fb):
 | `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |
 | `desktop/ui/TrayCheckSheetTest.kt` | `profileAt`: the calibration itself, moved to 16:10, and a game area too small | 3 |
-| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, with a shrunk game area, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved` | 10 |
+| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, with a shrunk game area, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved`; Apply refusing a point on a screenshot or camera reference of another size (`frameMismatch`), the note for a collector on each, and Enter left to the buttons after a refusal | 14 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/AccountEditorCloseTest.kt` | Close on an untouched sheet, the question after a changed box or switch, Keep editing, and a change put back | 3 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets grouped by screen, their plain labels and the army's names, the needed set against `validateForAttack`, `isSet` (with edge ends applied on the visit), `savedPoint`, `savedBox`, `targetEnabled`, `targetRows`, `withoutCard` against `AttackPlanner.buildDeployment`, `calibrationKey`, `takesEnter` and `saveFailure`; `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 25 |

@@ -1,5 +1,6 @@
 package local.clashfarmer.desktop.ui.calibration
 
+import androidx.compose.ui.input.key.Key
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -223,6 +224,53 @@ class CalibrationSizeTest {
         model.click(Point(900, 500))
         model.applyPoint()
         assertTrue(model.profile.collectionTargets.isEmpty())
+    }
+
+    @Test
+    fun `a collector on a camera reference of another size points to Retake`() {
+        val moved = refit(calibrated, 1860, 1162).profile
+        blood(moved, "wall_camera.png", 1740, 978)
+        val model = open()
+        model.showCameraReference()
+        settle(model)
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        model.click(Point(900, 500))
+        model.applyPoint()
+        // Capture game screen would lead back to Show camera reference and this same reference.
+        assertEquals(referenceMismatch(1740, 978, moved), toasts.last())
+        assertTrue(model.profile.collectionTargets.isEmpty())
+
+        // On the screenshot of a capture at another size, collectors still want the camera
+        // reference, and a reference at the calibration's size takes them.
+        blood(calibrated, "calibration/frozen.png", 1860, 1162)
+        val frozen = open()
+        frozen.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        frozen.click(Point(900, 500))
+        frozen.applyPoint()
+        assertEquals("Press Show camera reference first; collectors are measured on it", toasts.last())
+        frozen.showCameraReference()
+        settle(frozen)
+        frozen.click(Point(900, 500))
+        frozen.applyPoint()
+        assertEquals(2, frozen.profile.collectionTargets.size)
+    }
+
+    @Test
+    fun `a point refused on a frame of another size lets Enter reach the buttons`() {
+        // The note names a button to press; a point still waiting for Apply would take its Enter.
+        blood(calibrated, "calibration/frozen.png", 1860, 1162)
+        val model = open()
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == "attack" })
+        model.click(Point(261, 820))
+        assertTrue(takesEnter(Key.Enter, model.pending))
+        model.applyPoint()
+        assertFalse(takesEnter(Key.Enter, model.pending))
+        assertEquals(calibrated.stateAnchors, model.profile.stateAnchors)
+        // Likewise a collector, which waits for Show camera reference.
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        model.click(Point(900, 500))
+        model.applyPoint()
+        assertFalse(model.pending)
     }
 
     /** Blood with [saved] as its calibration and a black PNG of [width]x[height] at [path] in its folder. */

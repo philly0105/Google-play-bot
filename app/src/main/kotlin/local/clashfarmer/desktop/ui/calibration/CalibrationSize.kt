@@ -67,10 +67,10 @@ internal fun saveQuestion(opened: PhoneProfile, edited: PhoneProfile, hasSaved: 
 }
 
 /**
- * What Show camera reference says when the saved reference, [width]x[height], is not the size of
- * [profile], the one being edited, or null when it is. No point can be marked on it
- * ([frameMismatch]), and only Retake sets it aside: showing it changes nothing, so a capture at
- * another size that is never saved costs no collectors.
+ * What Show camera reference says, and Apply for a collector, when the saved reference,
+ * [width]x[height], is not the size of [profile], the one being edited, or null when it is. No
+ * point can be marked on it ([frameMismatch]), and only Retake sets it aside: showing it changes
+ * nothing, so a capture at another size that is never saved costs no collectors.
  */
 internal fun referenceMismatch(width: Int, height: Int, profile: PhoneProfile): String? {
     if (width == profile.resolutionWidth && height == profile.resolutionHeight) return null

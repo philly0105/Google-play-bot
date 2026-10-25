@@ -77,7 +77,10 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
      * point, so the profile alone can't tell a start just applied from one never set ([isSet]).
      */
     private var appliedEnds: Set<String> by mutableStateOf(emptySet())
-    /** Collection targets are only taken on the camera reference itself, never on another frame. */
+    /**
+     * Collection targets are only taken on the camera reference itself, never on another frame,
+     * and only when it is the profile's size ([referenceMismatch]).
+     */
     private var frameIsCameraReference = false
 
     /** The frame on show, or null before the first capture. */
@@ -429,17 +432,25 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
             host.toast("Capture sets the game area on the PC; pick another point")
             return
         }
+        // These two notes name a button, so the point is dropped: one still waiting would take the
+        // Enter meant for that button ([pending]).
+        if (target.name == COLLECTOR && !frameIsCameraReference) {
+            tempPoint = null
+            host.toast("Press Show camera reference first; collectors are measured on it", long = true)
+            return
+        }
         // The click is a pixel of the frame on show, which can be of another size than the profile.
-        frame?.let { frameMismatch(it.width, it.height, profile) }?.let {
+        // On a camera reference that old, only Retake lets collectors be marked at this size.
+        frame?.let {
+            if (target.name == COLLECTOR) referenceMismatch(it.width, it.height, profile)
+            else frameMismatch(it.width, it.height, profile)
+        }?.let {
+            tempPoint = null
             host.toast(it, long = true)
             return
         }
 
         if (target.name == COLLECTOR) {
-            if (!frameIsCameraReference) {
-                host.toast("Press Show camera reference first; collectors are measured on it", long = true)
-                return
-            }
             if (profile.collectionTargets.size >= CollectionPolicy.MAX_TARGETS) {
                 host.toast("At most ${CollectionPolicy.MAX_TARGETS} collectors", long = true)
                 return
@@ -588,8 +599,8 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /**
      * The body of [showCameraReference], which Retake runs too once the old reference is aside. A
      * saved reference of another size than the profile, taken before the game area changed, is
-     * shown with a note and not as the reference, and Apply takes no point on it: points marked on
-     * it would be saved where that frame had them ([referenceMismatch], [frameMismatch]).
+     * shown with a note, and Apply takes no point on it: points marked on it would be saved where
+     * that frame had them ([referenceMismatch], [frameMismatch]).
      */
     private suspend fun cameraReference() {
         try {
@@ -604,7 +615,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                     return
                 }
                 val mismatch = referenceMismatch(image.width, image.height, profile)
-                show(image, reference = mismatch == null)
+                show(image, reference = true)
                 if (mismatch == null) host.toast("Showing the saved camera reference") else host.toast(mismatch, long = true)
                 return
             }
