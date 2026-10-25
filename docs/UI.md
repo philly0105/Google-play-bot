@@ -161,9 +161,12 @@ Shell:
 - Controls are 40 dp tall and the main action 44 dp, down from the 48 dp finger target. Buttons
   show a hand cursor and a hover wash. Pages are at most 880 dp wide, forms 640 dp.
 - Tab moves between controls, and the one with focus has a 2 dp ring: gold, or the text colour
-  on a gold button and on the selected segment. Enter or Space presses it. Up and Down step a
-  stepper, Left and Right move a segmented choice. Ctrl+1 to Ctrl+5 open the tabs, and Ctrl+Tab
-  and Ctrl+Shift+Tab step through them, wherever focus is (`tabForKey`).
+  on a gold button and on the selected segment. A click focuses a control too, so the ring shows
+  only after a key press and goes at the next mouse press (`KeyboardNav`, watched on the window's
+  and each dialog's root). Enter or Space presses it. Up and Down step a stepper, Left and Right
+  move a segmented choice. Ctrl+1 to Ctrl+5 open the tabs, and Ctrl+Tab and Ctrl+Shift+Tab step
+  through them, wherever focus is (`tabForKey`). A tab change drops the old page with whatever
+  had focus in it, so the window takes focus back then and the shortcuts keep working.
 - A disabled main button keeps the glass fill with faint text, not a dimmed gold.
 - Home's and Run's start buttons sit in a footer under a hairline that stays put while the page
   scrolls. When Start is off, the reason shows above it in plain words, with a link to the fix
@@ -171,7 +174,7 @@ Shell:
   supervised attack >" opens Run's tools (from Home, the Run tab), and a reason that names Setup
   opens Setup. With
   the bot not running the reason reads "Clash Farmer is still starting..." in place of the
-  readiness check's accessibility line.
+  readiness check's accessibility line. The toasts that say so stay up for the long time.
 - The save dialog of Export CSV and the tray menu are Windows' own and follow its theme, not the
   app's dark one. That is known and kept.
 
@@ -185,7 +188,8 @@ Home:
 - While idle, the chip by the title is the game window's state (`gameChip`), toned as Setup's
   Game window line: "Clash open" or "Clash minimized" green, "Looking for Clash" grey, "Clash
   not open" amber, "Clash closed" or "Clash not found" red. An amber or red chip opens Setup.
-  While a run is going it shows the run's state as before.
+  While the bot is not up yet it reads an amber "Starting" instead, which opens nothing
+  (`headerChip`). While a run is going it shows the run's state as before.
 - A resource the bot has not read shows "Not read" on its bar and a faint dash in its tile, not
   a zero.
 
@@ -209,8 +213,9 @@ Activity:
 
 - The Problems tab reads "Problems (2)" with the count.
 - Clear resolved is a small button on the right and clears only past events (`clearable`). A
-  calibration or settings finding stays until it is fixed, since it still stops runs; on the
-  phone Clear resolved hid it for 30 days.
+  calibration or settings finding stays until it is fixed, since it is still true and the
+  incomplete ones stop runs; on the phone Clear resolved hid it for 30 days. Each one still has
+  its own Dismiss in the Problems view, for an advisory finding such as uneven card spacing.
 - A calibration or settings finding's button goes to its fix (`findingFix`): "Calibrate" opens
   calibration on the account when the calibration is missing, incomplete, has copied points or
   uneven card spacing; "Open Run" when it is not yet verified, which takes a supervised attack;
@@ -306,6 +311,9 @@ The stop reasons, the battery guard's lines and "on this phone" in `insight/Even
 `insight/Problems.kt`, `insight/CalibrationHealth.kt`, `core/Policy.kt`, `ui/screens/HomeCards.kt`
 and `service/RunNotice.kt` now say PC things; each edit has a row in `docs/DIVERGENCES.md`. The
 notifications and the status panel show a stop through `EventText.stopLine`, not the raw reason.
+A start set for later that did not run keeps its "Farm at 07:00: " and gives its reason in PC
+words (`RunNotifier.scheduledReason`): "Clash Farmer was closed before the start time; set the
+start again" for the helper phrases, and a refused calibration as Run words it.
 
 Phone wording remains in shared files (line numbers as of 3c438fb):
 
@@ -329,12 +337,13 @@ Phone wording remains in shared files (line numbers as of 3c438fb):
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
-| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts` and `shownPresets` with Blood alone; every tab, the account editor and calibration drawn off-screen at 1100x760, and the whole window at 100%, at 150% in 1280x650 dp and with a run going, into `app/build/ui-renders`; `tabForKey` | 4 |
-| `desktop/ui/StartFixTest.kt` | `StartFix` for each readiness reason, `plainReason`, `shownPresets` and `gameChip` | 8 |
+| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts` and `shownPresets` with Blood alone; every tab, the account editor and calibration drawn off-screen at 1100x760, and the whole window at 100%, at 150% in 1280x650 dp and with a run going, into `app/build/ui-renders`; `tabForKey`, and the tab keys after the page holding focus is dropped | 5 |
+| `desktop/ui/StartFixTest.kt` | `StartFix` for each readiness reason, `plainReason`, `shownPresets`, `gameChip` and `headerChip` | 9 |
 | `desktop/ui/ControllerTextTest.kt` | `actionFailure`'s titles and messages, and `readableState` | 3 |
 | `desktop/ui/ActivityLinksTest.kt` | `clearable` and `findingFix` | 2 |
 | `desktop/ui/components/KeyControlsTest.kt` | `stepKey` and `nextOption` | 2 |
-| `desktop/RunTrayTest.kt` | `RunNotifier` through `RunTray`, its stop notice in `stopLine`'s words, and the panel's status text, plain lines, idle shape and Stop | 9 |
+| `desktop/ui/components/FocusRingTest.kt` | A clicked button drawn without its focus ring until a key is pressed (`KeyboardNav`) | 1 |
+| `desktop/RunTrayTest.kt` | `RunNotifier` through `RunTray`, its stop notice in `stopLine`'s words, the scheduled-start notice's `scheduledReason`, and the panel's status text, plain lines, idle shape and Stop | 10 |
 
 ## Open points
 

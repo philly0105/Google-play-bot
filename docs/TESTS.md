@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1777 tests, 1637 copied from
-the phone and the PC's 140, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1781 tests, 1637 copied from
+the phone and the PC's 144, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -47,7 +47,7 @@ are also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-140 `@Test` methods in 22 files under `desktop/`. Their fixtures are in
+144 `@Test` methods in 23 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, and a few PNG crops.
 
@@ -62,11 +62,11 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
 | `DesktopLogTest` | The desktop log file | 1 |
-| `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 9 |
+| `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 10 |
 | `platform/ClashWindowWatcherTest` | The Clash window lookup | 4 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar | 9 |
 | `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar` | 9 |
-| `ui/` (nine files) | The Compose UI; see `docs/UI.md` | 54 |
+| `ui/` (ten files) | The Compose UI; see `docs/UI.md` | 57 |
 
 ## When they run
 
