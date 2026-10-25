@@ -80,6 +80,20 @@ class PcUpgradeListTest {
     }
 
     @Test
+    fun `a card's name reads line by line and a bare number under it is left out`() {
+        val end = rows("geo-list-end")
+        assertEquals("200 000", end.single { it.name == "ElixiR CollectoR x 7" }.priceText)
+        assertEquals("2 800 000", end.single { it.name == "CRafting StatioN Hero Hunter Poison EFFect" }.priceText)
+        assertTrue(end.none { it.name.startsWith("983") })
+        assertEquals("32 000", rows("geo-list-scroll1").single { it.name == "CRafting StatioN Hero Hunter Hitpoints" }.priceText)
+        assertEquals("32 000", rows("geo-list-top").single { it.name == "CRafting StatioN Hero Hunter Hitpoints" }.priceText)
+        // The tap stays on the name's own line.
+        val collector = end.single { it.name == "ElixiR CollectoR x 7" }
+        assertEquals(717, collector.top)
+        assertEquals(753, collector.bottom)
+    }
+
+    @Test
     fun `no row takes a timer for its price`() {
         for (name in listOf("geo-list-top", "geo-list-scroll1", "geo-list-end")) {
             for (row in rows(name)) {

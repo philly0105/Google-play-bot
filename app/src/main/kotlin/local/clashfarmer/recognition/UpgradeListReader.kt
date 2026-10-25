@@ -356,27 +356,34 @@ object UpgradeListReader {
             else clusters += mutableListOf(box)
         }
         if (panel) {
+            // On the PC a card's lines keep their order, each read left to right, and a second
+            // line's number at the left is no part of the name: Elixir Collector's "983" under it
+            // started the name, and "Hero Hunter Poison Effect", 4 px left of "Crafting Station"
+            // above it, came first (audit-evidence/spike/geo-list-end.json).
+            val pc = PcGeometry.isPc(viewport)
             // A card's second line (a subtitle, its price, or both) joins the name above it.
             val cards = mutableListOf<MutableList<RecognizedBox>>()
-            for (line in clusters) {
+            for (cluster in clusters) {
+                val line = if (pc) cluster.sortedBy { it.left } else cluster
                 val card = cards.lastOrNull()
                 val priced = card?.any { it.left >= split && !isTimer(it.text, viewport) && hasDigit(it.text) } == true
                 // A section header is its own line, never a card's.
                 val header = line.any { compact(it.text).contains("upgrade") }
                 if (card != null && !priced && !header &&
                     line.map { it.center.y }.average() - card.minOf { it.center.y } <= cardLineGap
-                ) card += line else cards += line
+                ) card += if (pc) line.filterNot { it.left < split && it.text.none(Char::isLetter) } else line
+                else cards += line.toMutableList()
             }
-            return cards.mapNotNull { cluster -> rowOf(cluster, popup, split, viewport, pixels, panel) }
+            return cards.mapNotNull { cluster -> rowOf(cluster, popup, split, viewport, pixels, panel, inOrder = pc) }
         }
         return clusters.mapNotNull { cluster -> rowOf(cluster, popup, split, viewport, pixels, panel) }
     }
 
     private fun rowOf(
         cluster: List<RecognizedBox>, popup: Region, split: Int, viewport: Viewport, pixels: (Region) -> IntArray,
-        panel: Boolean = false
+        panel: Boolean = false, inOrder: Boolean = false
     ): Row? {
-        val left = cluster.filter { it.left < split }.sortedBy { it.left }
+        val left = cluster.filter { it.left < split }.let { if (inOrder) it else it.sortedBy { box -> box.left } }
         val first = left.firstOrNull() ?: return null
         val nameBoxes = mutableListOf(first)
         for (box in left.drop(1)) {
