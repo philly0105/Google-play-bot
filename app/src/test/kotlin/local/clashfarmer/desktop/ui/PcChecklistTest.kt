@@ -1,8 +1,10 @@
 package local.clashfarmer.desktop.ui
 
+import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.sidecar.PcInfo
+import local.clashfarmer.desktop.sidecar.Hello
 import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.ui.TabBadge
 import local.clashfarmer.ui.components.Tone
@@ -205,5 +207,64 @@ class PcChecklistTest {
         assertEquals(2 to 2, SetupChecklist.ready(lines))
         assertNull(SetupChecklist.badge(lines))
         assertNull(SetupChecklist.primaryFix(lines))
+    }
+
+    @Test
+    fun `the text reader is not counted until the sidecar answers or while it loads`() {
+        val unread = PcChecklist.textReader(null)
+        assertEquals("text_reader", unread.key)
+        assertEquals("Text reader", unread.title)
+        assertEquals(Tone.NEUTRAL, unread.tone)
+        assertFalse(unread.counts)
+        val loading = PcChecklist.textReader(Hello("1", 7, ocrReady = false))
+        assertEquals(Tone.NEUTRAL, loading.tone)
+        assertEquals("Loading", loading.chip)
+        assertFalse(loading.counts)
+    }
+
+    @Test
+    fun `a text reader that failed to load is red with its reason and what to do`() {
+        val line = PcChecklist.textReader(Hello("1", 7, ocrReady = false, ocrError = "Unable to load DLL 'onnxruntime'."))
+        assertEquals(Tone.BAD, line.tone)
+        assertEquals("Failed", line.chip)
+        assertTrue(line.counts)
+        assertTrue(line.detail.startsWith("Could not start: Unable to load DLL 'onnxruntime'. Runs can't read the game."))
+        assertTrue(line.detail.contains("Visual C++ Redistributable (x64)"))
+        assertEquals(TabBadge(0, Tone.WARN), SetupChecklist.badge(listOf(line)))
+    }
+
+    @Test
+    fun `a loaded text reader is green`() {
+        val line = PcChecklist.textReader(Hello("1", 7, ocrReady = true))
+        assertEquals(Tone.OK, line.tone)
+        assertEquals("Ready", line.chip)
+        assertTrue(line.counts)
+    }
+
+    @Test
+    fun `the remote page line says why it is off and is never counted`() {
+        val stopped = PcChecklist.remote(serviceOn = false, status = RemotePage.Status("100.101.102.103", true))
+        assertEquals("remote", stopped.key)
+        assertEquals("Remote page", stopped.title)
+        assertEquals(Tone.IDLE, stopped.tone)
+        val noTailscale = PcChecklist.remote(serviceOn = true, status = RemotePage.Status(null, false))
+        assertEquals(Tone.IDLE, noTailscale.tone)
+        assertEquals("Off", noTailscale.chip)
+        assertTrue(noTailscale.detail.startsWith("Off (Tailscale not connected)."))
+        val portTaken = PcChecklist.remote(serviceOn = true,
+            status = RemotePage.Status("100.101.102.103", false, RemotePage.Failure.PORT_IN_USE))
+        assertEquals(Tone.WARN, portTaken.tone)
+        assertTrue(portTaken.detail.startsWith("Port 8765 is in use"))
+        val notBound = PcChecklist.remote(serviceOn = true,
+            status = RemotePage.Status("100.101.102.103", false, RemotePage.Failure.OTHER))
+        assertEquals(Tone.WARN, notBound.tone)
+        assertTrue(notBound.detail.startsWith("Tailscale is connected, but the page could not start"))
+        assertFalse(notBound.detail.contains("in use"))
+        val on = PcChecklist.remote(serviceOn = true, status = RemotePage.Status("100.101.102.103", true))
+        assertEquals(Tone.OK, on.tone)
+        assertEquals("On", on.chip)
+        assertTrue(on.detail.startsWith("100.101.102.103:8765 on your tailnet."))
+        assertTrue(listOf(stopped, noTailscale, portTaken, notBound, on).none { it.counts })
+        assertNull(SetupChecklist.badge(listOf(stopped, noTailscale, on)))
     }
 }

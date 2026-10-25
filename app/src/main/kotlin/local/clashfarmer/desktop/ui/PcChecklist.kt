@@ -1,20 +1,27 @@
 package local.clashfarmer.desktop.ui
 
+import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.PcInfo
+import local.clashfarmer.desktop.sidecar.Hello
+import local.clashfarmer.remote.RemoteServer
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.screens.CheckLine
 import local.clashfarmer.ui.screens.SetupChecklist
 
 /**
- * Setup's two lines about this PC, in place of the phone's accessibility and notification lines.
- * Pure, so their rules run in JVM tests. They are [CheckLine]s like the rest, so
- * [SetupChecklist.ready], badge and primaryFix count them as they counted the phone's.
+ * Setup's lines about this PC that the phone didn't have or that read differently here: the game
+ * window and tray icon in place of the phone's accessibility and notification lines, the text
+ * reader, and the remote page. Pure, so their rules run in JVM tests. They are [CheckLine]s like
+ * the rest, so [SetupChecklist.ready], badge and primaryFix count them as they counted the phone's.
  */
 object PcChecklist {
     const val GAME_WINDOW = "game_window"
     const val TRAY_ICON = "tray_icon"
     const val WINDOWS = "windows"
+    const val TEXT_READER = "text_reader"
+    /** The phone's key for its remote line, kept. */
+    const val REMOTE = "remote"
 
     /**
      * The Clash window as the watcher last found it. Its fix, under the phone's accessibility fix
@@ -89,4 +96,40 @@ object PcChecklist {
         if (supported) CheckLine(TRAY_ICON, "Tray icon", "Runs can show their status and stop button.", "On", Tone.OK)
         else CheckLine(TRAY_ICON, "Tray icon", "Runs cannot show their status or stop button in the notification area.",
             "Off", Tone.WARN)
+
+    /**
+     * The sidecar's text reader, from its last hello. Every run reads the game through it, so a
+     * reader that failed to load is red: the run would stop on screens it can't read without
+     * saying why. Until the first hello, or while the models load, it is not counted.
+     */
+    fun textReader(hello: Hello?): CheckLine = when {
+        hello == null -> CheckLine(TEXT_READER, "Text reader", "", SetupChecklist.chip(Tone.NEUTRAL), Tone.NEUTRAL, counts = false)
+        hello.ocrError != null -> CheckLine(TEXT_READER, "Text reader",
+            "Could not start: ${hello.ocrError.trimEnd('.')}. Runs can't read the game. Unzip Clash Farmer again into a new folder. " +
+                "If that doesn't help, install Microsoft's Visual C++ Redistributable (x64), then restart Clash Farmer.",
+            "Failed", Tone.BAD)
+        !hello.ocrReady -> CheckLine(TEXT_READER, "Text reader", "Loading.", "Loading", Tone.NEUTRAL, counts = false)
+        else -> CheckLine(TEXT_READER, "Text reader", "Reads the game's text.", "Ready", Tone.OK)
+    }
+
+    /**
+     * The remote page, in place of the phone's remote line. It listens only while Tailscale is
+     * connected, so without it the line is off rather than amber: the page is optional. Never
+     * counted, as on the phone. The key stays off the screen.
+     */
+    fun remote(serviceOn: Boolean, status: RemotePage.Status?): CheckLine = when {
+        !serviceOn || status == null -> CheckLine(REMOTE, "Remote page", "Starts with Clash Farmer.", "Off", Tone.IDLE, counts = false)
+        status.tailscale == null -> CheckLine(REMOTE, "Remote page",
+            "Off (Tailscale not connected). Optional: connect Tailscale on this PC to control runs from another device; " +
+                "the page turns on within a minute.", "Off", Tone.IDLE, counts = false)
+        !status.listening && status.failure == RemotePage.Failure.PORT_IN_USE -> CheckLine(REMOTE, "Remote page",
+            "Port ${RemoteServer.PORT} is in use by another program, so the page is off. Close that program; " +
+                "Clash Farmer tries again every 10 minutes.", "Off", Tone.WARN, counts = false)
+        !status.listening -> CheckLine(REMOTE, "Remote page",
+            "Tailscale is connected, but the page could not start on its address yet. Clash Farmer tries again " +
+                "every minute; if it stays off, restart Tailscale.", "Off", Tone.WARN, counts = false)
+        else -> CheckLine(REMOTE, "Remote page",
+            "${status.tailscale}:${RemoteServer.PORT} on your tailnet. The copied link holds the key; keep it private.",
+            "On", Tone.OK, counts = false)
+    }
 }

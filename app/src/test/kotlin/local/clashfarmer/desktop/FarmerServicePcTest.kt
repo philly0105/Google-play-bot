@@ -373,4 +373,12 @@ class FarmerServicePcTest {
         assertEquals(300, local.clashfarmer.service.LatestFrame.heightFor(1860, 1162))
         assertEquals(local.clashfarmer.service.LatestFrame.HEIGHT, local.clashfarmer.service.LatestFrame.heightFor(0, 0))
     }
+
+    @Test
+    fun `old logs are pruned again once a day while the app stays in the tray, never during a run`() {
+        val day = FarmerService.PRUNE_EVERY_MS
+        assertFalse(FarmerService.pruneDue(lastPruneMs = 1_000, nowMs = 1_000 + day - 1, busy = false))
+        assertTrue(FarmerService.pruneDue(lastPruneMs = 1_000, nowMs = 1_000 + day, busy = false))
+        assertFalse(FarmerService.pruneDue(lastPruneMs = 1_000, nowMs = 1_000 + day, busy = true))
+    }
 }

@@ -52,7 +52,10 @@ pixels and input points are the same pixels, at any DPI.
 
 ### `hello`
 
-Returns `version`, `pid` and `ocrReady`. OCR models load in the background at start.
+Returns `version`, `pid`, `ocrReady` and `ocrError`. OCR models load in the background at start.
+`ocrError` is null while they load and once they have; when the load failed it says why, such as
+a missing `onnxruntime.dll` dependency, and `ocrReady` stays false. The app asks every few seconds
+until the reader is ready or failed, then every minute, for Setup's Text reader line.
 
 ### `find`
 

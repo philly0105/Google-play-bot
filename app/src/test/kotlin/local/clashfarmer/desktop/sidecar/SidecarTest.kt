@@ -63,6 +63,22 @@ class SidecarTest {
     }
 
     @Test
+    fun `hello carries the text reader's load error, and a null or missing one as none`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        fun JSONObject.base() = put("version", "1").put("pid", 7).put("ocrReady", false)
+        val failed = async(Dispatchers.Default) { sidecar.hello() }
+        fake.ok(fake.next()) { base().put("ocrError", "Unable to load DLL 'onnxruntime'") }
+        assertEquals(Hello("1", 7, false, "Unable to load DLL 'onnxruntime'"), failed.await())
+        val loading = async(Dispatchers.Default) { sidecar.hello() }
+        fake.ok(fake.next()) { base().put("ocrError", JSONObject.NULL) }
+        assertEquals(Hello("1", 7, false, null), loading.await())
+        val older = async(Dispatchers.Default) { sidecar.hello() }
+        fake.ok(fake.next()) { base() }
+        assertEquals(Hello("1", 7, false, null), older.await())
+    }
+
+    @Test
     fun `a gesture sends its strokes and waits as long as they take`() = runBlocking {
         val fake = FakeSidecar()
         val sidecar = Sidecar { fake.connection }
@@ -221,5 +237,13 @@ class SidecarTest {
         val again = fake.next()
         fake.ok(again) { put("osBuild", 22631).put("gpgInstalled", true).put("clashInstalled", JSONObject.NULL) }
         assertEquals(PcInfo(osBuild = 22631, gpgInstalled = true, clashInstalled = null), unknown.await())
+    }
+
+    @Test
+    fun `Setup asks often while the text reader loads and seldom once it is ready or failed`() {
+        assertFalse(SidecarStatus.settled(null))
+        assertFalse(SidecarStatus.settled(Hello("1", 7, ocrReady = false)))
+        assertTrue(SidecarStatus.settled(Hello("1", 7, ocrReady = true)))
+        assertTrue(SidecarStatus.settled(Hello("1", 7, ocrReady = false, ocrError = "Unable to load DLL")))
     }
 }

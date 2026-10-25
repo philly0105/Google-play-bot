@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1842 tests, 1637 copied
-from the phone and the PC's 205, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1887 tests, 1637 copied
+from the phone and the PC's 250, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -47,14 +47,14 @@ are also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-205 `@Test` methods in 28 files under `desktop/`. Their fixtures are in
+250 `@Test` methods in 32 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, and a few PNG crops.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
-| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but Blood, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, and `LatestFrame.heightFor` | 22 |
+| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but Blood, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, `LatestFrame.heightFor`, and the daily pruning | 23 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
 | `PcBuildersCornerTest` | The builders' counter read again from an upscaled crop of a village frame, through a fake OCR backend | 7 |
@@ -65,13 +65,17 @@ at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, a
 | `PcRatePromptTest` | LATER on Play's rating dialog | 3 |
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
-| `DesktopLogTest` | The desktop log file | 1 |
+| `DesktopLogTest` | The desktop log file, and one log per file for every writer | 2 |
 | `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 10 |
 | `PcStopLineTest` | The PC's own stop and refusal reasons in `EventText.stopLine` | 1 |
+| `SingleInstanceTest` | One app per files directory: the lock in one JVM for the same and separate directories, its release, and a later start raising the first; the same against a second JVM holding the lock; a port file that can't be written; and the start messages | 10 |
+| `RemotePageTest` | Where the remote page listens, with a fake Tailscale address: off without it, on its IPv4, tailnet IPv6 and loopback addresses, following it as it comes, goes and changes, the 10-minute retry after a taken port against the next-check retry after any other failed bind, reopening a listener that stopped, and detection by adapter name; plus the real server on loopback, free and taken, and Java's own bind failures | 19 |
+| `CrashHandlerTest` | Uncaught failures: which end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
+| `BuildInfoTest` | The version and About text, and the stamped version matching `gradle.properties` | 3 |
 | `platform/ClashWindowWatcherTest` | The Clash window lookup, a window opened again by the same game process (and a new game's window that starts hidden, which is not), `pcInfo` and a failed start | 14 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar, and old frames on a locked PC, a dark display and a still village | 14 |
-| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including frame age, the window's process and full screen, `sessionState`, and `pcInfo` with Clash unknown | 13 |
-| `ui/` (ten files) | The Compose UI; see `docs/UI.md` | 64 |
+| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including frame age, the window's process and full screen, `sessionState`, and `pcInfo` with Clash unknown, and hello's text reader error | 15 |
+| `ui/` (ten files) | The Compose UI; see `docs/UI.md` | 68 |
 
 ## When they run
 

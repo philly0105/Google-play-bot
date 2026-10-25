@@ -99,7 +99,7 @@ test compiles unchanged, and record the move.
 | Floating overlay | Small always-on-top window with status, Pause and Stop |
 | Notifications | Windows notifications from the tray icon |
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
-| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules |
+| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules. It listens only on the Tailscale adapter's addresses (IPv4 and tailnet IPv6) and 127.0.0.1, while Tailscale is connected (`desktop/RemotePage.kt`) |
 
 ### Resolution and screen geometry
 
@@ -118,7 +118,14 @@ listed in `docs/DIVERGENCES.md`.
 
 `Build.ps1` at the repo root runs Gradle with the JDK and Gradle in `tools/` (gitignored). From a
 git worktree it finds `tools/` in the main checkout. Default tasks: `:app:test` and the desktop
-distributable. The sidecar builds with `dotnet` (SDK 8 is installed).
+distributable. The sidecar builds with `dotnet` (SDK 8 is installed); the distributable publishes
+it self-contained, without its .pdb, and copies the Visual C++ runtime DLLs from System32 beside
+it, failing the build if one is missing.
+
+The version is `appVersion` in `gradle.properties`. The build stamps it and the commit into
+`build-info.properties` (`desktop/BuildInfo.kt`) and gives it to the exe. `Package.ps1` runs the
+tests and the distributable and zips the app folder with `packaging/READ-ME-FIRST.txt` into
+`dist\ClashFarmerPC-<version>-<date>.zip`.
 
 ## Safety rules for anyone driving the game
 

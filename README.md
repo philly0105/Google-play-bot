@@ -21,9 +21,10 @@ ban can be permanent.
 - It never spends gems and never presses a button on a dialog that shows a gem price. It runs only
   the Blood account and never signs accounts in or out.
 - The dashboard has the phone's tabs (Home, Run, Stats, Activity, Setup); Ctrl+1 to Ctrl+5 and
-  Ctrl+Tab move between them, and Tab moves between controls. The app also has a tray
-  icon, Windows notifications, and the phone's remote page and API on port 8765. The tray menu's
-  Status panel shows a small always-on-top panel during runs; it is off at every launch.
+  Ctrl+Tab move between them, and Tab moves between controls. The app also has a tray icon,
+  Windows notifications, and the phone's remote page and API on port 8765, reachable only over
+  Tailscale. The tray menu's Status panel shows a small always-on-top panel during runs; it is
+  off at every launch.
 
 `docs/STATUS.md` says what has been proven live on this PC and what has only been tested offline.
 
@@ -41,7 +42,9 @@ ban can be permanent.
   taps reach the game. Setup's Game window line flags both.
 - To build: the .NET 8 SDK, and the JDK 21 and Gradle 8.11.1 that `Build.ps1` expects in `tools/`
   (gitignored; copy them from `clash-farmer/tools/android-build`). The built app bundles its own
-  Java runtime and a self-contained sidecar, so running it needs neither.
+  Java runtime and a self-contained sidecar, so running it needs neither. The build copies the
+  Visual C++ runtime DLLs from this PC's System32 next to the sidecar, and stops if they are
+  missing.
 
 ## Build and run
 
@@ -54,16 +57,41 @@ The app is `app\build\compose\binaries\main\app\ClashFarmerPC\ClashFarmerPC.exe`
 distributable fails with "Unable to delete directory" while that app is running; quit it from the
 tray first.
 
-Setup has a line for each thing a run needs: the Clash window, the tray icon, battery, the remote
-page (which needs Tailscale), and per account the calibration, the troop tray, walls, the goal and
-rules, and builders. Open Clash from the Game window line, calibrate Blood, then run one
-supervised attack. Unattended runs stay locked until a supervised attack has verified the
-account's profile.
+The version is `appVersion` in `gradle.properties`, and only there. The exe, Setup's About line,
+`desktop.log` and the package name all read it.
 
-Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu. App
-data, logs and captures live in `%LOCALAPPDATA%\ClashFarmerPC\files\`, laid out like the phone's
-files directory. The remote page's key is `remote_key.txt` there. Windows asks once to let the app
-through the firewall for port 8765.
+Setup has a line for each thing a run needs: the Clash window, the text reader (the sidecar's
+OCR), the tray icon, battery, the remote page (which needs Tailscale), and per account the
+calibration, the troop tray, walls, the goal and rules, and builders. Open Clash from the Game
+window line, calibrate Blood, then run one supervised attack. Unattended runs stay locked until a
+supervised attack has verified the account's profile. The bottom of Setup names the version and
+has Open logs folder.
+
+Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu.
+Starting the app again while it runs opens its window instead of a second copy. App data, logs and
+captures live in `%LOCALAPPDATA%\ClashFarmerPC\files\`, laid out like the phone's files directory.
+A failure nobody caught goes to `logs\desktop.log` there, and a dialog says so. Old logs and
+captures are pruned at start and once a day after that.
+
+The remote page listens on port 8765 only on this PC's Tailscale addresses (IPv4 and the tailnet
+IPv6 one) and on 127.0.0.1, never on the LAN. It checks for Tailscale every minute and turns on
+or off with it. Setup says why it is off: Tailscale not connected, port 8765 taken by another
+program (tried again every 10 minutes), or an address Windows won't use yet, as just after sleep
+(tried again every minute). Its key is
+`remote_key.txt` in the files directory. Windows asks once to let the app through the firewall.
+
+## Sending it to someone
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Package.ps1               # tests, build, zip
+powershell -ExecutionPolicy Bypass -File .\Package.ps1 -SkipTests    # build and zip only
+```
+
+It writes `dist\ClashFarmerPC-<version>-<date>.zip` (gitignored) and prints its SHA256. The zip
+holds the `ClashFarmerPC` folder and `packaging\READ-ME-FIRST.txt`: how to unzip and start it, the
+SmartScreen "More info > Run anyway" step (the exe isn't signed), the requirements (GPG, Clash in
+English), calibrate then one supervised attack, and the ban risk. Raise `appVersion` before
+sending a new build.
 
 ## Layout
 

@@ -1,6 +1,8 @@
 package local.clashfarmer.desktop
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -23,5 +25,14 @@ class DesktopLogTest {
         log.write("Sidecar 2 ready")
         assertEquals(2, File(file.path + ".1").readLines().size)
         assertTrue(file.readText().endsWith(" Sidecar 2 ready\n"))
+    }
+
+    @Test
+    fun `every writer of one file shares one log`() {
+        val file = File(temp.root, "logs/desktop.log")
+        val crash = DesktopLog.of(file)
+        assertSame(crash, DesktopLog.of(File(temp.root, "logs/../logs/desktop.log")))
+        assertSame(crash, DesktopLog.of(File(file.path.uppercase())))
+        assertNotSame(crash, DesktopLog.of(File(temp.root, "logs/other.log")))
     }
 }

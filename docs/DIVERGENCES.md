@@ -60,6 +60,7 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `recognition/UpgradeListReader.kt` | New `isTimer(text, viewport)`: `isCountdown`, and on the PC also text with a digit, no run of three digits, and a word of up to two digits or lookalikes (I, l, O, o, B, S, G, E), a unit (d, h, H, m, M, s) and at most one digit after it. `read`'s flush-price count and page items, `rowsOf`'s priced card and `rowOf`'s prices use it in place of `isCountdown`. | The PC's recogniser reads a card's timer as "Id B8H", "Gd 9H", "4d0", "10 9H" or "40M 0s" (`audit-evidence/spike/geo-list-*.json`). Taken for a price, the timer on the name line stood as the card's price and the real one on the line below was dropped: Royal Champion, Barbarian King, Archer Queen, Monolith, Air Bomb and Builder's Hut lost theirs. Every price has a run of three digits. |
 | `recognition/UpgradeListReader.kt` | On the PC, `rowsOf` builds a panel card from its lines in order, each line sorted left to right, and leaves out a joined line's boxes left of the split that hold no letter; `rowOf` takes such a card's boxes in that order (`inOrder`) rather than sorting them by x. | Elixir Collector's "983", on the line under its name and 1 px further left, started the name ("983 ElixiR CollectoR x 7"), and a subtitle 2-4 px left of "Crafting Station" came before it ("Hero Hunter Poison Effect Crafting Station"); a few pixels decided which word a page comparison keyed the row on (`audit-evidence/spike/geo-list-end.json`, `geo-list-scroll1.json`, `geo-list-top.json`). |
 | `recognition/ScreenTargets.kt` | `returnHomeTarget`, when no button line reads in `RESULT_BUTTON` and the screen is a result screen, returns on the PC the centre of a Return box and a Home box both read in `PC_REPLAY_RETURN`, the bottom-left x 0-0.2, y 0.8-1.0, before falling back to the calibrated point. | A defence replay's end screen reads as a result screen (Total damage, Troops expended), with its Return Home at x 40-190, y 1053-1131 of 1860x1162 (`audit-evidence/live/20261024-033349-look`). The calibrated point there is bare village, so the run would tap it and never get home. None of the eleven saved battle-result frames reads anything in that corner, and matchmaking's Return Home there has no result words, so neither changes. |
+| `remote/RemoteServer.kt` | The constructor takes a third parameter, `bindAddress: InetAddress? = null`, and `start` opens `ServerSocket(port, 50, bindAddress)` in place of `ServerSocket(port)`; null keeps the phone's all-interfaces listen. A new `isListening` says whether `start` bound the socket and neither `stop` nor a failed accept has closed it, and `startError` keeps the exception a failed bind swallowed. The accept loop now closes its socket when an accept fails and ends the loop; the phone left it open and silent. `RemoteApi.peerAllowed`, the routes and the key are unchanged. | The phone listened on every interface of a phone on Wi-Fi. A PC sits on a home LAN with other people's devices, and the page only needs Tailscale, so `desktop/RemotePage.kt` opens one server on each of the Tailscale adapter's IPv4 and tailnet IPv6 addresses and one on 127.0.0.1, and closes them when Tailscale goes. `start` swallows a bind failure, as on the phone, so `isListening` and `startError` are how `RemotePage` tells a taken port (retried after 10 minutes) from an address Windows won't bind yet after sleep (retried within a minute). A listener whose accept failed would otherwise look on while answering nothing; closed, it is opened again on the next check. |
 
 ## Shims and platform differences
 
@@ -79,7 +80,8 @@ These change no copied file, but the copied code runs on them, so they can chang
   `AccessibilityService.GLOBAL_ACTION_BACK` (fully qualified) in `core/LocalRunner.kt`, and
   `GLOBAL_ACTION_HOME` in `FarmerService`'s takeover wait. `FarmerService` answers them through its
   own `getSystemService` and `performGlobalAction`. With them, `RemoteServer.kt`, which PLAN.md
-  lists as ported (class 3), stays verbatim (class 2).
+  lists as ported (class 3), is verbatim through shims (class 2) apart from the bind address in
+  the table above.
 - The ML Kit shim returns each OCR line as its own `TextBlock` with one `Line`; ML Kit groups
   lines into blocks. `Text.text` joins them with newlines, as ML Kit does.
 - `org.json` is json.org's `org.json:json:20240303`, the same artifact the phone's JVM tests used,
@@ -236,6 +238,15 @@ below.
   - Added `launchClash()`, Setup's Open Clash of Clans: it starts Clash and returns at once, and
     sends nothing while a run is active or a Clash window exists. `captureNormalizedVillage`'s
     `returnToActivityClass` defaults to null, as `captureClashGame`'s does.
+  - Remote page: the companion's private `remoteServer` is now the public, read-only `remotePage`
+    (`desktop/RemotePage.kt`). `onServiceConnected` starts it with the same `RemoteApi` and
+    watches for Tailscale every minute on `serviceScope`; it listens only on the Tailscale addresses
+    (IPv4, and the tailnet IPv6 one when the adapter has it) and 127.0.0.1, and Setup reads its
+    status. `onDestroy` stops it, as it stopped the server.
+  - Retention: the phone pruned old logs and captures once, in `onServiceConnected`, since Android
+    restarted the service often enough. The PC app can live in the tray for weeks, so the same
+    prune, moved into `pruneStorage`, also runs from the health loop once a day while no run is
+    busy (`pruneDue`). It logs the phone's `retention_pruned` and `retention_failed`.
 - `service/RunNotifier.kt` and `service/RunNotice.kt`: `RunNotice` and `LiveStatus` moved verbatim
   (phone lines 26-200, with the imports they use) into `RunNotice.kt`. `RunNotifier` takes no
   argument and writes to `RunTray`, which Main's tray icon reads: `post` queues a Windows
@@ -264,5 +275,5 @@ below.
   `FarmerService`'s "Paused: notification shade open" reads "Paused until Clash is back in front".
   `OverlayGeometry` is verbatim (phone lines 492-533). `StatusBubble` and `PauseGlyph` are drawn in
   Compose in `StatusPanel.kt`.
-- `remote/RemoteServer.kt` is verbatim through shims (above), not ported or stubbed. It holds
-  `ServiceRemoteBackend`, which calls `FarmerService`.
+- `remote/RemoteServer.kt` is verbatim through shims (above) except for its bind address (table
+  above), not ported or stubbed. It holds `ServiceRemoteBackend`, which calls `FarmerService`.

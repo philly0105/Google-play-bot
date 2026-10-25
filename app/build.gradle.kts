@@ -45,15 +45,59 @@ tasks.test {
 val appResources = layout.buildDirectory.dir("appResources")
 val sidecarProject = rootProject.file("native/ClashFarmer.Native")
 
+// onnxruntime.dll, which the OCR loads, needs the Visual C++ runtime. Windows doesn't always have
+// it, so these ship beside it; Microsoft allows that app-local copy. Without them OCR fails on a
+// PC that lacks the redistributable, and every run stops on screens it can't read.
+val vcRuntimeDlls = listOf("msvcp140.dll", "msvcp140_1.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+
 val publishSidecar by tasks.registering(Exec::class) {
     val out = appResources.map { it.dir("windows-x64/sidecar") }
     inputs.files(fileTree(sidecarProject) { exclude("bin/**", "obj/**") })
     outputs.dir(out)
     doFirst { delete(out) }
+    // DebugType=None leaves the .pdb out of the app.
     commandLine(
         "dotnet", "publish", sidecarProject.path, "-c", "Release", "-r", "win-x64",
-        "--self-contained", "true", "-o", out.get().asFile.path
+        "--self-contained", "true", "-p:DebugType=None", "-o", out.get().asFile.path
     )
+    doLast {
+        val system32 = File(System.getenv("WINDIR") ?: "C:\\Windows", "System32")
+        for (name in vcRuntimeDlls) {
+            val dll = File(system32, name)
+            if (!dll.isFile) {
+                throw GradleException("$dll is missing. Install the Microsoft Visual C++ Redistributable (x64) on this PC, then build again.")
+            }
+            dll.copyTo(out.get().file(name).asFile, overwrite = true)
+        }
+    }
+}
+
+// The version is set once, as appVersion in gradle.properties. build-info.properties carries it
+// and the commit to the app (desktop/BuildInfo.kt), so Setup and desktop.log name the build.
+val appVersion = providers.gradleProperty("appVersion").get()
+val appCommit = runCatching {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim()
+}.getOrDefault("")
+
+val buildInfo by tasks.registering {
+    val out = layout.buildDirectory.dir("generated/buildInfo")
+    val text = "version=$appVersion\ncommit=$appCommit\n"
+    inputs.property("text", text)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("build-info.properties").asFile
+        file.parentFile.mkdirs()
+        file.writeText(text)
+    }
+}
+
+sourceSets {
+    main {
+        resources.srcDir(buildInfo)
+    }
 }
 
 compose.desktop {
@@ -61,8 +105,15 @@ compose.desktop {
         mainClass = "local.clashfarmer.desktop.MainKt"
         nativeDistributions {
             packageName = "ClashFarmerPC"
-            packageVersion = "1.0.0"
+            packageVersion = appVersion
+            description = "Clash Farmer PC"
+            vendor = "Clash Farmer"
+            copyright = "Not affiliated with or endorsed by Supercell."
             appResourcesRootDir.set(appResources)
+            windows {
+                // FarmerIcon (desktop/ui/theme/FarmerIcon.kt) drawn at 16 to 256 px.
+                iconFile.set(project.file("icons/ClashFarmerPC.ico"))
+            }
         }
     }
 }
