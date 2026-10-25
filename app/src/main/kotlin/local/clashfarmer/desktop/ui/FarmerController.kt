@@ -75,8 +75,45 @@ internal fun actionFailure(action: String, error: Throwable): Pair<String, Strin
     return title to message
 }
 
-/** A screen state's enum name as a word for the inspect report: "VILLAGE_HOME" reads "village home". */
-internal fun readableState(name: String): String = name.lowercase(Locale.ROOT).replace('_', ' ')
+/**
+ * A screen state's enum name as the inspect report says it: "HOME" reads "the village". A name
+ * this list lacks is lowercased: "VILLAGE_HOME" reads "village home".
+ */
+internal fun readableState(name: String): String = when (name) {
+    "HOME" -> "the village"
+    "MENU" -> "the attack menu"
+    "ARMY" -> "the army screen"
+    "SCOUT" -> "a base to attack (scout screen)"
+    "SEARCHING" -> "searching for an opponent"
+    "BATTLE" -> "a battle"
+    "REWARD" -> "a reward to pick"
+    "RESULT" -> "the battle result"
+    "WALL" -> "a wall's upgrade panel"
+    "UNKNOWN" -> "a screen the bot doesn't know"
+    else -> name.lowercase(Locale.ROOT).replace('_', ' ')
+}
+
+/**
+ * Inspect's report: what the bot takes the screen for, in words, then under Details the raw
+ * reading a bug report needs: the state's name, the game area, and the text read, cut at 400
+ * characters.
+ */
+internal fun inspectReport(observation: Observation, imageName: String): String {
+    val vp = observation.viewport
+    val text = observation.rawText.take(400) + if (observation.rawText.length > 400) "..." else ""
+    return listOf(
+        "The game shows ${readableState(observation.state.name)}.",
+        "Saved picture: $imageName",
+        "",
+        "Details",
+        "State: ${observation.state.name}",
+        "Game area: [${vp.left}, ${vp.top}, ${vp.right}, ${vp.bottom}]",
+        "Pieces of text read: ${observation.boxes.size}",
+        "",
+        "Text read:",
+        text
+    ).joinToString("\n")
+}
 
 /** A message at the foot of the window, the phone's Toast. A class, so two equal texts are two toasts. */
 class ToastMessage(val text: String, val long: Boolean)
@@ -516,18 +553,7 @@ class FarmerController(
     }
 
     private fun showInspectReport(observation: Observation, captureFile: File) {
-        val report = """
-            The game shows: ${readableState(observation.state.name)}
-            ------------------------------------
-            State: ${observation.state.name}
-            Viewport: [${observation.viewport.left}, ${observation.viewport.top}, ${observation.viewport.right}, ${observation.viewport.bottom}]
-            Recognized Text Count: ${observation.boxes.size}
-            Saved Image: ${captureFile.name}
-
-            OCR Text:
-            ${observation.rawText.take(400)}${if (observation.rawText.length > 400) "..." else ""}
-        """.trimIndent()
-        alerts += Alert("What the bot sees", report, "OK", monospace = true)
+        alerts += Alert("What the bot sees", inspectReport(observation, captureFile.name), "OK", monospace = true)
     }
 
     private companion object {

@@ -1,7 +1,12 @@
 package local.clashfarmer.desktop.ui
 
+import local.clashfarmer.core.ScreenState
+import local.clashfarmer.core.Viewport
+import local.clashfarmer.recognition.Observation
 import org.json.JSONException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** What the controller's alerts say when an action fails, and the inspect report's state word. */
@@ -31,7 +36,26 @@ class ControllerTextTest {
 
     @Test
     fun `the inspect report names the screen in words`() {
+        assertEquals("the village", readableState("HOME"))
+        assertEquals("a base to attack (scout screen)", readableState("SCOUT"))
+        assertEquals("a screen the bot doesn't know", readableState("UNKNOWN"))
+        // Every state the reader can give has words of its own, not its lowercased name.
+        ScreenState.entries.forEach { assertNotEquals(it.name, it.name.lowercase(), readableState(it.name)) }
         assertEquals("village home", readableState("VILLAGE_HOME"))
-        assertEquals("unknown", readableState("UNKNOWN"))
+    }
+
+    @Test
+    fun `the inspect report leads with words and keeps the raw reading under Details`() {
+        val observation = Observation(ScreenState.SCOUT, emptyList(), "Next 1234", Viewport(0, 0, 1740, 978))
+        val report = inspectReport(observation, "inspect-20261025-120000.png").lines()
+        assertEquals("The game shows a base to attack (scout screen).", report[0])
+        assertEquals("Saved picture: inspect-20261025-120000.png", report[1])
+        val details = report.indexOf("Details")
+        assertTrue(details > 1)
+        assertEquals("State: SCOUT", report[details + 1])
+        assertEquals("Game area: [0, 0, 1740, 978]", report[details + 2])
+        assertEquals("Next 1234", report.last())
+        val long = inspectReport(observation.copy(rawText = "x".repeat(500)), "a.png").lines().last()
+        assertEquals("x".repeat(400) + "...", long)
     }
 }
