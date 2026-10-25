@@ -78,19 +78,23 @@ again; the log replays its history only on the first call, so that is harmless.
 The controller never sets `FarmerService.helperActivityVisible` and never touches the overlay's
 visibility. The overlay is its own window, and the PC bot works the game in the background.
 
-The PC runs only Blood. `pcAccounts` drops every other account from what the controller reads,
-both the tick it binds and its starts, so Sweat's calibration and wall lines never sit in Setup
-or Activity, Home has no second-account card, and Run greys out Both. Sweat's record and files
-stay on disk. `Main.kt` selects Blood at each start, and calibration falls back to Blood. The
-built-in "Both accounts" preset is kept and refused with "Both needs two accounts".
+The PC runs one account, `PcAccount.ID` (Blood's id slot, so the owner's files stay put).
+`pcAccounts` drops every other account from what the controller reads, both the tick it binds and
+its starts, so the owner's second phone account never sits in Setup or Activity, Home has no
+second-account card, and Run greys out Both. That account's record and files stay on disk.
+`Main.kt` calls `PcAccount.seedIfFresh` before `ensureMigrated`, so a fresh install gets one
+neutral account, "Your village", and never the phone's two; then it selects `PcAccount.ID` at each
+start, and calibration falls back to it. The built-in "Both accounts" preset is kept and refused
+with "Both needs two accounts".
 
 ## Actions
 
 Every action but `stop`, `pause`, `edit:` and `history` is refused while a run or an inspection
 is on, with the toast "Wait for the current operation or stop the bot first." and the log event
 `handle_action_busy`. Every action logs `handle_action`; a failure logs `handle_action_error` and
-shows "Could not start" with the reason, such as the service's "The PC runs only Blood, not
-Sweat".
+shows "Could not start" with the reason, such as the service's "Clash Farmer runs one account on
+this PC, and Sweat is not it." or, for an unattended start before the account is read, "Run one
+supervised attack first so the bot can read your account."
 
 | Action | What it does |
 | --- | --- |
@@ -188,6 +192,12 @@ Setup:
   the game area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI
   assumes 16:9.
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
+- Each account's block opens with an Account line (`PcChecklist.account`) saying whether the bot
+  has read the account off Clash's Settings (`PcAccount.enrolled`, read with the other files on
+  IO). Not read is amber, "Not read", with no fix, and says the first supervised attack reads the
+  village name and tag and other runs wait until then. Read is green and names the village. The
+  block's header shows the tag only once the account is read, so a fresh install never shows a
+  placeholder tag.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
 - Copy link puts the remote link on the AWT clipboard. The key is never shown or logged.
@@ -274,7 +284,7 @@ of main at b514d40):
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix | 11 |
+| `desktop/ui/PcChecklistTest.kt` | The Game window, Tray icon and Account lines, including a 1860x1162 surface, a window closed by hand and an account not read yet, and how they count toward ready, the tab dot and the primary fix | 13 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |

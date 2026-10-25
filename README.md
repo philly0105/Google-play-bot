@@ -18,8 +18,8 @@ ban can be permanent.
 - It works in the background. Input is posted to the Clash window, so the cursor and the keyboard
   stay yours and Clash can sit behind other windows. Before each run, and before Calibrate,
   Inspect and the tray check, it sizes the game back to 1740x978, the size it was calibrated at.
-- It never spends gems and never presses a button on a dialog that shows a gem price. It runs only
-  the Blood account and never signs accounts in or out.
+- It never spends gems and never presses a button on a dialog that shows a gem price. It runs one
+  account, the one signed in to Clash on this PC, and never signs accounts in or out.
 - The dashboard has the phone's tabs (Home, Run, Stats, Activity, Setup). The app also has a tray
   icon, Windows notifications, and the phone's remote page and API on port 8765. The tray menu's
   Status panel shows a small always-on-top panel during runs; it is off at every launch.
@@ -28,7 +28,7 @@ ban can be permanent.
 
 ## Requirements
 
-- Windows 11 with Google Play Games for PC, Clash of Clans installed, and Blood signed in.
+- Windows 11 with Google Play Games for PC, Clash of Clans installed and signed in, set to English.
 - To build: the .NET 8 SDK, and the JDK 21 and Gradle 8.11.1 that `Build.ps1` expects in `tools/`
   (gitignored; copy them from `clash-farmer/tools/android-build`). The built app bundles its own
   Java runtime and a self-contained sidecar, so running it needs neither.
@@ -46,9 +46,16 @@ tray first.
 
 Setup has a line for each thing a run needs: the Clash window, the tray icon, battery, the remote
 page (which needs Tailscale), and per account the calibration, the troop tray, walls, the goal and
-rules, and builders. Open Clash from the Game window line, calibrate Blood, then run one
+rules, and builders. Open Clash from the Game window line, calibrate the account, then run one
 supervised attack. Unattended runs stay locked until a supervised attack has verified the
 account's profile.
+
+A fresh install starts with one account called "Your village". The first supervised attack opens
+Clash's Settings, reads the village name and tag, and keeps a crop of that strip in
+`accounts\<id>\identity.png` with the frame size it was cut at in `identity.json`. Every later run
+checks Settings against that crop before it starts, at any game size. Until the account is read,
+Setup's Account line is amber and unattended starts are refused with "Run one supervised attack
+first so the bot can read your account."
 
 Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu. App
 data, logs and captures live in `%LOCALAPPDATA%\ClashFarmerPC\files\`, laid out like the phone's
