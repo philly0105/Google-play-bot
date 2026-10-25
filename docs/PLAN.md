@@ -103,8 +103,25 @@ test compiles unchanged, and record the move.
 ### Resolution and screen geometry
 
 GPG keeps the game area at an aspect it picks at launch (16:9 and 16:10 so far), so the phone's
-1600x720 (20:9) can't be reproduced. Calibration is redone on the PC, and the bot refuses to act
-when the captured size differs from the profile's.
+1600x720 (20:9) can't be reproduced. Calibration is redone on the PC. A relaunch can change the
+aspect (1740x978 came back as 1860x1162, and 1565x978 when 1740x978 was asked), and relaunching to
+get the old one back breaks input until the PC restarts, so the bot works at the area it gets:
+
+- Before every profile read, `FarmerService` brings Clash forward and asks for the calibration's
+  size (`fitSurface`). The sidecar caps that to the monitor's work area at the same aspect
+  (`docs/SIDECAR.md`, resize), and `preferredSurface` does the same sum for a new profile.
+- `PcProfiles.derive` then moves the saved profile onto the size reached, with the anchors in
+  `docs/PC-GEOMETRY.md`. At the calibrated size it returns the profile itself, so the owner's
+  1740x978 runs are what they were. It refuses a shape outside `PcGeometry.isPc` or an area under
+  720 rows, in words for the user. `RunGuard` and `LocalRunner` keep their equality checks, now
+  against the moved size, and their stop texts are turned into sentences by
+  `PcProfiles.plainStopReason`.
+- The moved profile is never written to profile.json. Verification at another aspect lives in
+  `accounts/<id>/surfaces.json` (`SurfaceVerification`): the moved profile counts as verified when
+  the calibration is and its aspect is recorded there, which a supervised attack at that aspect
+  does through the run's profile updater. Calibrate's Save deletes the file when it changes the
+  points.
+- Calibrate, the tray check and Setup's Game window line use the same move (`docs/UI.md`).
 
 The phone tree places taps and reads text with fractions of 1600x720, mostly in `ScreenTargets`,
 `Builders`, `ArmyRecipes`, `WallPanel`, `UpgradeListNavigator` and `PopupGuard`. Some of them miss

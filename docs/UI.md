@@ -187,6 +187,15 @@ Setup:
   broke input, so the line says to restart the PC. A minimized window is fine. A found window gives
   the game area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI
   assumes 16:9.
+- With an account picked on Home and calibrated, a found window's line sets the game area beside
+  that calibration, at the size a run would reach (`PcChecklist.runSize`: the calibration's size,
+  shrunk to what the monitor holds, at the game area's own shape). The same shape is green, and
+  says when the window will be resized or the screen holds less. Another shape is green once a
+  supervised attack has worked there (surfaces.json), else amber, "New shape", saying to run one
+  supervised attack, or to calibrate again when the calibration itself is not verified. A shape
+  outside 16:9 to 16:10 or a game under 720 rows is red, "Can't run".
+- The account lines count verification as a run would on the game area shown
+  (`PcChecklist.verifiedHere`), so at an unverified shape they ask for a supervised attack.
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
@@ -195,6 +204,9 @@ Setup:
 Tray check:
 
 - The picture cards wrap to the sheet's width; the phone fitted four to a row.
+- A frame of another size than the calibration is checked with the calibration moved onto it, as
+  a run moves it (`TrayCheckSheet.profileAt`). The phone refused it as a screen still turning; on
+  a 16:10 game area every check stopped there. A game area too small to read says so.
 
 Inspect and captures:
 
@@ -217,8 +229,19 @@ Calibration:
   with the target list, actions and status on the right.
 - File reads, writes and captures run on IO, with every button but Back off until they end.
 - The default profile, before the saved one is read and for an account without one, is at the
-  game surface's live size when the watcher has measured it, else the phone's 1600x720. This also
-  lets `captureNormalizedVillage` find the display it waits for on a new account.
+  game surface's live size when the watcher has measured it, capped to what the monitor holds,
+  else the phone's 1600x720. This also lets `captureNormalizedVillage` find the display it waits
+  for on a new account.
+- A capture of another size moves the points onto it with the run's rule (`refit`, which calls
+  `PcProfiles.derive`) and leaves them unverified; the phone kept the points and changed only the
+  size. A toast says the points were moved and, when there were any, that the collectors were
+  cleared. A profile that can't be moved, such as the phone's default, is relabelled as before.
+- The camera reference follows: a frame from `captureNormalizedVillage` of another size moves the
+  profile instead of failing, and a saved `wall_camera.png` of another size than the profile is
+  set aside with its collectors, as Retake does, and a new one captured.
+- Save refuses a game area a run can't use. Replacing a saved calibration of one shape with one of
+  another asks first ("Save at another shape?"). A save that changes the points also deletes the
+  account's surfaces.json, since the shapes in it were verified on the old points.
 - Marks on the frame are sized in dp, not the phone's pixels.
 - On a PC frame, a landscape one from 1.3:1 to under 2:1 (`PcGeometry.isPc`), the boxes Apply
   draws around a click are the PC's size: the phone's times 1.13 at 1740x978, scaled with the
@@ -274,7 +297,9 @@ of main at b514d40):
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix | 11 |
+| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix; the game area against the calibration (same size, same shape, capped, new shape, verified shape, unverified calibration, too small, unsupported shape), `runSize` and `verifiedHere` | 19 |
+| `desktop/ui/TrayCheckSheetTest.kt` | `profileAt`: the calibration itself, moved to 16:10, and a game area too small | 3 |
+| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, and `SurfaceVerification.calibrationSaved` | 8 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |

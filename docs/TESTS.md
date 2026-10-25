@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1754 tests, the phone's 1635
-and the PC's 119, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1797 tests, the phone's 1635
+and the PC's 162, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -39,14 +39,15 @@ edit is also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-119 `@Test` methods in 18 files under `desktop/`. Their fixtures are in
+162 `@Test` methods in 21 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, and a few PNG crops.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
-| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, and refusing every account but Blood | 14 |
+| `PcProfilesTest` | `PcProfiles.derive` against Blood's 1740x978 calibration: the same profile at its own size, 1860x1162 and 1565x978 values (Battle inside its button and the storage boxes over their balances on a 16:10 capture), 1920x1080, a round trip, the attack check at four sizes, verification per aspect, refusals, `fitInside`, `plainStopReason` and `SurfaceVerification` | 17 |
+| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, capping it to the monitor, moving the calibration onto the size reached (the same profile at 1740x978, unverified at 16:10 until a supervised attack writes surfaces.json and never profile.json), and refusing every account but Blood | 20 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
 | `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |
 | `PcBattleResultTest` | The result screen's loot rows and stars at the PC's lengths | 3 |
@@ -57,8 +58,8 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 5 |
 | `platform/ClashWindowWatcherTest` | The Clash window lookup | 4 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar | 9 |
-| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar` | 9 |
-| `ui/` (five files) | The Compose UI; see `docs/UI.md` | 37 |
+| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including the monitor's room in `find` | 10 |
+| `ui/` (seven files) | The Compose UI; see `docs/UI.md` | 56 |
 
 ## When they run
 
@@ -67,8 +68,10 @@ at 1740x978 and 1860x1162, and a few PNG crops.
   nothing is written there.
 - `EventTextTest.everyLoggedEventHasAPlainSentence` needs every event name logged under
   `src/main/kotlin` (outside `insight/`) to be one `EventText` knows, and more than 150 of them.
-  The tree logs 249 names: 246 of the phone's 251, and `surface_resized`, `surface_aspect_differs`
-  and `surface_resize_failed`, which the PC's `FarmerService` logs when it sizes the game. The
+  The tree logs 253 names: 246 of the phone's 251, and `surface_resized`, `surface_aspect_differs`,
+  `surface_resize_failed`, `surface_resize_capped`, `profile_moved`, `surface_verified` and
+  `surface_verification_skipped_unverified_calibration`, which the PC's `FarmerService` logs when
+  it sizes the game and moves the calibration onto it. The
   phone's other five come from Android-only code: `app_switched_recovering`,
   `capture_layout_wait_timeout`, `notification_failed` and `screen_off_receiver_failed` from its
   `FarmerService` and `RunNotifier`, and `intent_action_rejected` from `MainActivity`. Any new
