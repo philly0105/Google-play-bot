@@ -1,0 +1,46 @@
+Clash Farmer PC
+===============
+
+Clash Farmer plays Clash of Clans for you in Google Play Games on this PC: it attacks and
+collects loot while you do other things.
+
+Read this first: using a bot breaks Supercell's terms of service, and Supercell can ban the
+account for good. Only use it on an account you are ready to lose.
+
+
+What you need
+-------------
+- Windows 10 or 11, 64-bit.
+- Google Play Games for PC, with Clash of Clans installed and signed in.
+- Clash of Clans set to English (Settings > Language). The bot reads the game's text.
+
+
+Install
+-------
+1. Right-click the zip, choose Properties, tick Unblock if it is there, and click OK.
+2. Right-click the zip and choose Extract All. Put the folder anywhere you like, for example
+   Documents. Don't run it from inside the zip.
+3. Open the ClashFarmerPC folder and double-click ClashFarmerPC.exe.
+4. Windows may say "Windows protected your PC". The app isn't signed, so this is expected:
+   click More info, then Run anyway. You only do this once.
+   If Smart App Control blocks it with no Run anyway button, this PC can't run unsigned apps.
+
+
+First run
+---------
+1. Open Clash of Clans in Google Play Games.
+2. In Clash Farmer, open Setup and fix anything it marks in red or amber.
+3. Calibrate when Setup asks you to.
+4. Start one supervised attack and watch it all the way through before you leave it alone.
+
+Closing the window keeps Clash Farmer running in the notification area (next to the clock).
+To stop it, right-click its icon there and choose Quit.
+
+
+Help
+----
+Setup has an "Open logs folder" button. If something goes wrong, send the newest files from
+that folder (desktop.log is the main one) to whoever gave you Clash Farmer.
+
+To update, quit Clash Farmer, delete the old folder and extract the new zip. Your settings are
+kept in %LOCALAPPDATA%\ClashFarmerPC. To remove it completely, delete both.

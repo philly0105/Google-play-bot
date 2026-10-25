@@ -10,3 +10,4 @@ native/**/obj/
 audit-evidence/
 local.properties
 .claude/worktrees/
+dist/
