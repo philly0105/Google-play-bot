@@ -77,7 +77,11 @@ scaled by one of these about the phone's centre (800,360) and placed about (870,
 The army screen has been captured at 16:10 (`live-1860-army`), and Clash fits it inside the game
 area: it scales by the smaller of W/1740 and H/978 about the centre, so at 1860x1162 it grows by
 the width's 1.069, not the height's 1.188. Its Attack!, gem and clan buttons sit within 6 px of that
-rule. The profile menu and its Settings tab, also captured at 16:10, follow the height
+rule. The zoomed-out battle map is fitted the same way: on a live 1860x1162 battle
+(`audit-evidence/live/20261025-055900-battle1610`) Blood's perimeter segments, fitted, lie on the
+grass edge at the left and right corners, and scaled by the height they fall on the beach and in
+the forest. The troop tray and the battle HUD follow the height. The profile menu and its Settings
+tab, also captured at 16:10, follow the height
 (`audit-evidence/live/20261025-034323-profile3`), and so does the result screen
 (`live-1860-result`): its label, VICTORY and the gap from "You got" to the first row grow by 1.175
 to 1.19 about the centre. No list or recipes tab has been captured at 16:10; Clash may scale them by
@@ -95,9 +99,10 @@ profile's own size in place of 1740x978. At the calibrated size the profile is u
 | `stateAnchors` attack, end_battle, find_match | LEFT | Battle and End Battle sit in the HUD's left corners; Find a Match's cards run from the left |
 | `stateAnchors` next | RIGHT | Next sits in the HUD's right corner |
 | `stateAnchors` army | fitted | the army screen is fitted inside the game area: scaled about the centre by min(W/1740, H/978) over the same for the calibration's size |
+| `deploymentPoints`, `perimeterSegments`, `heroDrop`, `stateAnchors` hero_drop | fitted | the zoomed-out battle map is fitted like the army screen |
 | other `stateAnchors` (return_home, ...) | CENTRE | drawn on centred panels |
 | `troopAnchors`, `troopRois` | CENTRE | the tray is centred along the bottom |
-| `deploymentPoints`, `perimeterSegments`, `heroDrop`, `wallPoints`, `wallRows` | CENTRE | map space, about the centre |
+| `wallPoints`, `wallRows` | CENTRE | the home village's map, about the centre; not seen at 16:10, and it may be fitted like the battle map |
 | `wallConfig` dialog fields | CENTRE | centred dialog, not seen at 16:10 |
 | `homeResourceRois`, `wallConfig.resourceRois`, `scoutFeeRoi` | RIGHT | the storage balances and the fee sit at the right edge |
 | `scoutLootRois` | LEFT | the scout's loot panel sits at the left edge |
@@ -108,8 +113,10 @@ Proven on 16:10 captures (PcProfilesTest): Battle moved from Blood's 1740x978 ca
 inside its button on `live-1860-village`, the storage boxes over the balances the OCR read, and the
 army tap on Attack! on `live-1860-army`, 20 px or more from the gem and clan buttons. End Battle,
 Next, the countdown, the loot and the tray's cards matched the rule within 6 px on a 16:10 scout
-(`audit-evidence/live/20261025-034044-scout`). No attack has run at 16:10, so the battle map and
-the drops are unproven there, which is why a moved profile counts as verified only after a
+(`audit-evidence/live/20261025-034044-scout`). The first four attacks at 16:10, with the drops
+scaled by the height, each tapped the Valkyries' card a second time (`card_retry`) because the
+first drops fell off the map; the fitted segments are drawn on the same battle in
+`audit-evidence/live/20261025-055900-battle1610`. A moved profile counts as verified only after a
 supervised attack at that aspect (`desktop/SurfaceVerification`, `accounts/<id>/surfaces.json`).
 
 ## PC values
@@ -272,6 +279,7 @@ model. The Wall rows are `geo-list-end` with two countdowns removed and two name
 | Capture | Settles |
 | --- | --- |
 | the recipes tab at 16:10 | whether it is fitted like My Army, and the army values marked estimated |
+| the home village zoomed out at 16:10, with walls calibrated | whether `wallPoints` and `wallRows` are fitted like the battle map |
 | the upgrade list at 16:10, and how far a swipe scrolls it | the panel, `CARD_LINE_GAP`, the coin column, both list swipes |
 | a defeat | the result reader on a battle with no stars and little loot |
 | a selected building at 16:10 | `PC_BUTTON_PITCH` |

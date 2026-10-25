@@ -146,12 +146,33 @@ class PcProfilesTest {
         assertEquals(Point(1571, 948), moved.stateAnchors["army"])
         assertEquals(Point(261, 1073), moved.troopAnchors["valkyries"])
         assertEquals(1074, moved.troopAnchors.getValue("jumps").x)
-        assertEquals(Point(176, 447), moved.heroDrop)
         assertEquals(Region(88, 118, 288, 158), moved.scoutLootRois[Resource.GOLD])
         assertEquals(Region(1668, 890, 1786, 930), moved.scoutFeeRoi)
         assertEquals(Region(863, 52, 999, 97), moved.scoutCountdownRoi)
         assertEquals(SurfaceSize(1860, 1162), SurfaceSize(moved.resolutionWidth, moved.resolutionHeight))
         assertEquals(Viewport(0, 0, 1860, 1162), moved.viewport)
+    }
+
+    @Test
+    fun at16by10TheDropPointsAreFittedToTheMap() {
+        // Clash fits the zoomed-out battle map inside a 16:10 game area, as it does the army
+        // screen. On a live 1860x1162 battle (audit-evidence/live/20261025-055900-battle1610) these
+        // segments lie on the grass edge at the left and right corners; scaled by the height they
+        // fell on the beach and in the forest, and every Valkyrie drop was refused.
+        val moved = PcProfiles.derive(calibrated, wide, emptySet())
+        assertEquals(
+            listOf(
+                Pair(Point(328, 402), Point(191, 505)),
+                Pair(Point(191, 556), Point(328, 659)),
+                Pair(Point(1545, 390), Point(1681, 492)),
+                Pair(Point(1681, 544), Point(1545, 646))
+            ),
+            moved.perimeterSegments
+        )
+        assertEquals(Point(251, 460), moved.heroDrop)
+        val withAnchor = calibrated.copy(heroDrop = null, stateAnchors = calibrated.stateAnchors + ("hero_drop" to Point(235, 376)))
+        assertEquals(Point(251, 460), PcProfiles.derive(withAnchor, wide, emptySet()).stateAnchors["hero_drop"])
+        assertEquals(Point(211, 387), PcProfiles.derive(calibrated, resized, emptySet()).heroDrop)
     }
 
     @Test
@@ -203,6 +224,10 @@ class PcProfilesTest {
         calibrated.stateAnchors.forEach { (name, p) -> near(p, back.stateAnchors.getValue(name)) }
         calibrated.troopAnchors.forEach { (name, p) -> near(p, back.troopAnchors.getValue(name)) }
         near(calibrated.heroDrop!!, back.heroDrop!!)
+        calibrated.perimeterSegments.zip(back.perimeterSegments).forEach { (a, b) ->
+            near(a.first, b.first)
+            near(a.second, b.second)
+        }
     }
 
     @Test

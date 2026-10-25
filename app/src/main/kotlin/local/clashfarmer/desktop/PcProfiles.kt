@@ -23,9 +23,9 @@ import kotlin.math.roundToInt
  * [PcGeometry] uses for its own values: everything scales by the height, and each x keeps its
  * distance from the edge or centre Clash draws it about. The 16:10 HUD follows that rule within
  * 5 px (PcGeometryTest), and the Battle button and storage balances are checked on a 16:10 capture
- * (PcProfilesTest). The army screen is the exception: Clash fits it inside the game area, so its
- * Attack! button is moved by the smaller of the two scales about the centre. docs/PC-GEOMETRY.md
- * has the anchors and their evidence.
+ * (PcProfilesTest). The army screen and the zoomed-out battle map are the exceptions: Clash fits
+ * them inside the game area, so the Attack! button and the drop points are moved by the smaller of
+ * the two scales about the centre. docs/PC-GEOMETRY.md has the anchors and their evidence.
  *
  * A moved profile is used for one run and never saved: profile.json keeps the points the user
  * tapped. At another aspect it counts as verified only once a supervised attack has worked at that
@@ -207,11 +207,9 @@ object PcProfiles {
             stateAnchors = profile.stateAnchors.mapValues { (name, point) -> stateAnchor(name, point, move) },
             troopAnchors = profile.troopAnchors.mapValues { move.point(it.value, Anchor.CENTRE) },
             troopRois = profile.troopRois.mapValues { move.region(it.value, Anchor.CENTRE) },
-            deploymentPoints = profile.deploymentPoints.map { move.point(it, Anchor.CENTRE) },
-            perimeterSegments = profile.perimeterSegments.map {
-                Pair(move.point(it.first, Anchor.CENTRE), move.point(it.second, Anchor.CENTRE))
-            },
-            heroDrop = profile.heroDrop?.let { move.point(it, Anchor.CENTRE) },
+            deploymentPoints = profile.deploymentPoints.map { move.fitted(it) },
+            perimeterSegments = profile.perimeterSegments.map { Pair(move.fitted(it.first), move.fitted(it.second)) },
+            heroDrop = profile.heroDrop?.let { move.fitted(it) },
             wallPoints = profile.wallPoints.map { move.point(it, Anchor.CENTRE) },
             wallRows = profile.wallRows?.let {
                 it.copy(
@@ -235,13 +233,13 @@ object PcProfiles {
      * sit in the HUD's left corners and Next in its right; Find a Match's cards run from the left.
      * The army screen is a dialog Clash fits inside the game area: at 1860x1162 it grows by the
      * width's 1.069, not the height's 1.188, about the centre, and the height's rule would put the
-     * tap on Attack!'s bottom edge. Return Home and anything else are on panels drawn about the
-     * centre.
+     * tap on Attack!'s bottom edge. The hero drop is on the battle map, fitted the same way. Return
+     * Home and anything else are on panels drawn about the centre.
      */
     private fun stateAnchor(name: String, point: Point, move: Mover): Point = when (name) {
         "attack", "end_battle", "find_match" -> move.point(point, Anchor.LEFT)
         "next" -> move.point(point, Anchor.RIGHT)
-        "army" -> move.fitted(point)
+        "army", "hero_drop" -> move.fitted(point)
         else -> move.point(point, Anchor.CENTRE)
     }
 
