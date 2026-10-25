@@ -37,6 +37,19 @@ Closing the window keeps Clash Farmer running in the notification area (next to 
 To stop it, right-click its icon there and choose Quit.
 
 
+While it plays
+--------------
+- Keep the PC unlocked with the screen on. Locking it, or letting the screen turn off, stops
+  the run, and Clash Farmer tells you why.
+- You can use the PC meanwhile: Clash can sit behind other windows or be minimized, and the
+  mouse and keyboard stay yours. Don't play Clash full screen.
+- Don't close Clash's window while Google Play Games is still open. If you do, restart the PC
+  before the next run: until then the game ignores the bot's taps.
+- It never spends gems and never signs you in or out.
+- To have runs stop once gold and elixir are full, enter your storage sizes: Setup, Edit
+  settings, the capacity boxes. Without them a run keeps attacking until its limit.
+
+
 Help
 ----
 Setup has an "Open logs folder" button. If something goes wrong, send the newest files from
