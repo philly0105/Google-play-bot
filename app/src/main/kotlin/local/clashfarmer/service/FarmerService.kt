@@ -165,8 +165,9 @@ class FarmerService(
     /** The newest capture for the dashboard and the remote page, in memory only. */
     val latestFrame: LatestFrame by lazy { LatestFrame(serviceScope) }
 
+    /** Desktop: tests set it too; the app's comes from [onServiceConnected]. */
     var overlay: FarmerOverlay? = null
-        private set
+        internal set
 
     private var notifier: RunNotifier? = null
 
@@ -1042,14 +1043,12 @@ class FarmerService(
                         width = profile.resolutionWidth,
                         height = profile.resolutionHeight
                     )
-                    try {
+                    val checked = try {
                         ScreenReader().use { reader ->
                             val switcher = local.clashfarmer.accounts.AccountSwitcher(this@FarmerService, reader)
                             // Desktop: a check started at the PC reads an account not read yet, as
                             // a watched run does; the remote page's was refused above.
-                            if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, target.id)) {
-                                switcher.ensureAccount(target, switchToken)
-                            } else switcher.enrolAndCheck(target, switchToken)
+                            switchOnlyCheck(switcher, target, switchToken)
                         }
                     } finally {
                         // The job's end, so no pause is carried: kept, an idle Pause pressed after
@@ -1057,8 +1056,9 @@ class FarmerService(
                         // shown (UO-21 review, 15 October).
                         runGuard.stop("Switch only completed")
                     }
-                    overlay?.updateStatus("Verified: ${target.villageName}")
-                    AppLog.log("switch_only_completed", "village" to target.villageName, "tag" to target.playerTag)
+                    // Desktop: the account as checked, so a first read shows the village it read.
+                    overlay?.updateStatus("Verified: ${checked.villageName}")
+                    AppLog.log("switch_only_completed", "village" to checked.villageName, "tag" to checked.playerTag)
                 }
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 stop("Switch timed out")
@@ -1082,6 +1082,23 @@ class FarmerService(
             }
         }
         keepAwakeWhile(job)
+    }
+
+    /**
+     * Desktop: [startSwitchOnly]'s account check. [AccountSwitcher.ensureAccount] checks an account
+     * read before; [AccountSwitcher.enrolAndCheck] reads one not read yet first, and returns it with
+     * the village name and tag it read. Returns the account as checked. Tests stand in for it,
+     * since it reads Clash's screens.
+     */
+    internal var switchOnlyCheck: suspend (
+        switcher: local.clashfarmer.accounts.AccountSwitcher,
+        target: local.clashfarmer.accounts.AccountRecord,
+        token: Long
+    ) -> local.clashfarmer.accounts.AccountRecord = { switcher, target, token ->
+        if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, target.id)) {
+            switcher.ensureAccount(target, token)
+            target
+        } else switcher.enrolAndCheck(target, token)
     }
 
     /**
@@ -1287,16 +1304,7 @@ class FarmerService(
                 }
                 // The job is over, so a pause carried past its last finish has no run to hold.
                 runGuard.stop("Session finished")
-                val snapshot = AppLog.sessionSnapshot()
-                notifier?.post(
-                    if (finished?.reason == local.clashfarmer.core.CompletionReason.DEVICE_GUARD) {
-                        RunNotice.deviceGuard(account.villageName, finished.detail)
-                    } else {
-                        RunNotice.finished(account.villageName,
-                            if (wallOnly) null else finished?.completedAttacks,
-                            snapshot.wallsUpgraded, snapshot.goldSpent, snapshot.elixirSpent, finished?.detail)
-                    }
-                )
+                notifier?.post(sessionEndNotice(account, wallOnly, finished, AppLog.sessionSnapshot()))
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 stop("Session timeout elapsed (${maxMinutes}m + ${local.clashfarmer.core.Policy.TIME_LIMIT_GRACE_MS / 60_000}m grace)")
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1319,6 +1327,29 @@ class FarmerService(
             }
         }
         keepAwakeWhile(job)
+    }
+
+    /**
+     * The notice a single-account session posts when it ends with [finished]. Desktop: it names
+     * the account as the store has it now. A first supervised run reads the village name in its
+     * account check, and [account] was loaded before that, with [PcAccount.FRESH_VILLAGE_NAME].
+     */
+    internal fun sessionEndNotice(
+        account: local.clashfarmer.accounts.AccountRecord,
+        wallOnly: Boolean,
+        finished: local.clashfarmer.core.RunOutcome?,
+        snapshot: local.clashfarmer.core.SessionSnapshot
+    ): RunNotice {
+        val name = runCatching {
+            local.clashfarmer.accounts.AccountStore(filesDir).load().firstOrNull { it.id == account.id }
+        }.getOrNull()?.villageName ?: account.villageName
+        return if (finished?.reason == local.clashfarmer.core.CompletionReason.DEVICE_GUARD) {
+            RunNotice.deviceGuard(name, finished.detail)
+        } else {
+            RunNotice.finished(name,
+                if (wallOnly) null else finished?.completedAttacks,
+                snapshot.wallsUpgraded, snapshot.goldSpent, snapshot.elixirSpent, finished?.detail)
+        }
     }
 
     private suspend fun runSingleAccountSession(
