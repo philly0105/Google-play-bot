@@ -91,7 +91,8 @@ test compiles unchanged, and record the move.
 | Two-finger pinch | Mouse wheel. The bot only pinches out to the zoom-out limit, so a pinch-out becomes wheel notches out to the limit |
 | Global Back | Esc, which GPG maps to Android Back |
 | Clash in foreground | The Clash GPG window exists, is not minimized and shows Clash |
-| Screen off / locked | PC sleeping, or capture no longer delivering frames |
+| Screen off / locked | The session locked or the display off (the sidecar's `sessionState`) while capture delivers only old frames; the run stops with a plain reason. A still village is never read as this |
+| A start set for later | The same, plus a system-only power request (`keepSystemAwake`) so the PC does not sleep through it |
 | Battery and heat guard | Laptop battery when unplugged |
 | Restart Clash | Start it through GPG's launch link, only when there is no Clash window |
 | Home (the takeover wait) | Nothing: Clash stays on the takeover dialog. The bot never closes the Clash window, since a relaunch into the running VM broke posted input (`docs/gpg-spike.md`, Restarting) |

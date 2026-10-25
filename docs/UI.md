@@ -41,7 +41,7 @@ Phone paths are under `android/app/src/main/java/local/clashfarmer/`; PC paths a
 | `ui/components/Chip.kt` | `components/Chip.kt` | Adds `Dot` |
 | `ui/components/{CheckRow,SectionHeader,Segmented,StatTile,Stepper,TabIcon,ToggleRow}.kt` | `components/`, same names | |
 | Android's `EditText` | `components/TextInput.kt` | |
-| None | `PcChecklist.kt` | Setup's Game window and Tray icon lines |
+| None | `PcChecklist.kt` | Setup's Game window, Windows and Tray icon lines |
 
 Pure logic that lived inside class 4 files is ported, not moved: `CALIBRATION_TARGETS` and
 `applyTarget` (CalibrationActivity's target list and Apply), `FrameFit` (CalibrationView's fit),
@@ -184,9 +184,20 @@ Setup:
   A failed lookup is red with the reason. No window is amber, "Not open", with the fix "Open
   Clash of Clans", which sends `launch_clash`. A window closed by hand is red, "Closed", with no
   fix: Google Play Games keeps the game running hidden, and opening it again is the relaunch that
-  broke input, so the line says to restart the PC. A minimized window is fine. A found window gives
-  the game area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI
-  assumes 16:9.
+  broke input, so the line says to restart the PC. A window seen hidden and then shown again by
+  the same Google Play Games process is that relaunch: red, "Reopened", with the same restart
+  advice and no fix, and a start refuses while it shows (`WindowStatus.reopenedInRunningVm`; a
+  new process clears it). A minimized window is fine. A full-screen window is amber, "Full
+  screen", and says to turn full screen off in Google Play Games. A found window gives the game
+  area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI assumes
+  16:9.
+- With no window, the line also reads the sidecar's `pcInfo` (every 30 s): no Google Play Games
+  is red, "Not installed", with the download address and no fix; a start through Google Play
+  Games that failed is amber, "Did not open", until a window appears; no Clash of Clans shortcut
+  is amber, "Not installed", and keeps the open fix, since the shortcut check can miss.
+- Windows is an amber line, "Windows 10", below Game window on a build below 22000: Windows 10
+  draws a yellow frame around a captured window, and the bot was tested on Windows 11 only. It
+  does not count toward ready. Windows 11 shows no line.
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
@@ -241,7 +252,8 @@ Calibration:
 | "... is no longer on this phone" | "... is no longer on this PC" |
 | "Export failed. Check free space on the phone." | "Export failed. Check free space on the disk." |
 | "Saved to Downloads" | "Saved to <folder>", which is "Saved to Downloads" when that folder is kept |
-| "The phone must be on and unlocked then" | "The PC must be on and unlocked then" |
+| "The phone must be on and unlocked then" | "The PC stays awake until then. Leave it unlocked" (the app holds the PC awake, not the screen, while a start is set) |
+| PendingStart's "The phone was asleep at the start time" | "The PC was asleep at the start time" (`FarmerService.PC_ASLEEP`) |
 | Setup's "Phone" | "This PC" |
 | "Runs on this phone. ..." and "No accounts are set up on this phone." | "this PC" |
 | "Saves the run as set now. Tap it later to load it; press and hold to rename or delete." | "Saves the run as set now. Click it later to load it; right-click it to rename or delete." |
@@ -274,7 +286,7 @@ of main at b514d40):
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix | 11 |
+| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface, a window closed by hand or opened again, full screen, Google Play Games or Clash missing, a failed start and the Windows 10 line, and how they count toward ready, the tab dot and the primary fix | 18 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
@@ -286,7 +298,10 @@ of main at b514d40):
 - A window closed by hand reads as "Closed" from the sidecar's `visible` flag, following the
   spike's finding that closing hides the window. That has not been seen live, since closing it
   breaks input until the PC restarts. Whether quitting Google Play Games from its tray icon also
-  gives a clean start is untested, so the line names only the restart.
+  gives a clean start is untested, so the line names only the restart. "Reopened" (same
+  process, hidden then shown) has not been seen live either.
+- The full-screen check (the window's frame covers its monitor), the Clash shortcut scan and the
+  Windows 10 yellow frame have not been seen live.
 - The remote link on the clipboard can be kept by Windows clipboard history or cloud clipboard.
   Android marked the clip sensitive; Java has no such mark.
 - Every screen draws off-screen without a layout failure. The window has run on this PC since 24

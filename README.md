@@ -28,7 +28,15 @@ ban can be permanent.
 
 ## Requirements
 
-- Windows 11 with Google Play Games for PC, Clash of Clans installed, and Blood signed in.
+- Windows 11 with Google Play Games for PC, Clash of Clans installed, and Blood signed in. On
+  Windows 10, Windows draws a yellow frame around the game while the bot captures it, and the bot
+  has not been tested there; Setup shows an amber Windows line.
+- The PC must stay unlocked with the screen on during a run. Locking it or letting the screen turn
+  off stops the game's picture, and the bot stops the run with a message saying so. A start set
+  for later keeps the PC from sleeping until it fires.
+- Don't run Clash of Clans full screen in Google Play Games, and don't close its window by hand
+  while Google Play Games keeps running: opening it again needs a PC restart before the bot's
+  taps reach the game. Setup's Game window line flags both.
 - To build: the .NET 8 SDK, and the JDK 21 and Gradle 8.11.1 that `Build.ps1` expects in `tools/`
   (gitignored; copy them from `clash-farmer/tools/android-build`). The built app bundles its own
   Java runtime and a self-contained sidecar, so running it needs neither.
