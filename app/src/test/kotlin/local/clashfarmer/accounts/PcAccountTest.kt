@@ -1,7 +1,9 @@
 package local.clashfarmer.accounts
 
 import android.graphics.Bitmap
+import local.clashfarmer.core.PresetStore
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.RunPlan
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONObject
@@ -55,6 +57,29 @@ class PcAccountTest {
         assertFalse(PcAccount.seedIfFresh(dir))
         assertArrayEquals(before, index.readBytes())
         assertEquals(2, AccountStore(dir).load().size)
+    }
+
+    @Test
+    fun `a fresh install's presets build no walls and run the one account`() {
+        assertTrue(PcAccount.seedPresetsIfFresh(dir))
+        val presets = PresetStore(dir).presets()
+        assertEquals(listOf("Farm 40", "2 h"), presets.map { it.name })
+        assertTrue(presets.none { it.walls })
+        assertTrue(presets.all { it.accountIds == listOf(RunPlan.SELECTED) })
+        assertEquals(PresetStore.SEEDS[0].length, presets[0].length)
+        assertEquals(PresetStore.SEEDS[1].length, presets[1].length)
+        assertNull(PresetStore(dir).last())
+        assertFalse(PcAccount.seedPresetsIfFresh(dir))
+    }
+
+    @Test
+    fun `existing presets are left byte for byte`() {
+        val file = File(dir, "presets.json")
+        PresetStore(dir).presets()
+        val before = file.readBytes()
+        assertFalse(PcAccount.seedPresetsIfFresh(dir))
+        assertArrayEquals(before, file.readBytes())
+        assertEquals(PresetStore.SEEDS, PresetStore(dir).presets())
     }
 
     @Test
@@ -202,6 +227,40 @@ class PcAccountTest {
     @Test
     fun `the PC's account keeps the slot the owner's files are in`() {
         assertEquals(AccountStore.BLOOD_ID, PcAccount.ID)
+    }
+
+    @Test
+    fun `a strip that reads as nothing says which part failed, without its text`() {
+        assertEquals("nothing read", PcAccount.identityMiss(emptyList()))
+        assertEquals("no tag line", PcAccount.identityMiss(listOf(box("Farmland", 2))))
+        assertEquals("tag unreadable", PcAccount.identityMiss(listOf(box("Farmland", 2), box("#TE?!", 37))))
+        assertEquals("name read as the tag", PcAccount.identityMiss(listOf(box("TEST2468", 2), box("#TEST2468", 37))))
+        assertNull(PcAccount.identityMiss(listOf(box("Farmland", 2), box("#TEST2468", 37))))
+    }
+
+    @Test
+    fun `Clash's English words are told from another language's`() {
+        // The village and the profile menu in English, as OCR gives them (pc-frames/profile).
+        assertTrue(PcAccount.readsEnglish("SHOP | 3h 31m | **** | Battle | Build"))
+        assertTrue(PcAccount.readsEnglish("ClaNs | Social | INbOX | Settings"))
+        assertTrue(PcAccount.readsEnglish("Return Home"))
+        // The same screens in German and French: the bot knows none of their words.
+        assertFalse(PcAccount.readsEnglish("SHOP | 3h 31m | **** | Kampf | Bauen"))
+        assertFalse(PcAccount.readsEnglish("Clans | Sozial | Posteingang | Einstellungen"))
+        assertFalse(PcAccount.readsEnglish("Combat | Construire | Continuer | Annuler | Parametres"))
+        assertFalse(PcAccount.readsEnglish(""))
+        // Whole words only: a name holding one is not English.
+        assertFalse(PcAccount.readsEnglish("Battlefield Builders"))
+    }
+
+    @Test
+    fun `the village and identity refusals say what to do in Clash, and hedge the cause`() {
+        assertTrue(PcAccount.VILLAGE_NOT_FOUND.contains("set it to English (Settings > Language)"))
+        assertTrue(PcAccount.VILLAGE_NOT_FOUND.contains("Otherwise close any open window in Clash."))
+        assertTrue(PcAccount.IDENTITY_UNREADABLE.contains("if yours isn't, connect it"))
+        for (text in listOf(PcAccount.VILLAGE_NOT_FOUND, PcAccount.IDENTITY_UNREADABLE)) {
+            assertTrue(text, text.endsWith("Then run one supervised attack again."))
+        }
     }
 
     private fun box(text: String, top: Int) = RecognizedBox(text, 50, top, 250, top + 30)

@@ -126,7 +126,9 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
 
     suspend fun power(): PowerState {
         val json = request("power").json
-        return PowerState(json.getBoolean("ac"), json.getInt("batteryPercent"), json.getBoolean("saver"))
+        // An older sidecar sends no hasBattery; it reads as a battery, as before the flag.
+        return PowerState(json.getBoolean("ac"), json.getInt("batteryPercent"), json.getBoolean("saver"),
+            json.optBoolean("hasBattery", true))
     }
 
     suspend fun keepAwake(on: Boolean) {
@@ -251,8 +253,8 @@ data class TextLine(val text: String, val left: Int, val top: Int, val right: In
 
 data class SurfaceSize(val width: Int, val height: Int)
 
-/** [batteryPercent] is -1 when Windows doesn't know it. */
-data class PowerState(val ac: Boolean, val batteryPercent: Int, val saver: Boolean)
+/** [batteryPercent] is -1 when Windows doesn't know it. [hasBattery] is false only on a PC Windows says has none. */
+data class PowerState(val ac: Boolean, val batteryPercent: Int, val saver: Boolean, val hasBattery: Boolean = true)
 
 /** [idleMs] counts from the last real mouse or keyboard input anywhere; the bot's own input doesn't count. */
 data class InputState(val idleMs: Long, val gameForeground: Boolean, val cursorInGame: Boolean)

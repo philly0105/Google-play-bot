@@ -169,6 +169,18 @@ class FarmerServicePcTest {
     }
 
     @Test
+    fun `a PC with no battery is told apart, and the guard's reading is unchanged`() = runBlocking {
+        assertNull(service.hasBattery)
+        host.battery = { PowerState(ac = true, batteryPercent = -1, saver = false, hasBattery = false) }
+        service.refreshDeviceHealth()
+        assertEquals(false, service.hasBattery)
+        assertEquals(DeviceHealth(levelPercent = null, charging = true, tempC = null), service.readDeviceHealth())
+        host.battery = { PowerState(ac = false, batteryPercent = 42, saver = false) }
+        service.refreshDeviceHealth()
+        assertEquals(true, service.hasBattery)
+    }
+
+    @Test
     fun `with no Clash window a start launches Clash and returns once it draws`() = runBlocking {
         service.connectTransport()
         surface.frames = listOf(BLACK, GREY)

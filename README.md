@@ -69,8 +69,14 @@ tray first.
 The version is `appVersion` in `gradle.properties`, and only there. The exe, Setup's About line,
 `desktop.log` and the package name all read it.
 
+The first start shows "Before you start": the ban risk, then three steps (open Clash of Clans in
+Google Play Games, calibrate the account, run one supervised attack and watch it). "I
+understand" opens Setup and doesn't show it again (`first-run.json` in the files directory); Quit
+closes the app. Setup repeats the ban warning at its top.
+
 Setup has a line for each thing a run needs: the Clash window, the text reader (the sidecar's
-OCR), the tray icon, battery, the remote page (which needs Tailscale), and per account whether the
+OCR), the tray icon, power (a laptop's battery; a desktop shows "No battery"), the remote page
+(optional, and only with Tailscale), and per account whether the
 bot has read it, the calibration, the troop tray, walls, the goal and rules, and builders. Open
 Clash from the Game window line, calibrate the account, then run one supervised attack.
 Unattended runs stay locked until a supervised attack has verified the account's profile. The
@@ -85,10 +91,16 @@ read that the check straight after it does not confirm is dropped, so a misread 
 account. Until the account is read, Setup's Account line is amber and unattended starts, and the
 remote page's account check, are refused with "Run one supervised attack first so the bot can read
 your account." Setup's Read account again drops the crop, so the next supervised attack reads the
-account afresh.
+account afresh. When the read can't find the village and no English word shows on Clash's screen,
+it stops and says to set Clash to English or close an open window. When the name and tag can't be
+read, it says they show only for an account linked to a Supercell ID.
 
-Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu.
-Starting the app again while it runs opens its window instead of a second copy. App data, logs and
+A fresh install also starts with two presets, "Farm 40" and "2 h", neither building walls; an
+existing `presets.json` is kept as it is.
+
+Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu, and
+asks "Stop the run and quit?" while a run is going. The window's title shows what a run is doing,
+and the window opens where it was left (`window.json`), fitted to the screen. Starting the app again while it runs opens its window instead of a second copy. App data, logs and
 captures live in `%LOCALAPPDATA%\ClashFarmerPC\files\`, laid out like the phone's files directory.
 A failure nobody caught goes to `logs\desktop.log` there, and a dialog says so. Old logs and
 captures are pruned at start and once a day after that.
@@ -98,7 +110,9 @@ IPv6 one) and on 127.0.0.1, never on the LAN. It checks for Tailscale every minu
 or off with it. Setup says why it is off: Tailscale not connected, port 8765 taken by another
 program (tried again every 10 minutes), or an address Windows won't use yet, as just after sleep
 (tried again every minute). Its key is
-`remote_key.txt` in the files directory. Windows asks once to let the app through the firewall.
+`remote_key.txt` in the files directory, and the link Setup copies works like a password. Setup's
+New remote link writes a fresh key and the old link stops working at once, without the page going
+off. Windows asks once to let the app through the firewall.
 
 ## Sending it to someone
 

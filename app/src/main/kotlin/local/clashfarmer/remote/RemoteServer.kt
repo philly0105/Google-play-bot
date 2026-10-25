@@ -40,7 +40,9 @@ import java.util.concurrent.Executors
  * per connection. Peers outside Tailscale and loopback are dropped before a byte is read, and
  * every request needs the key besides.
  */
-class RemoteServer(private val port: Int, private val api: RemoteApi, private val bindAddress: java.net.InetAddress? = null) {
+class RemoteServer(private val port: Int, api: RemoteApi, private val bindAddress: java.net.InetAddress? = null) {
+    /** Desktop: the api requests go to. Setup's New remote link swaps in one with a fresh key, on the open socket. */
+    @Volatile var api: RemoteApi = api
     @Volatile private var socket: ServerSocket? = null
     private var workers: ExecutorService? = null
 

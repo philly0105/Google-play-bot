@@ -2,6 +2,7 @@ package local.clashfarmer.desktop.ui
 
 import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.accounts.PcAccount
+import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
@@ -37,11 +38,12 @@ class PcChecklistTest {
     }
 
     @Test
-    fun `a failed lookup is red with its reason and no fix`() {
+    fun `a failed lookup is red with what to do, no internal error and no fix`() {
         val line = PcChecklist.gameWindow(WindowStatus(checked = true, error = "Can't start the sidecar"))
         assertEquals(Tone.BAD, line.tone)
         assertEquals("Needs you", line.chip)
-        assertEquals("Could not look for the window: Can't start the sidecar", line.detail)
+        assertTrue(line.detail.startsWith("Could not look for the Clash window. Restart Clash Farmer"))
+        assertFalse(line.detail.contains("sidecar"))
         assertTrue(line.counts)
         assertNull(line.fix)
     }
@@ -217,8 +219,8 @@ class PcChecklistTest {
         val lines = listOf(
             PcChecklist.gameWindow(WindowStatus(checked = true)),
             PcChecklist.trayIcon(true),
-            SetupChecklist.battery(null),
-            SetupChecklist.remote(serviceOn = false, address = null)
+            PcChecklist.power(null, null),
+            PcChecklist.remote(serviceOn = false, status = null)
         )
         assertEquals(1 to 2, SetupChecklist.ready(lines))
         assertEquals(TabBadge(0, Tone.WARN), SetupChecklist.badge(lines))
@@ -380,8 +382,9 @@ class PcChecklistTest {
         assertEquals(Tone.IDLE, stopped.tone)
         val noTailscale = PcChecklist.remote(serviceOn = true, status = RemotePage.Status(null, false))
         assertEquals(Tone.IDLE, noTailscale.tone)
-        assertEquals("Off", noTailscale.chip)
-        assertTrue(noTailscale.detail.startsWith("Off (Tailscale not connected)."))
+        assertEquals("Optional", noTailscale.chip)
+        assertTrue(noTailscale.detail.startsWith("Not needed to farm."))
+        assertNull(noTailscale.fix)
         val portTaken = PcChecklist.remote(serviceOn = true,
             status = RemotePage.Status("100.101.102.103", false, RemotePage.Failure.PORT_IN_USE))
         assertEquals(Tone.WARN, portTaken.tone)
@@ -395,7 +398,40 @@ class PcChecklistTest {
         assertEquals(Tone.OK, on.tone)
         assertEquals("On", on.chip)
         assertTrue(on.detail.startsWith("100.101.102.103:8765 on your tailnet."))
+        assertTrue(on.detail.contains("like a password"))
         assertTrue(listOf(stopped, noTailscale, portTaken, notBound, on).none { it.counts })
         assertNull(SetupChecklist.badge(listOf(stopped, noTailscale, on)))
+    }
+
+    @Test
+    fun `a PC with no battery reads plugged in, green and not counted`() {
+        val line = PcChecklist.power(DeviceHealth(levelPercent = null, charging = true, tempC = null), hasBattery = false)
+        assertEquals("battery", line.key)
+        assertEquals("Power", line.title)
+        assertEquals(Tone.OK, line.tone)
+        assertEquals("No battery", line.chip)
+        assertTrue(line.detail.startsWith("Plugged in. This PC has no battery"))
+        assertFalse(line.detail.contains("charging"))
+        assertFalse(line.counts)
+        // The flag decides even before the first battery reading.
+        assertEquals(line, PcChecklist.power(null, hasBattery = false))
+    }
+
+    @Test
+    fun `a laptop's power line reads its level and plug, and counts as the phone's did`() {
+        val plugged = PcChecklist.power(DeviceHealth(80, charging = true, tempC = null), hasBattery = true)
+        assertEquals("80%, plugged in.", plugged.detail)
+        assertEquals(Tone.OK, plugged.tone)
+        assertTrue(plugged.counts)
+        val onBattery = PcChecklist.power(DeviceHealth(60, charging = false, tempC = null), hasBattery = null)
+        assertEquals("60%, on battery. Runs end at home at 15%.", onBattery.detail)
+        val low = PcChecklist.power(DeviceHealth(10, charging = false, tempC = null), hasBattery = true)
+        assertEquals(Tone.BAD, low.tone)
+        assertEquals("10%, on battery. Plug the laptop in; runs stop until then.", low.detail)
+        assertTrue(low.counts)
+        val unread = PcChecklist.power(null, hasBattery = true)
+        assertEquals(Tone.NEUTRAL, unread.tone)
+        assertFalse(unread.counts)
+        assertTrue(listOf(plugged, onBattery, low, unread).none { "heat" in it.title.lowercase() || "charging" in it.detail })
     }
 }

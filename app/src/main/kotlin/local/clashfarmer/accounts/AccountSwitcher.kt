@@ -355,7 +355,16 @@ class AccountSwitcher(
         }
         service.overlay?.updateStatus("Reading your account in Clash's Settings...")
         reclaimTakenVillage(runToken, reclaimTakeover = true)
-        returnHomeBeforeCheck(runToken, ownBattle = false)
+        try {
+            returnHomeBeforeCheck(runToken, ownBattle = false)
+        } catch (e: StopException) {
+            // Desktop: Clash in another language never reads as the village, so a walk that ran
+            // out where no English word shows says what to check.
+            if (e.message?.startsWith(ReturnHome.START_TIMEOUT_PREFIX) == true && !englishOnScreen(runToken)) {
+                throw StopException(PcAccount.VILLAGE_NOT_FOUND)
+            }
+            throw e
+        }
         openSettings(runToken, byText = true)
         // Settings is open from here, so a failed read closes it rather than leave it over the village.
         val read = try {
@@ -374,6 +383,7 @@ class AccountSwitcher(
      * tag on one frame and not the next.
      */
     private suspend fun readAndSave(target: AccountRecord, runToken: Long): SettingsIdentity {
+        var miss = "settings tab not read"
         repeat(ENROL_READS) {
             delay(ENROL_READ_GAP_MS)
             val frame = service.transport.capture(runToken)
@@ -381,8 +391,10 @@ class AccountSwitcher(
                 val observation = screenReader.observe(frame.bitmap, acquisitionTimeMs = frame.timestampMs)
                 val screen = Viewport(0, 0, frame.bitmap.width, frame.bitmap.height)
                 val region = identityRegion(screen)
-                val identity = if (!settingsTabShowing(observation.rawText)) null
-                    else PcAccount.readIdentity(screenReader.observeRegion(frame.bitmap, region, scale = 5).boxes)
+                val strip = if (!settingsTabShowing(observation.rawText)) null
+                    else screenReader.observeRegion(frame.bitmap, region, scale = 5).boxes
+                val identity = strip?.let { PcAccount.readIdentity(it) }
+                if (strip != null && identity == null) miss = PcAccount.identityMiss(strip) ?: miss
                 if (identity != null) {
                     val store = AccountStore(service.filesDir)
                     val accounts = store.load()
@@ -400,7 +412,27 @@ class AccountSwitcher(
                 }
             } finally { frame.bitmap.recycle() }
         }
+        // Which part failed on the last tab read, so a shared log shows the cause; never the text.
+        AppLog.log("account_identity_unread", "reason" to miss, "frames" to ENROL_READS)
         throw StopException(PcAccount.IDENTITY_UNREADABLE)
+    }
+
+    /**
+     * Desktop: whether any of [ENROL_READS] fresh frames, [ENROL_READ_GAP_MS] apart, shows Clash's
+     * English words: a screen the reader knows, all of which it knows by English words, or one of
+     * [PcAccount.readsEnglish]'s. More than one frame, so one caught mid-fade does not decide it.
+     */
+    private suspend fun englishOnScreen(runToken: Long): Boolean {
+        repeat(ENROL_READS) {
+            delay(ENROL_READ_GAP_MS)
+            val frame = service.transport.capture(runToken)
+            val observation = try {
+                screenReader.observe(frame.bitmap, acquisitionTimeMs = frame.timestampMs)
+            } finally { frame.bitmap.recycle() }
+            if (observation.state != ScreenState.UNKNOWN || PcAccount.readsEnglish(observation.rawText)) return true
+        }
+        AppLog.log("start_no_english", "frames" to ENROL_READS)
+        return false
     }
 
     /**

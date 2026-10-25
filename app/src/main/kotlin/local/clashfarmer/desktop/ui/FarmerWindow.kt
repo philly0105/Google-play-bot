@@ -22,8 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,10 +73,11 @@ private val RAIL_WIDTH = 88.dp
  * The main window's body: the phone's FarmerDashboard laid out for a desktop window. A tab rail
  * on the left, the run strip across the top of every tab but Home while a run is active, and the
  * selected tab's page; calibration replaces all of it while open. Toasts, the account editor and
- * alerts show over it. Composing it starts the controller's once-a-second reads.
+ * alerts show over it, and on a fresh install the "Before you start" dialog ([FirstRun]) over all
+ * of them, whose Quit calls [onQuit]. Composing it starts the controller's once-a-second reads.
  */
 @Composable
-fun FarmerWindowContent(controller: FarmerController) {
+fun FarmerWindowContent(controller: FarmerController, onQuit: () -> Unit) {
     DisposableEffect(controller) {
         controller.windowShown()
         onDispose { controller.windowHidden() }
@@ -106,6 +110,43 @@ fun FarmerWindowContent(controller: FarmerController) {
                 monospace = alert.monospace
             )
         }
+        // Read when the window opens; only I understand writes the flag.
+        var firstRun by remember { mutableStateOf(FirstRun.needed(controller.filesDir)) }
+        if (firstRun) {
+            MessageDialog(
+                title = FirstRun.TITLE,
+                message = FirstRun.MESSAGE,
+                confirm = FirstRun.CONFIRM,
+                onConfirm = {
+                    // A flag that won't save only means the dialog shows again next start.
+                    runCatching { FirstRun.confirm(controller.filesDir) }
+                    firstRun = false
+                    controller.openTab(Tab.SETUP)
+                },
+                onDismiss = onQuit,
+                dismiss = FirstRun.QUIT,
+                buttonsOnly = true
+            )
+        }
+    }
+}
+
+/**
+ * Asks before the tray's Quit, or closing the window with no tray, ends a busy run: quitting
+ * stops it where it is, possibly mid-attack. Escape and a click outside cancel.
+ */
+@Composable
+fun StopAndQuitDialog(onQuit: () -> Unit, onCancel: () -> Unit) {
+    FarmerDesktopTheme {
+        MessageDialog(
+            title = "Stop the run and quit?",
+            message = "A run is going. Quitting stops it now, even in the middle of an attack, and closes Clash Farmer.",
+            confirm = "Stop and quit",
+            onConfirm = onQuit,
+            onDismiss = onCancel,
+            dismiss = "Cancel",
+            danger = true
+        )
     }
 }
 

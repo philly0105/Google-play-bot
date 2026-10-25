@@ -2,7 +2,9 @@ package local.clashfarmer.accounts
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import local.clashfarmer.core.PresetStore
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.RunPlan
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONArray
@@ -41,10 +43,26 @@ object PcAccount {
     /** An unattended start can't open Settings to learn the account, so it waits for a watched one. */
     const val ENROL_FIRST = "Run one supervised attack first so the bot can read your account."
 
-    /** The Settings tab opened, but no name and tag could be read off it. */
+    /**
+     * The Settings tab opened, but no name and tag could be read off it. The strip shows them only
+     * for an account linked to a Supercell ID, but OCR can also miss a name in another alphabet or
+     * misread the tag, so the text names the link as one cause, not the cause. The log has which
+     * part failed (`account_identity_unread`, [identityMiss]).
+     */
     const val IDENTITY_UNREADABLE =
-        "Could not read your village name and tag in Clash's Settings. Make sure the account is linked to a " +
-            "Supercell ID and Clash is in English, then try again."
+        "Could not read your village name and tag in Clash's Settings. They show only when the account is " +
+            "linked to a Supercell ID; if yours isn't, connect it in Clash's Settings. Then run one supervised " +
+            "attack again."
+
+    /**
+     * The walk to the village ran out on screens with none of Clash's English words on them
+     * ([readsEnglish]). Clash in another language looks like that, since every screen the bot knows
+     * is known by its English words; so does a window the bot can't read left open over the village.
+     */
+    const val VILLAGE_NOT_FOUND =
+        "Could not find the village in Clash. The bot reads Clash's English words, so if Clash is in another " +
+            "language, set it to English (Settings > Language). Otherwise close any open window in Clash. Then " +
+            "run one supervised attack again."
 
     /** Settings is open, but neither the strip nor the name is the village read on the first run. */
     const val NOT_THE_READ_VILLAGE =
@@ -85,6 +103,30 @@ object PcAccount {
         record.validate()
         val json = JSONObject().put("selectedId", ID).put("accounts", JSONArray().put(record.toJson()))
         atomicWrite(index, json.toString(2).toByteArray(Charsets.UTF_8))
+        return true
+    }
+
+    /**
+     * The presets a fresh install starts with. The phone's seeds build walls, which a new account
+     * has not set up, and one runs "Both accounts", which a PC with one account can't start.
+     */
+    val FRESH_PRESETS: List<RunPlan> = listOf(
+        PresetStore.SEEDS[0].copy(walls = false, name = "Farm 40"),
+        PresetStore.SEEDS[1].copy(walls = false, name = "2 h")
+    )
+
+    /**
+     * Swaps the phone's seeded presets for [FRESH_PRESETS] when there is no presets.json yet, and
+     * says whether it did. It goes through PresetStore's own calls, so that copied file stays as
+     * it was. The new presets are saved before the seeds go, so a stop half way leaves too many
+     * presets rather than none. An existing file, the owner's, is left alone.
+     */
+    fun seedPresetsIfFresh(filesDir: File): Boolean {
+        if (File(filesDir, "presets.json").exists()) return false
+        val store = PresetStore(filesDir)
+        val seeds = store.presets()
+        FRESH_PRESETS.forEach { store.save(it) }
+        seeds.mapNotNull { it.name }.filter { name -> FRESH_PRESETS.none { it.name == name } }.forEach { store.delete(it) }
         return true
     }
 
@@ -165,16 +207,41 @@ object PcAccount {
      * line that starts with # is tried as the tag: a village name with digits in it passes the
      * parser's own tag rule. The tag keeps its #, loses OCR's spaces, and must look like a tag.
      */
-    fun readIdentity(boxes: List<RecognizedBox>): SettingsIdentity? {
+    fun readIdentity(boxes: List<RecognizedBox>): SettingsIdentity? = readStrip(boxes).first
+
+    /**
+     * Why [readIdentity] read nothing off [boxes], in a few words for the log, or null when it
+     * read them. It names the part, never the text, since the tag is the player's own.
+     */
+    fun identityMiss(boxes: List<RecognizedBox>): String? = readStrip(boxes).second
+
+    private fun readStrip(boxes: List<RecognizedBox>): Pair<SettingsIdentity?, String?> {
         val lines = boxes.filter { it.text.isNotBlank() }.sortedBy { it.top }
+        if (lines.isEmpty()) return null to "nothing read"
         val hash = lines.indexOfFirst { it.text.trim().startsWith("#") }
         val read = if (hash > 0) SettingsIdentity(lines[hash - 1].text.trim(), lines[hash].text)
-            else AccountIdentityParser.parseSettingsIdentity(lines) ?: return null
+            else AccountIdentityParser.parseSettingsIdentity(lines) ?: return null to "no tag line"
         val tag = AccountIdentityParser.normalizeTag(read.playerTag).replace(" ", "")
         val name = read.villageName.trim()
-        if (!TAG.matches(tag) || name.isBlank() || AccountIdentityParser.normalizeTag(name).replace(" ", "") == tag) return null
-        return SettingsIdentity(name, "#$tag")
+        return when {
+            !TAG.matches(tag) -> null to "tag unreadable"
+            name.isBlank() -> null to "no name"
+            AccountIdentityParser.normalizeTag(name).replace(" ", "") == tag -> null to "name read as the tag"
+            else -> SettingsIdentity(name, "#$tag") to null
+        }
     }
+
+    /**
+     * Whether [rawText] has one of the English words Clash draws on the screens a start passes:
+     * the village's Battle, Build and Attack, the profile menu's Inbox and Settings, and the
+     * buttons of its dialogs. Each is a whole word, so French "Continuer" is not "Continue". The
+     * reader knows the rest of its screens by English words too, so [AccountSwitcher] also counts
+     * any screen it reads.
+     */
+    fun readsEnglish(rawText: String): Boolean = ENGLISH_WORDS.containsMatchIn(AccountIdentityParser.normalize(rawText))
+
+    private val ENGLISH_WORDS =
+        Regex("(^|[^A-Z])(BATTLE|BUILD|ATTACK|INBOX|SETTINGS|OKAY|CANCEL|CONTINUE|RETURN HOME)([^A-Z]|$)")
 
     private val TAG = Regex("^[0-9A-Z]{4,14}$")
 

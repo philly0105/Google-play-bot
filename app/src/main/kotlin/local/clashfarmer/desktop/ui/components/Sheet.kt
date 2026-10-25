@@ -91,7 +91,8 @@ fun Sheet(
 
 /**
  * The phone's AlertDialog: a title, a message the user can select and copy, and one or two
- * buttons. [dismiss] null leaves only [confirm]; Escape and a click outside call [onDismiss].
+ * buttons. [dismiss] null leaves only [confirm]; Escape and a click outside call [onDismiss],
+ * unless [buttonsOnly], for a choice whose dismiss button does something drastic, such as quit.
  * [monospace] sets the message in 12 sp monospace, as Inspect's report was.
  */
 @Composable
@@ -103,9 +104,13 @@ fun MessageDialog(
     onDismiss: () -> Unit,
     dismiss: String? = null,
     danger: Boolean = false,
-    monospace: Boolean = false
+    monospace: Boolean = false,
+    buttonsOnly: Boolean = false
 ) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(
+        onDismissRequest = if (buttonsOnly) ({}) else onDismiss,
+        properties = DialogProperties(dismissOnClickOutside = !buttonsOnly, usePlatformDefaultWidth = false)
+    ) {
         Panel(if (monospace) SHEET_WIDTH else 460.dp) {
             Label(title, Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp), size = FarmerTheme.TITLE, bold = true)
             ScrollBody(Modifier.weight(1f, fill = false)) {

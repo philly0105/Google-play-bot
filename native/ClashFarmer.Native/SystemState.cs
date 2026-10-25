@@ -9,11 +9,16 @@ internal static class SystemState
     private static IntPtr _request;
     private static bool _awake;
 
-    /** Plugged in, battery percent (-1 when unknown), battery saver on. */
-    public static (bool Ac, int BatteryPercent, bool Saver) Power()
+    /**
+     * Plugged in, battery percent (-1 when unknown), battery saver on, and whether the PC has a
+     * battery. Only Windows' "no system battery" flag (128) says it has none; an unknown status
+     * (255) counts as a battery, so a laptop that can't be read keeps its battery line.
+     */
+    public static (bool Ac, int BatteryPercent, bool Saver, bool HasBattery) Power()
     {
         if (!Win32.GetSystemPowerStatus(out var status)) throw new InvalidOperationException("GetSystemPowerStatus failed");
-        return (status.ACLineStatus == 1, status.BatteryLifePercent == 255 ? -1 : status.BatteryLifePercent, (status.SystemStatusFlag & 1) != 0);
+        var hasBattery = status.BatteryFlag == 255 || (status.BatteryFlag & 128) == 0;
+        return (status.ACLineStatus == 1, status.BatteryLifePercent == 255 ? -1 : status.BatteryLifePercent, (status.SystemStatusFlag & 1) != 0, hasBattery);
     }
 
     /**

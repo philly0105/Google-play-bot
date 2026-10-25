@@ -40,6 +40,28 @@ class RemotePage(
 
         /** False once the listener stopped answering on its own, as after a failed accept. */
         val listening: Boolean get() = true
+
+        /** Answers with [api] from now on, on the socket already open. */
+        fun use(api: RemoteApi) {}
+    }
+
+    /**
+     * The api [use] last handed over, which listeners opened later answer with too; null until
+     * then, when [open] decides.
+     */
+    @Volatile
+    var api: RemoteApi? = null
+        private set
+
+    /**
+     * Swaps [api] into every open listener and the ones opened later, without closing a socket:
+     * Windows can refuse to bind the port again for minutes after a close, so a new key would
+     * otherwise turn the page off. The old api, and the key it checks, stop answering at once.
+     */
+    @Synchronized
+    fun use(api: RemoteApi) {
+        this.api = api
+        listeners.forEach { it.use(api) }
     }
 
     /**
@@ -160,18 +182,23 @@ class RemotePage(
         fun portInUse(error: Throwable): Boolean =
             error is BindException && error.message.orEmpty().contains("in use", ignoreCase = true)
 
-        /** The page over [api], each address its own [RemoteServer] on [port]. */
+        /** The page over [api], each address its own [RemoteServer] on [port]; [use] replaces the api. */
         fun serving(
             api: RemoteApi,
             port: Int = RemoteServer.PORT,
             tailscale: () -> Tailnet? = ::tailnet
-        ): RemotePage = RemotePage(tailscale) { address ->
-            val server = RemoteServer(port, api, address).also { it.start() }
-            if (!server.isListening) throw server.startError ?: IOException("The remote page did not start on ${address.hostAddress}")
-            object : Listener {
-                override fun close() = server.stop()
-                override val listening: Boolean get() = server.isListening
+        ): RemotePage {
+            lateinit var page: RemotePage
+            page = RemotePage(tailscale) { address ->
+                val server = RemoteServer(port, page.api ?: api, address).also { it.start() }
+                if (!server.isListening) throw server.startError ?: IOException("The remote page did not start on ${address.hostAddress}")
+                object : Listener {
+                    override fun close() = server.stop()
+                    override val listening: Boolean get() = server.isListening
+                    override fun use(api: RemoteApi) { server.api = api }
+                }
             }
+            return page
         }
 
         private const val TAILSCALE = "tailscale"

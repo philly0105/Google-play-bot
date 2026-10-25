@@ -1,5 +1,6 @@
 package local.clashfarmer.desktop
 
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.desktop.platform.SidecarGameSurface
 import local.clashfarmer.insight.EventText
 import local.clashfarmer.service.FarmerService
@@ -23,6 +24,16 @@ class PcStopLineTest {
         assertEquals(
             "the PC was locked or its screen was off at the start time",
             EventText.stopLine(FarmerService.PC_LOCKED_AT_START)
+        )
+    }
+
+    @Test
+    fun `a first read that can't find the village keeps its advice, Clash's capitals included`() {
+        assertEquals(
+            "could not find the village in Clash. The bot reads Clash's English words, so if Clash is in another " +
+                "language, set it to English (Settings > Language). Otherwise close any open window in Clash. Then " +
+                "run one supervised attack again",
+            EventText.stopLine(PcAccount.VILLAGE_NOT_FOUND)
         )
     }
 }

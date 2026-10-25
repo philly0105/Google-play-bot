@@ -2,6 +2,8 @@ package local.clashfarmer.desktop.ui
 
 import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.accounts.PcAccount
+import local.clashfarmer.core.DeviceGuard
+import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.desktop.PcProfiles
 import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.platform.WindowStatus
@@ -52,7 +54,9 @@ object PcChecklist {
         return when {
             !status.checked -> CheckLine(GAME_WINDOW, "Game window", "Looking for the Clash of Clans window.",
                 SetupChecklist.chip(Tone.NEUTRAL), Tone.NEUTRAL, counts = false)
-            status.error != null -> CheckLine(GAME_WINDOW, "Game window", "Could not look for the window: ${status.error}",
+            // The lookup's own error names the app's internals, so the line says what to do instead.
+            status.error != null -> CheckLine(GAME_WINDOW, "Game window",
+                "Could not look for the Clash window. Restart Clash Farmer; if that doesn't help, unzip it again into a new folder.",
                 SetupChecklist.chip(Tone.BAD), Tone.BAD)
             window == null && status.pc?.gpgInstalled == false -> CheckLine(GAME_WINDOW, "Game window",
                 "Google Play Games is not installed. Install it from play.google.com/googleplaygames, " +
@@ -191,16 +195,50 @@ object PcChecklist {
         else -> CheckLine(TEXT_READER, "Text reader", "Reads the game's text.", "Ready", Tone.OK)
     }
 
+    /** The phone's key for its battery line, kept. */
+    const val POWER = "battery"
+
+    /**
+     * Power, in place of the phone's "Battery and heat": the PC reports no temperature, so only the
+     * battery guard can stop a run. [hasBattery] is the sidecar's flag, false only when Windows says
+     * the PC has no battery: a desktop is always plugged in, so its line says that rather than
+     * "charging", and isn't counted, having nothing to get ready. A laptop's line counts as the
+     * phone's did and is red when [DeviceGuard] would stop a run now.
+     */
+    fun power(health: DeviceHealth?, hasBattery: Boolean?): CheckLine {
+        if (hasBattery == false) {
+            return CheckLine(POWER, "Power", "Plugged in. This PC has no battery, so the battery guard never stops a run.",
+                "No battery", Tone.OK, counts = false)
+        }
+        if (health == null) {
+            return CheckLine(POWER, "Power", "The battery could not be read.", SetupChecklist.chip(Tone.NEUTRAL),
+                Tone.NEUTRAL, counts = false)
+        }
+        // The guard's own reason reads like a log line, so the row says it in plain words.
+        if (DeviceGuard.stopReason(health) != null) {
+            return CheckLine(POWER, "Power", "${health.levelPercent}%, on battery. Plug the laptop in; runs stop until then.",
+                SetupChecklist.chip(Tone.BAD), Tone.BAD)
+        }
+        val plug = when (health.charging) {
+            true -> "plugged in"
+            false -> "on battery. Runs end at home at ${DeviceGuard.LOW_BATTERY_PERCENT}%"
+            null -> null
+        }
+        val reading = listOfNotNull(health.levelPercent?.let { "$it%" }, plug).joinToString(", ")
+        return CheckLine(POWER, "Power", if (reading.isEmpty()) "No reading." else reading.replaceFirstChar { it.uppercase() } + ".",
+            SetupChecklist.chip(Tone.OK), Tone.OK)
+    }
+
     /**
      * The remote page, in place of the phone's remote line. It listens only while Tailscale is
-     * connected, so without it the line is off rather than amber: the page is optional. Never
-     * counted, as on the phone. The key stays off the screen.
+     * connected, so without it the line is a neutral "Optional" rather than amber: most people
+     * never use the page. Never counted, as on the phone. The key stays off the screen.
      */
     fun remote(serviceOn: Boolean, status: RemotePage.Status?): CheckLine = when {
         !serviceOn || status == null -> CheckLine(REMOTE, "Remote page", "Starts with Clash Farmer.", "Off", Tone.IDLE, counts = false)
         status.tailscale == null -> CheckLine(REMOTE, "Remote page",
-            "Off (Tailscale not connected). Optional: connect Tailscale on this PC to control runs from another device; " +
-                "the page turns on within a minute.", "Off", Tone.IDLE, counts = false)
+            "Not needed to farm. To watch and stop runs from another device, install Tailscale on this PC and on " +
+                "that device and connect both; the page turns on within a minute.", "Optional", Tone.IDLE, counts = false)
         !status.listening && status.failure == RemotePage.Failure.PORT_IN_USE -> CheckLine(REMOTE, "Remote page",
             "Port ${RemoteServer.PORT} is in use by another program, so the page is off. Close that program; " +
                 "Clash Farmer tries again every 10 minutes.", "Off", Tone.WARN, counts = false)
@@ -208,7 +246,8 @@ object PcChecklist {
             "Tailscale is connected, but the page could not start on its address yet. Clash Farmer tries again " +
                 "every minute; if it stays off, restart Tailscale.", "Off", Tone.WARN, counts = false)
         else -> CheckLine(REMOTE, "Remote page",
-            "${status.tailscale}:${RemoteServer.PORT} on your tailnet. The copied link holds the key; keep it private.",
+            "${status.tailscale}:${RemoteServer.PORT} on your tailnet. The copied link works like a password: anyone " +
+                "who has it can control runs. If it gets out, make a new link.",
             "On", Tone.OK, counts = false)
     }
 

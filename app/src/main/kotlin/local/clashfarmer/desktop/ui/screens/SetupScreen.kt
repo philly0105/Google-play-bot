@@ -1,6 +1,7 @@
 package local.clashfarmer.desktop.ui.screens
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,29 +28,32 @@ import local.clashfarmer.core.BuilderReading
 import local.clashfarmer.core.BuilderStore
 import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.desktop.BuildInfo
+import local.clashfarmer.desktop.RemoteLink
 import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.sidecar.Hello
 import local.clashfarmer.desktop.sidecar.SidecarStatus
 import local.clashfarmer.desktop.SurfaceVerification
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
+import local.clashfarmer.desktop.ui.FirstRun
 import local.clashfarmer.desktop.ui.PcChecklist
 import local.clashfarmer.desktop.ui.TrayCheckSheet
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.CheckRow
+import local.clashfarmer.desktop.ui.components.MessageDialog
 import local.clashfarmer.desktop.ui.components.PrimaryButton
 import local.clashfarmer.desktop.ui.components.ScreenPage
 import local.clashfarmer.desktop.ui.components.ScreenTitle
 import local.clashfarmer.desktop.ui.components.SecondaryButton
 import local.clashfarmer.desktop.ui.components.SectionHeader
 import local.clashfarmer.desktop.ui.components.Sheet
+import local.clashfarmer.desktop.ui.components.ToneCard
 import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.insight.CalibrationHealth
 import local.clashfarmer.insight.Finding
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.recognition.PhoneProfile
-import local.clashfarmer.remote.RemoteServer
 import local.clashfarmer.service.FarmerService
 import local.clashfarmer.ui.DashboardState
 import local.clashfarmer.ui.FarmerTheme
@@ -80,9 +84,11 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     private var trayResult: TrayCheckSheet.Outcome? by mutableStateOf(null)
     /** The row whose findings sheet is open. */
     private var detail: CheckLine? by mutableStateOf(null)
+    /** Whether New remote link is asking to go ahead. */
+    private var confirmNewLink by mutableStateOf(false)
 
     /** Tray, battery, text reader and remote page: system calls, read on IO at most every 30 s. */
-    private data class Machine(val connected: Boolean, val tray: Boolean, val battery: DeviceHealth?,
+    private data class Machine(val connected: Boolean, val tray: Boolean, val battery: DeviceHealth?, val hasBattery: Boolean?,
                                val serviceOn: Boolean, val remote: RemotePage.Status?, val textReader: Hello?)
     private var machine: Machine? by mutableStateOf(null)
     private var machineAtMs = 0L
@@ -151,12 +157,22 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         ScreenPage(scroll = scroll) {
             ScreenTitle("Setup", "$ready of $total ready")
 
+            // First, where nobody scrolls past it (AGENTS.md: say it plainly).
+            ToneCard(Tone.WARN) {
+                Label(FirstRun.BAN_WARNING, size = FarmerTheme.SMALL + 1, color = FarmerColors.text)
+            }
+
             SectionHeader("This PC")
             Card {
                 list.machine.forEach { LineRow(it, busy) }
                 if (list.machine.any { it.key == PcChecklist.REMOTE && it.tone == Tone.OK }) {
-                    SecondaryButton("Copy link", Modifier.padding(top = 8.dp), enabled = !trayCheckRunning, compact = true) {
-                        copyRemoteLink()
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SecondaryButton("Copy link", enabled = !trayCheckRunning, compact = true) {
+                            copyRemoteLink(renew = false)
+                        }
+                        SecondaryButton(NEW_LINK, enabled = !trayCheckRunning, compact = true) {
+                            confirmNewLink = true
+                        }
                     }
                 }
             }
@@ -187,8 +203,6 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                 }
             }
 
-            Label("Bots violate Supercell's terms and risk a permanent ban.", Modifier.padding(top = 8.dp),
-                size = FarmerTheme.LABEL, color = FarmerColors.warn)
             Label("Runs on this PC. The network is used only for the remote control page, which answers on Tailscale alone.",
                 Modifier.padding(top = 8.dp), size = FarmerTheme.LABEL, color = FarmerColors.faint)
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -200,6 +214,20 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
 
         detail?.let { DetailSheet(it, state.busy) }
         trayResult?.let { TrayCheckSheet.ResultSheet(it, host) { trayResult = null } }
+        if (confirmNewLink) {
+            MessageDialog(
+                title = "Make a new remote link?",
+                message = "The link you copied before stops working at once, on every device that has it. " +
+                    "Use this if the link got out. The new link is copied for you.",
+                confirm = NEW_LINK,
+                onConfirm = {
+                    confirmNewLink = false
+                    copyRemoteLink(renew = true)
+                },
+                onDismiss = { confirmNewLink = false },
+                dismiss = "Cancel"
+            )
+        }
     }
 
     /** One block per account: the header with Edit settings, the account's rows, and Open calibration. */
@@ -292,7 +320,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             PcChecklist.windowsVersion(windowStatus.pc),
             PcChecklist.textReader(m?.textReader),
             m?.let { PcChecklist.trayIcon(it.tray) } ?: notRead(PcChecklist.TRAY_ICON, "Tray icon"),
-            m?.let { SetupChecklist.battery(it.battery) } ?: notRead("battery", "Battery and heat"),
+            m?.let { PcChecklist.power(it.battery, it.hasBattery) } ?: notRead(PcChecklist.POWER, "Power"),
             m?.let { PcChecklist.remote(it.serviceOn, it.remote) } ?: notRead(PcChecklist.REMOTE, "Remote page")
         )
         val findings = health(state.accounts, profiles)
@@ -354,6 +382,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             tray = runCatching { SystemTray.isSupported() }.getOrDefault(false),
             // The service reads the battery through the sidecar in the background; this is its last reading.
             battery = runCatching { service?.readDeviceHealth() }.getOrNull(),
+            hasBattery = service?.hasBattery,
             serviceOn = serviceOn,
             remote = if (serviceOn) FarmerService.remotePage?.status else null,
             // DesktopServices asks the sidecar; this is its last answer.
@@ -468,20 +497,38 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
 
     /**
      * Puts the full remote link on the clipboard. The key is never shown or logged. Android marks
-     * such a clip sensitive; Windows has no such mark for Java, so clipboard history may keep it.
+     * such a clip sensitive; Windows has no such mark for Java, so clipboard history may keep it,
+     * which is what New remote link ([renew]) is for: it gives the page a fresh key first
+     * ([RemoteLink.renew]), so the old link stops working. The key is read from its file, which a
+     * renewal rewrites, not from FarmerService's copy made at start.
      */
-    private fun copyRemoteLink() {
+    private fun copyRemoteLink(renew: Boolean) {
         val service = FarmerService.instance
         val address = machine?.remote?.takeIf { it.listening }?.tailscale
         if (service == null || address == null) {
             host.toast("Remote control is not available.")
             return
         }
-        val copied = runCatching {
-            Toolkit.getDefaultToolkit().systemClipboard
-                .setContents(StringSelection("http://$address:${RemoteServer.PORT}/?key=${service.remoteKey}"), null)
-        }.isSuccess
-        host.toast(if (copied) "Link copied. Keep it private; the key in it is the password." else "Could not copy the link.")
+        val files = host.filesDir
+        host.scope.launch {
+            val key = runCatching {
+                withContext(Dispatchers.IO) { if (renew) RemoteLink.renew(service) else RemoteLink.key(files) }
+            }.getOrNull()
+            if (!isActive) return@launch
+            if (key == null) {
+                host.toast(if (renew) "Could not make a new link. The old link still works." else "Could not copy the link.")
+                return@launch
+            }
+            val copied = runCatching {
+                Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(RemoteLink.url(address, key)), null)
+            }.isSuccess
+            host.toast(when {
+                renew && copied -> "New link copied. The old link no longer works."
+                renew -> "New link made, but it could not be copied. Press Copy link."
+                copied -> "Link copied. It works like a password; keep it private."
+                else -> "Could not copy the link."
+            }, long = renew)
+        }
     }
 
     /** Opens the logs folder in Explorer, off the UI thread: Desktop.open can wait on the shell. */
@@ -495,5 +542,6 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
 
     private companion object {
         const val CACHE_MS = 30_000L
+        const val NEW_LINK = "New remote link"
     }
 }

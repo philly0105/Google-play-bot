@@ -866,11 +866,21 @@ class FarmerService(
      */
     fun readDeviceHealth(): DeviceHealth? = deviceHealth
 
+    /**
+     * Desktop: false when the last reading said this PC has no battery, so Setup's Power line
+     * says a desktop is plugged in rather than "charging". Null until the first reading. Kept
+     * apart from [DeviceHealth], which is the phone's and feeds the battery guard.
+     */
+    @Volatile
+    var hasBattery: Boolean? = null
+        private set
+
     /** Desktop: reads the battery through [host] for [readDeviceHealth]; a failure leaves null. */
     internal suspend fun refreshDeviceHealth() {
         deviceHealth = try {
             val power = host.power()
             healthFailed = false
+            hasBattery = power.hasBattery
             DeviceHealth(levelPercent = power.batteryPercent.takeIf { it >= 0 }, charging = power.ac, tempC = null)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

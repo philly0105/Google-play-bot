@@ -95,15 +95,15 @@ test compiles unchanged, and record the move.
 | Clash in foreground | The Clash GPG window exists, is not minimized and shows Clash |
 | Screen off / locked | The session locked or the display off (the sidecar's `sessionState`) while capture delivers only old frames; the run stops with a plain reason. A still village is never read as this |
 | A start set for later | The run's own keep-awake (system and display) from the time it is set until it fires, so the PC neither sleeps nor goes dark; at the start time a locked PC or a dark display refuses the start with a plain reason |
-| Battery and heat guard | Laptop battery when unplugged |
+| Battery and heat guard | Laptop battery when unplugged. A desktop has none (the sidecar's `power.hasBattery`), so Setup's Power line says the guard never stops a run there. No temperature is read |
 | Restart Clash | Start it through GPG's launch link, only when there is no Clash window |
 | Home (the takeover wait) | Nothing: Clash stays on the takeover dialog. The bot never closes the Clash window, since a relaunch into the running VM broke posted input (`docs/gpg-spike.md`, Restarting) |
 | Floating overlay | Small always-on-top window with status, Pause and Stop |
 | Notifications | Windows notifications from the tray icon |
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
-| Sweat and Blood, seeded with the owner's names and tags | One account in Blood's id slot (`accounts/PcAccount.kt`). A fresh install seeds it as "Your village" |
+| Sweat and Blood, seeded with the owner's names and tags | One account in Blood's id slot (`accounts/PcAccount.kt`). A fresh install seeds it as "Your village", with the presets "Farm 40" and "2 h" (no walls, no "Both accounts") |
 | Identity templates shipped as app assets | `accounts\<id>\identity.png` and `identity.json` in the data folder, cut by the account's first supervised run and dropped again if the check straight after does not confirm it |
-| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules. It listens only on the Tailscale adapter's addresses (IPv4 and tailnet IPv6) and 127.0.0.1, while Tailscale is connected (`desktop/RemotePage.kt`) |
+| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules. It listens only on the Tailscale adapter's addresses (IPv4 and tailnet IPv6) and 127.0.0.1, while Tailscale is connected (`desktop/RemotePage.kt`). The phone's key lasted for good; Setup's New remote link writes a fresh one and swaps it into the running page (`desktop/RemoteLink.kt`), so a link that got out stops working |
 
 ### Resolution and screen geometry
 
