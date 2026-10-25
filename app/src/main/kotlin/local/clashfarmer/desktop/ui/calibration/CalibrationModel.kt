@@ -429,6 +429,11 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
             host.toast("Capture sets the game area on the PC; pick another point")
             return
         }
+        // The click is a pixel of the frame on show, which can be of another size than the profile.
+        frame?.let { frameMismatch(it.width, it.height, profile) }?.let {
+            host.toast(it, long = true)
+            return
+        }
 
         if (target.name == COLLECTOR) {
             if (!frameIsCameraReference) {
@@ -548,7 +553,9 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /**
      * The phone's onCreate reads: the saved profile, the account's name, the last frozen frame
      * and whether a camera reference is saved. A profile that will not read is logged and the
-     * default kept, as on the phone.
+     * default kept, as on the phone. A frozen frame of another size than the profile, from a
+     * capture whose move was not saved, is shown as it is, and Apply takes no point on it
+     * ([frameMismatch]).
      */
     private suspend fun load() {
         val saved = withContext(Dispatchers.IO) {
@@ -581,8 +588,8 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /**
      * The body of [showCameraReference], which Retake runs too once the old reference is aside. A
      * saved reference of another size than the profile, taken before the game area changed, is
-     * shown with a note and not as the reference: collectors marked on it would be tapped where
-     * that frame had them ([referenceMismatch]).
+     * shown with a note and not as the reference, and Apply takes no point on it: points marked on
+     * it would be saved where that frame had them ([referenceMismatch], [frameMismatch]).
      */
     private suspend fun cameraReference() {
         try {

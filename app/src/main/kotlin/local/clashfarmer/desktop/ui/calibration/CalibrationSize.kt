@@ -68,15 +68,28 @@ internal fun saveQuestion(opened: PhoneProfile, edited: PhoneProfile, hasSaved: 
 
 /**
  * What Show camera reference says when the saved reference, [width]x[height], is not the size of
- * [profile], the one being edited, or null when it is. Collectors can't be marked on it, and only
- * Retake sets it aside: showing it changes nothing, so a capture at another size that is never
- * saved costs no collectors.
+ * [profile], the one being edited, or null when it is. No point can be marked on it
+ * ([frameMismatch]), and only Retake sets it aside: showing it changes nothing, so a capture at
+ * another size that is never saved costs no collectors.
  */
 internal fun referenceMismatch(width: Int, height: Int, profile: PhoneProfile): String? {
     if (width == profile.resolutionWidth && height == profile.resolutionHeight) return null
     return "This camera reference was taken at ${width}x$height, and the calibration is now " +
-        "${profile.resolutionWidth}x${profile.resolutionHeight}, so collectors can't be marked on it. " +
-        "To mark them at this size, press Retake camera reference."
+        "${profile.resolutionWidth}x${profile.resolutionHeight}, so no points can be marked on it. " +
+        "To mark collectors at this size, press Retake camera reference."
+}
+
+/**
+ * What Apply says when the frame on show, [width]x[height], is not the size of [profile], the one
+ * being edited, or null when it is. A click is a pixel of that frame, so it would be saved where
+ * that frame had it: the screenshot of a capture at another size that was never saved, which the
+ * screen shows again when it opens, or a camera reference taken before the game area changed.
+ */
+internal fun frameMismatch(width: Int, height: Int, profile: PhoneProfile): String? {
+    if (width == profile.resolutionWidth && height == profile.resolutionHeight) return null
+    return "This screenshot was taken at ${width}x$height, and the calibration is " +
+        "${profile.resolutionWidth}x${profile.resolutionHeight}, so no points can be set on it. " +
+        "Press Capture game screen first."
 }
 
 /** Why Save refuses a profile of this size, in words for the user, or null when it may be saved. */

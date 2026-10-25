@@ -431,9 +431,13 @@ Calibration:
   toast, so a game area an earlier build shrank through a corner click is repaired.
 - The camera reference follows: a frame from `captureNormalizedVillage` of another size moves the
   profile instead of failing. Show camera reference never changes a saved reference: one of
-  another size than the profile being edited is shown with a note (`referenceMismatch`), and
-  collectors can't be marked on it until Retake sets it aside with its collectors and captures a
-  new one.
+  another size than the profile being edited is shown with a note (`referenceMismatch`), and no
+  point can be marked on it; collectors can be marked again once Retake sets it aside with its
+  collectors and captures a new one.
+- Apply refuses a click on a frame of another size than the profile being edited and says to
+  press Capture game screen (`frameMismatch`), since the click is a pixel of that frame. Besides
+  such a camera reference, that is the frozen.png of a capture at another size whose move was
+  never saved, which the screen shows again when it opens.
 - Save refuses a game area a run can't use. Replacing a saved calibration of one shape with one of
   another asks first ("Save at another shape?"). A save that changes the points also deletes the
   account's surfaces.json, since the shapes in it were verified on the old points.
