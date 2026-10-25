@@ -3,7 +3,6 @@ package local.clashfarmer.accounts
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import local.clashfarmer.core.Region
-import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONArray
@@ -43,11 +42,16 @@ object PcAccount {
 
     /** The Settings tab opened, but no name and tag could be read off it. */
     const val IDENTITY_UNREADABLE =
-        "Could not read your village name and tag in Clash's Settings. Set Clash to English, then try again."
+        "Could not read your village name and tag in Clash's Settings. Make sure the account is linked to a " +
+            "Supercell ID and Clash is in English, then try again."
 
     /** Settings is open, but neither the strip nor the name is the village read on the first run. */
     const val NOT_THE_READ_VILLAGE =
-        "Clash's Settings does not show the village the bot read on its first run. Make sure Clash is on that account, then try again."
+        "Clash's Settings does not show the village the bot read. Switch Clash to that account and try again, " +
+            "or press Read account again in Setup and run one supervised attack."
+
+    /** Setup's button that drops the template ([forget]). */
+    const val READ_AGAIN = "Read account again"
 
     /** A start for any account but this one. The account check would switch accounts in Clash. */
     fun otherAccountRefused(villageName: String) =
@@ -75,21 +79,47 @@ object PcAccount {
     /** The frame size [templateFile] was cut at. */
     fun templateFrameFile(filesDir: File, id: String): File = File(accountDir(filesDir, id), "identity.json")
 
-    /** Whether the account has its template, so its check can run unwatched. */
-    fun enrolled(filesDir: File, id: String): Boolean = templateFile(filesDir, id).isFile
+    /**
+     * Whether the account has a template that decodes, so its check can run unwatched. A damaged
+     * one counts as none: the next supervised run reads the account again and writes over it.
+     */
+    fun enrolled(filesDir: File, id: String): Boolean =
+        loadTemplate(filesDir, id)?.also { it.bitmap.recycle() } != null
+
+    /**
+     * Drops the account's template, so the next supervised run reads the account again. The
+     * template goes first, since it is what marks the account read.
+     */
+    fun forget(filesDir: File, id: String) {
+        templateFile(filesDir, id).delete()
+        templateFrameFile(filesDir, id).delete()
+    }
+
+    /**
+     * Undoes a read the account check did not confirm: drops the template and puts [before], the
+     * record as it was before the read, back. Says whether there was anything to undo.
+     */
+    fun undoRead(filesDir: File, before: AccountRecord): Boolean {
+        val store = AccountStore(filesDir)
+        val now = runCatching { store.load().firstOrNull { it.id == before.id } }.getOrNull()
+        if (!templateFile(filesDir, before.id).exists() && now == before) return false
+        forget(filesDir, before.id)
+        runCatching { store.update(before) }
+        return true
+    }
 
     /** A template and the size of the frame it was cut from. */
     class Template(val bitmap: Bitmap, val frame: Viewport)
 
     /**
-     * The account's template, or null before its first read. A missing or unreadable
-     * identity.json means [DEFAULT_TEMPLATE_FRAME]: only the owner's copied template lacks one.
+     * The account's template, or null before its first read or when the file does not decode.
+     * A missing or unreadable identity.json means [DEFAULT_TEMPLATE_FRAME]: only the owner's
+     * copied template lacks one.
      */
     fun loadTemplate(filesDir: File, id: String): Template? {
         val file = templateFile(filesDir, id)
         if (!file.isFile) return null
-        val bitmap = BitmapFactory.decodeFile(file.path)
-            ?: throw StopException("The saved copy of your village's Settings could not be read: ${file.path}")
+        val bitmap = BitmapFactory.decodeFile(file.path) ?: return null
         val frame = runCatching {
             val json = JSONObject(templateFrameFile(filesDir, id).readText(Charsets.UTF_8))
             Viewport(0, 0, json.getInt("frameWidth"), json.getInt("frameHeight"))

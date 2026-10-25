@@ -476,7 +476,8 @@ class FarmerController(
             return
         }
         toast("Switching to ${account.displayName}...")
-        service.startSwitchOnly(account)
+        // Started at the PC, so it may read an account not read yet.
+        service.startSwitchOnly(account, readAccount = true)
         refreshStatus()
     }
 

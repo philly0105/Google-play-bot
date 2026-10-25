@@ -42,6 +42,7 @@ import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.Label
 import local.clashfarmer.insight.CalibrationHealth
 import local.clashfarmer.insight.Finding
+import local.clashfarmer.log.AppLog
 import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.remote.RemoteServer
 import local.clashfarmer.service.FarmerService
@@ -206,6 +207,12 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                     actionEnabled = !trayCheckRunning) { editAccount(id) }
                 Card {
                     lines.forEach { LineRow(it, busy) }
+                    // A read that went wrong, or another account in Clash, would stop every start.
+                    if (enrolled[id] == true) {
+                        SecondaryButton(PcAccount.READ_AGAIN, Modifier.fillMaxWidth().padding(top = 8.dp), enabled = !busy) {
+                            readAgain(id)
+                        }
+                    }
                     // A green row offers no fix, yet trays and wall points may still need redoing.
                     // Hidden while a row of the card offers "Open calibration" itself, so the card shows it once.
                     if (!SetupChecklist.rowOffersCalibration(lines)) {
@@ -381,6 +388,31 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             // The host also refuses it while an inspection runs.
             CheckLine.FixKind.CALIBRATION -> host.openCalibration(fix.accountId)
             CheckLine.FixKind.EDIT_SETTINGS -> Unit
+        }
+    }
+
+    /**
+     * Drops the account's identity template ([PcAccount.forget]), so the next supervised attack
+     * reads the account again. Not during a run, whose account check reads the template.
+     */
+    private fun readAgain(id: String) {
+        if (trayCheckRunning) return
+        if (FarmerService.instance?.isBusy == true) {
+            host.toast("Wait for the current run to finish.")
+            return
+        }
+        val files = host.filesDir
+        host.scope.launch {
+            val done = runCatching {
+                withContext(Dispatchers.IO) {
+                    PcAccount.forget(files, id)
+                    AppLog.log("account_identity_forgotten", "where" to "setup")
+                }
+            }.isSuccess
+            if (!isActive) return@launch
+            host.toast(if (done) "The next supervised attack will read your account again." else "Could not reset the account. Try again.")
+            if (done) enrolled = enrolled + (id to false)
+            loadFiles(force = true)
         }
     }
 

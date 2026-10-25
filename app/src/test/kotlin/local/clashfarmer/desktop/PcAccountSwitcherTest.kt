@@ -22,8 +22,8 @@ import java.nio.file.Files
  * The account check on the PC's frames. The profile menu and its Settings tab were read on Blood
  * at 1740x978 (audit-evidence/live/20261024-134805-profile2); `pc-frames/profile` holds their OCR
  * and the identity strip's crops from the village and the profile tab, and `identity/pc/blood.png`
- * the Settings strip. No Settings tab has been captured at 16:10, so the strip is scaled into a
- * frame of that size here.
+ * the Settings strip. The Settings tab and village at 1860x1162 (20261025-034323-profile3) give
+ * `identity/pc/blood-1860x1162.png` and `pc-frames/profile/strip-village-1860x1162.png`.
  */
 class PcAccountSwitcherTest {
     private val phone = Viewport(0, 0, 1600, 720)
@@ -111,6 +111,47 @@ class PcAccountSwitcherTest {
     }
 
     @Test
+    fun `the real Settings strips at 1740x978 and 1860x1162 match each other, both ways`() {
+        // Cut from real captures: audit-evidence/live/20261024-134805-profile2/02-settings.png and
+        // 20261025-034323-profile3/01-menu.png. Scaling blurs letters, so these differ by about 11.
+        val small = png("/identity/pc/blood.png")
+        val large = png("/identity/pc/blood-1860x1162.png")
+        val smallStrip = AccountSwitcher.identityRegion(pc)
+        val largeStrip = AccountSwitcher.identityRegion(tall)
+        assertEquals(largeStrip.width, large.width)
+        assertEquals(largeStrip.height, large.height)
+        val onLarge = frame(tall, large, largeStrip)
+        val onSmall = frame(pc, small, smallStrip)
+        // The template cut at 16:9 on Clash at 16:10, and the other way round.
+        val down = AccountSwitcher.identityDifference(onLarge, largeStrip, small)!!
+        val up = AccountSwitcher.identityDifference(onSmall, smallStrip, large)!!
+        assertTrue("$down", down > AccountSwitcher.MAX_IDENTITY_DIFFERENCE)
+        assertTrue("$up", up > AccountSwitcher.MAX_IDENTITY_DIFFERENCE)
+        assertTrue("$down", AccountSwitcher.identityMatches(onLarge, largeStrip, small))
+        assertTrue("$up", AccountSwitcher.identityMatches(onSmall, smallStrip, large))
+        assertEquals(AccountSwitcher.MAX_CROSS_SCALE_IDENTITY_DIFFERENCE, AccountSwitcher.identityLimit(largeStrip, small), 0.0)
+        // At its own size each keeps the old limit.
+        assertEquals(AccountSwitcher.MAX_IDENTITY_DIFFERENCE, AccountSwitcher.identityLimit(largeStrip, large), 0.0)
+        assertTrue(AccountSwitcher.identityMatches(onLarge, largeStrip, large))
+    }
+
+    @Test
+    fun `across sizes the village behind the strip still does not match`() {
+        val small = png("/identity/pc/blood.png")
+        val large = png("/identity/pc/blood-1860x1162.png")
+        val largeStrip = AccountSwitcher.identityRegion(tall)
+        val smallStrip = AccountSwitcher.identityRegion(pc)
+        // The real 16:10 village under the strip (20261025-034323-profile3/00-home.png).
+        val village = frame(tall, png("/pc-frames/profile/strip-village-1860x1162.png"), largeStrip)
+        assertFalse(AccountSwitcher.identityMatches(village, largeStrip, small))
+        assertFalse(AccountSwitcher.identityMatches(village, largeStrip, large))
+        for (name in listOf("strip-village", "strip-profile-tab")) {
+            val other = frame(pc, png("/pc-frames/profile/$name.png"), smallStrip)
+            assertFalse(name, AccountSwitcher.identityMatches(other, smallStrip, large))
+        }
+    }
+
+    @Test
     fun `at another height the strip is scaled to the template before it is compared`() {
         val template = png("/identity/pc/blood.png")
         val strip = AccountSwitcher.identityRegion(tall)
@@ -152,11 +193,10 @@ class PcAccountSwitcherTest {
     /** [template] matches Blood's strip on a frame of [display]'s size, and the village and profile tab there do not. */
     private fun assertMatches(template: Bitmap, display: Viewport) {
         val strip = AccountSwitcher.identityRegion(display)
-        val blood = AccountSwitcher.identityDifference(frame(display, png("/identity/pc/blood.png"), strip), strip, template)
-        assertTrue("$display: $blood", AccountSwitcher.settingsPanelShowing(listOf(blood)))
+        assertTrue("$display", AccountSwitcher.identityMatches(frame(display, png("/identity/pc/blood.png"), strip), strip, template))
         for (name in listOf("strip-village", "strip-profile-tab")) {
-            val other = AccountSwitcher.identityDifference(frame(display, png("/pc-frames/profile/$name.png"), strip), strip, template)
-            assertFalse("$display $name: $other", AccountSwitcher.settingsPanelShowing(listOf(other)))
+            val other = frame(display, png("/pc-frames/profile/$name.png"), strip)
+            assertFalse("$display $name", AccountSwitcher.identityMatches(other, strip, template))
         }
     }
 

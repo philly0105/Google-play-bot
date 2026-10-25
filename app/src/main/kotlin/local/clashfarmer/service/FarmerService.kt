@@ -882,11 +882,16 @@ class FarmerService(
         keepAwakeWhile(job)
     }
 
-    fun startSwitchOnly(target: local.clashfarmer.accounts.AccountRecord) {
+    /**
+     * Desktop: [readAccount] is true only for a check started at the PC, which may read an account
+     * not read yet. The remote page's, with nobody watching Settings open, waits for that.
+     */
+    fun startSwitchOnly(target: local.clashfarmer.accounts.AccountRecord, readAccount: Boolean = false) {
         if (isBusy) {
             throw IllegalStateException("A farming session is already active")
         }
         refuseOtherAccounts(target)
+        if (!readAccount) refuseUnreadAccounts(target)
 
         val store = local.clashfarmer.accounts.AccountStore(filesDir)
         val saved = store.readProfile(target.id)
@@ -916,11 +921,11 @@ class FarmerService(
                     try {
                         ScreenReader().use { reader ->
                             val switcher = local.clashfarmer.accounts.AccountSwitcher(this@FarmerService, reader)
-                            // Desktop: a check started by hand reads an account not read yet, as a
-                            // watched run does.
-                            val checked = if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, target.id)) target
-                                else switcher.enrol(target, switchToken)
-                            switcher.ensureAccount(checked, switchToken)
+                            // Desktop: a check started at the PC reads an account not read yet, as
+                            // a watched run does; the remote page's was refused above.
+                            if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, target.id)) {
+                                switcher.ensureAccount(target, switchToken)
+                            } else switcher.enrolAndCheck(target, switchToken)
                         }
                     } finally {
                         // The job's end, so no pause is carried: kept, an idle Pause pressed after
@@ -1247,11 +1252,13 @@ class FarmerService(
                 ScreenReader().use { reader ->
                     val switcher = local.clashfarmer.accounts.AccountSwitcher(this, reader)
                     // Desktop: an account not read yet is read first, by a watched run only.
-                    val checked = if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, account.id)) account else {
+                    if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, account.id)) {
+                        switcher.ensureAccount(account, switchToken, reclaimTakeover = !resuming)
+                    } else {
                         if (!supervised) throw StopException(local.clashfarmer.accounts.PcAccount.ENROL_FIRST)
-                        switcher.enrol(account, switchToken).also { AppLog.setAccountContext(it.id, it.villageName) }
+                        switcher.enrolAndCheck(account, switchToken, reclaimTakeover = !resuming)
+                            .also { AppLog.setAccountContext(it.id, it.villageName) }
                     }
-                    switcher.ensureAccount(checked, switchToken, reclaimTakeover = !resuming)
                 }
             } finally {
                 stopBetweenRuns("Account identity verified")

@@ -145,6 +145,9 @@ class PcChecklistTest {
         assertEquals("Read", line.chip)
         assertTrue(line.detail.contains("Farmland"))
         assertFalse(line.detail.contains("#TEST2468"))
+        // Setup's button under the account's lines undoes a wrong read.
+        assertTrue(line.detail.contains(PcAccount.READ_AGAIN))
+        assertNull(line.fix)
         assertEquals(1 to 1, SetupChecklist.ready(listOf(line)))
     }
 

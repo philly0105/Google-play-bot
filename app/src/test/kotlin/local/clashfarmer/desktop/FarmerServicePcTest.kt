@@ -256,7 +256,31 @@ class FarmerServicePcTest {
         assertEquals(PcAccount.otherAccountRefused("Sweat"), refused.message)
         assertThrows(IllegalStateException::class.java) { service.startCombinedRun(blood, sweat, 1, 1) }
         assertFalse(service.isBusy)
-        service.startSwitchOnly(blood)
+        service.startSwitchOnly(blood, readAccount = true)
+        assertTrue(service.isBusy)
+    }
+
+    @Test
+    fun `a check from the remote page waits for the account to be read, and one started at the PC reads it`() {
+        service.connectTransport()
+        PcAccount.seedIfFresh(filesDir)
+        val account = AccountStore(filesDir).ensureMigrated().single()
+        // RemoteServer's switch mode calls startSwitchOnly(account), with nobody to watch Settings open.
+        val refused = assertThrows(IllegalStateException::class.java) { service.startSwitchOnly(account) }
+        assertEquals(PcAccount.ENROL_FIRST, refused.message)
+        assertFalse(service.isBusy)
+        service.startSwitchOnly(account, readAccount = true)
+        assertTrue(service.isBusy)
+    }
+
+    @Test
+    fun `once the account is read the remote page's check goes ahead`() {
+        service.connectTransport()
+        PcAccount.seedIfFresh(filesDir)
+        val account = AccountStore(filesDir).ensureMigrated().single()
+        PcAccount.saveTemplate(filesDir, account.id, Bitmap.createBitmap(1740, 978, Bitmap.Config.ARGB_8888),
+            local.clashfarmer.core.Region(745, 171, 1020, 264))
+        service.startSwitchOnly(account)
         assertTrue(service.isBusy)
     }
 

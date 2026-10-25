@@ -2,7 +2,6 @@ package local.clashfarmer.accounts
 
 import android.graphics.Bitmap
 import local.clashfarmer.core.Region
-import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONObject
@@ -11,7 +10,6 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -100,9 +98,52 @@ class PcAccountTest {
     }
 
     @Test
-    fun `a template that is not an image stops the check`() {
+    fun `a template that is not an image counts as not read, and the next read writes over it`() {
         PcAccount.templateFile(dir, PcAccount.ID).apply { parentFile.mkdirs() }.writeText("not a png")
-        assertThrows(StopException::class.java) { PcAccount.loadTemplate(dir, PcAccount.ID) }
+        assertNull(PcAccount.loadTemplate(dir, PcAccount.ID))
+        assertFalse(PcAccount.enrolled(dir, PcAccount.ID))
+        PcAccount.saveTemplate(dir, PcAccount.ID, Bitmap.createBitmap(1740, 978, Bitmap.Config.ARGB_8888), Region(745, 171, 1020, 264))
+        assertTrue(PcAccount.enrolled(dir, PcAccount.ID))
+    }
+
+    @Test
+    fun `a read the check did not confirm is undone, record and template`() {
+        PcAccount.seedIfFresh(dir)
+        val store = AccountStore(dir)
+        val before = store.load().single()
+        // What enrolment writes: the record with the name and tag read, then the template.
+        store.update(before.copy(villageName = "Farmlnad", playerTag = "#TEST2468"))
+        PcAccount.saveTemplate(dir, PcAccount.ID, Bitmap.createBitmap(1740, 978, Bitmap.Config.ARGB_8888), Region(745, 171, 1020, 264))
+        assertTrue(PcAccount.undoRead(dir, before))
+        assertFalse(PcAccount.enrolled(dir, PcAccount.ID))
+        assertEquals(before, AccountStore(dir).load().single())
+        // Nothing left to undo, as when the read failed before writing anything.
+        assertFalse(PcAccount.undoRead(dir, before))
+    }
+
+    @Test
+    fun `a read that stopped after the record and before the template is undone too`() {
+        PcAccount.seedIfFresh(dir)
+        val store = AccountStore(dir)
+        val before = store.load().single()
+        store.update(before.copy(villageName = "Farmland", playerTag = "#TEST2468"))
+        assertTrue(PcAccount.undoRead(dir, before))
+        assertEquals(PcAccount.FRESH_VILLAGE_NAME, AccountStore(dir).load().single().villageName)
+    }
+
+    @Test
+    fun `forgetting the template marks the account not read and leaves its other files`() {
+        PcAccount.seedIfFresh(dir)
+        PcAccount.saveTemplate(dir, PcAccount.ID, Bitmap.createBitmap(1740, 978, Bitmap.Config.ARGB_8888), Region(745, 171, 1020, 264))
+        val profile = File(PcAccount.templateFile(dir, PcAccount.ID).parentFile, "profile.json").apply { writeText("{}") }
+        PcAccount.forget(dir, PcAccount.ID)
+        assertFalse(PcAccount.enrolled(dir, PcAccount.ID))
+        assertFalse(PcAccount.templateFile(dir, PcAccount.ID).exists())
+        assertFalse(PcAccount.templateFrameFile(dir, PcAccount.ID).exists())
+        assertTrue(profile.exists())
+        assertEquals(1, AccountStore(dir).load().size)
+        // Forgetting an account never read does nothing.
+        PcAccount.forget(dir, PcAccount.ID)
     }
 
     @Test

@@ -68,6 +68,7 @@ object PcChecklist {
             "Not read yet. The first supervised attack opens Clash's Settings to read your village name and tag. " +
                 "Other runs wait until then.", "Not read", Tone.WARN)
         true -> CheckLine(ACCOUNT, "Account",
-            "Each run checks that Clash's Settings shows ${account.villageName} before it starts.", "Read", Tone.OK)
+            "Each run checks that Clash's Settings shows ${account.villageName} before it starts. " +
+                "If that is the wrong account, press ${PcAccount.READ_AGAIN}.", "Read", Tone.OK)
     }
 }
