@@ -30,8 +30,10 @@ uses the main checkout's `tools/`.
   file it came from and the matching section of `clash-farmer/android/STATUS.md`.
 - Don't edit verbatim files casually. If a PC-only reason forces an edit, make it surgical and add
   it to `docs/DIVERGENCES.md`.
-- Evidence (captures, logs) goes in `audit-evidence/`, which is gitignored.
-- Commit locally as you go. Never push.
+- Evidence (captures, logs) goes in `audit-evidence/`, which is gitignored. What a live check
+  proved goes in `docs/STATUS.md`.
+- Commit locally as you go. The remote is the private repo `philly0105/Google-play-bot`: push
+  `main` there when the user asks, and keep other branches local.
 
 ## Driving the game
 
