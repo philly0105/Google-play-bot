@@ -22,9 +22,9 @@ import local.clashfarmer.ui.components.ResourceBar as SharedResourceBar
 @Composable
 fun ResourceBar(resource: Resource, value: Long?, capacity: Long?, modifier: Modifier = Modifier) {
     val fraction = ResourceFormat.fraction(value, capacity)
-    // A null value reads "- not read"; never shown as 0.
+    // A null value reads "Not read", in faint; never shown as 0.
     val amount = when {
-        value == null -> "-  not read"
+        value == null -> "Not read"
         capacity == null -> ResourceFormat.short(value)
         else -> "${ResourceFormat.short(value)} / ${ResourceFormat.short(capacity)}"
     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,10 +70,20 @@ fun ScreenPage(
     }
 }
 
-/** "Setup" in 28 sp with an optional muted subtitle under it, then 16 dp of space. */
+/**
+ * "Setup" in 28 sp with an optional muted subtitle under it, then 16 dp of space. [action], such
+ * as Stats' Export CSV, sits at the title's right.
+ */
 @Composable
-fun ScreenTitle(title: String, subtitle: String? = null) {
-    Label(title, size = FarmerTheme.HEADLINE, bold = true)
+fun ScreenTitle(title: String, subtitle: String? = null, action: (@Composable () -> Unit)? = null) {
+    if (action == null) {
+        Label(title, size = FarmerTheme.HEADLINE, bold = true)
+    } else {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Label(title, Modifier.weight(1f), size = FarmerTheme.HEADLINE, bold = true)
+            action()
+        }
+    }
     if (subtitle != null) {
         Label(subtitle, Modifier.padding(top = 6.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.muted)
     }
@@ -120,6 +131,53 @@ fun ToneCard(tone: Tone, modifier: Modifier = Modifier, content: @Composable Col
 @Composable
 fun Divider(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.dp).background(FarmerColors.line))
+}
+
+/**
+ * A footer that stays under a scrolling page, such as Run's Start: a hairline on top and the
+ * window's fill, so the page scrolls under a clear edge, then a centred column [maxWidth] wide.
+ */
+@Composable
+fun StickyFooter(maxWidth: Dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().background(FarmerColors.background)) {
+        Divider()
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = maxWidth)
+                    .fillMaxWidth()
+                    .padding(start = FarmerSize.GUTTER, top = 12.dp, end = FarmerSize.GUTTER, bottom = 12.dp),
+                content = content
+            )
+        }
+    }
+}
+
+/**
+ * Why Start is off, in amber, with [fix], a link to where it is put right, at its right when
+ * there is one.
+ */
+@Composable
+fun StartReason(reason: String, fix: String?, modifier: Modifier = Modifier, onFix: () -> Unit = {}) {
+    Row(modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Label(reason, Modifier.weight(1f), size = FarmerTheme.SMALL, color = FarmerColors.warn, maxLines = 2)
+        if (fix != null) TextLink(fix, Modifier.padding(start = 8.dp), onClick = onFix)
+    }
+}
+
+/** A hover tooltip's box, for a TooltipArea: the rail's fill, a hairline and small text. */
+@Composable
+fun Tooltip(text: String) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        Modifier
+            .clip(shape)
+            .background(FarmerColors.navBar)
+            .border(1.dp, FarmerColors.line, shape)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Label(text, size = FarmerTheme.SMALL, maxLines = 1)
+    }
 }
 
 /** Vertical space, FarmerTheme.space. */
