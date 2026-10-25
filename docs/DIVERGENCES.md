@@ -48,6 +48,7 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `ui/screens/HomeCards.kt` | The battery guard's card reads "The battery guard ended the last run at home. Plug the laptop in before the next one." | As for `Problems.kt`. |
 | `service/RunNotice.kt` | `deviceGuard`'s text without a reason reads "The run ended at home to save the battery". | As above. |
 | Tests: `insight/EventTextTest.kt`, `TimelineTest.kt`, `ProblemsTest.kt`, `CalibrationHealthTest.kt`, `ui/SetupChecklistTest.kt` | The assertions on the lines above take their PC wording; `EventTextTest` adds cases for each new `stopLine` branch. | They assert the phone's text the rows above change. |
+| `resources/remote.html` | The supervised button reads "Supervised attack" (its `data-label` too), an HTTP error reads "The PC answered", the screen-off and locked lines say "The PC", and the earlier-lines note points to "the Activity tab in Clash Farmer on the PC". | The page opens on the user's phone but talks about the farming machine, which is the PC; the app calls the one-attack run "supervised attack" everywhere else. The screen-off and locked lines cannot show on the PC today, but now read right if they do. The battery line already hides when the PC sends no level. |
 
 ## Shims and platform differences
 
