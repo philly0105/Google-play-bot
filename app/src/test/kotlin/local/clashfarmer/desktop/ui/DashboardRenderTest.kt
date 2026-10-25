@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +19,7 @@ import local.clashfarmer.core.PresetStore
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.ui.calibration.CalibrationModel
 import local.clashfarmer.desktop.ui.calibration.CalibrationScreen
+import local.clashfarmer.desktop.ui.screens.shownPresets
 import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.FarmerDesktopTheme
 import local.clashfarmer.ui.DashboardLoader
@@ -67,33 +69,20 @@ class DashboardRenderTest {
         assertEquals(listOf(AccountStore.BLOOD_ID), loaded.accounts.map { it.id })
         assertEquals(setOf(AccountStore.BLOOD_ID), loaded.profiles.keys)
         assertEquals(2, store.load().size)
-        // The built-in "Both accounts" preset finds no second account and is refused, not run.
-        val both = PresetStore(filesDir).presets().first { it.isBoth }
+        // The built-in "Both accounts" preset finds no second account and is refused, not run, and
+        // Run does not offer it.
+        val presets = PresetStore(filesDir).presets()
+        val both = presets.first { it.isBoth }
         assertEquals(Launch.Refused("Both needs two accounts"),
             both.launch(loaded.accounts, System.currentTimeMillis(), loaded.selectedId))
+        assertEquals(presets.filterNot { it.isBoth }, shownPresets(presets, loaded.accounts.size))
     }
 
     @Test
     fun `every tab, the account editor and calibration draw at the window's size`() {
         val store = AccountStore(filesDir)
         val accounts = store.ensureMigrated()
-        store.select(AccountStore.BLOOD_ID)
-        val tick = DashboardLoader(filesDir, store).tick()
-        // As FarmerController binds it: the service is up from the app's start, and only Blood shows.
-        val shown = pcAccounts(tick.accounts)
-        val state = DashboardState(
-            snapshot = tick.snapshot,
-            runContext = tick.runContext,
-            connected = true,
-            busy = false,
-            paused = false,
-            accounts = shown.accounts,
-            selectedId = shown.selectedId,
-            profiles = shown.profiles,
-            profileError = shown.profileError,
-            events = tick.events,
-            frame = null
-        )
+        val state = pcState(store)
         lateinit var dashboard: FarmerDashboard
         onUiThread {
             dashboard = FarmerDashboard(host)
@@ -112,13 +101,74 @@ class DashboardRenderTest {
     }
 
     /**
-     * Draws [content] in the window's theme at 1100 by 760, twice with a pause between, so loads a
-     * screen starts when shown have landed by the second frame, which is saved.
+     * The whole window body, rail and footers included: at 100%, at 150% in the 1280 by 650 dp a
+     * 1080p screen's work area leaves, and with a run going, where the run strip tops every tab
+     * but Home.
      */
-    private fun render(name: String, content: @Composable () -> Unit) {
+    @Test
+    fun `the window draws whole at 100 and 150 percent and with a run going`() {
+        val store = AccountStore(filesDir)
+        store.ensureMigrated()
+        val idle = pcState(store)
+        lateinit var dashboard: FarmerDashboard
+        onUiThread {
+            dashboard = FarmerDashboard(host)
+            dashboard.bind(idle)
+        }
+        render("shell-home") { Dashboard(dashboard, host) }
+        onUiThread { dashboard.selectTab(Tab.RUN.ordinal) }
+        render("shell-run-150", 1280, 650, 1.5f) { Dashboard(dashboard, host) }
+        onUiThread {
+            dashboard.bind(idle.copy(busy = true))
+            dashboard.selectTab(Tab.STATS.ordinal)
+        }
+        render("shell-stats-busy") { Dashboard(dashboard, host) }
+        onUiThread { dashboard.selectTab(Tab.HOME.ordinal) }
+        render("shell-home-busy-150", 1280, 650, 1.5f) { Dashboard(dashboard, host) }
+    }
+
+    @Test
+    fun `Ctrl with a digit or Tab picks a tab`() {
+        val count = Tab.entries.size
+        assertEquals(0, tabForKey(Key.One, ctrl = true, shift = false, selected = 3, count = count))
+        assertEquals(4, tabForKey(Key.Five, ctrl = true, shift = false, selected = 0, count = count))
+        assertEquals(null, tabForKey(Key.Six, ctrl = true, shift = false, selected = 0, count = count))
+        assertEquals(null, tabForKey(Key.One, ctrl = false, shift = false, selected = 0, count = count))
+        assertEquals(1, tabForKey(Key.Tab, ctrl = true, shift = false, selected = 0, count = count))
+        assertEquals(0, tabForKey(Key.Tab, ctrl = true, shift = false, selected = count - 1, count = count))
+        assertEquals(count - 1, tabForKey(Key.Tab, ctrl = true, shift = true, selected = 0, count = count))
+        assertEquals(null, tabForKey(Key.Tab, ctrl = false, shift = false, selected = 0, count = count))
+    }
+
+    /** The state as FarmerController binds it: the service is up from the app's start, and only Blood shows. */
+    private fun pcState(store: AccountStore): DashboardState {
+        store.select(AccountStore.BLOOD_ID)
+        val tick = DashboardLoader(filesDir, store).tick()
+        val shown = pcAccounts(tick.accounts)
+        return DashboardState(
+            snapshot = tick.snapshot,
+            runContext = tick.runContext,
+            connected = true,
+            busy = false,
+            paused = false,
+            accounts = shown.accounts,
+            selectedId = shown.selectedId,
+            profiles = shown.profiles,
+            profileError = shown.profileError,
+            events = tick.events,
+            frame = null
+        )
+    }
+
+    /**
+     * Draws [content] in the window's theme at [width] by [height] dp and [scale], twice with a
+     * pause between, so loads a screen starts when shown have landed by the second frame, which
+     * is saved.
+     */
+    private fun render(name: String, width: Int = 1100, height: Int = 760, scale: Float = 1f, content: @Composable () -> Unit) {
         lateinit var scene: ImageComposeScene
         onUiThread {
-            scene = ImageComposeScene(1100, 760, Density(1f)) {
+            scene = ImageComposeScene((width * scale).toInt(), (height * scale).toInt(), Density(scale)) {
                 FarmerDesktopTheme {
                     Box(Modifier.fillMaxSize().background(FarmerColors.background)) { content() }
                 }

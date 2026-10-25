@@ -3,6 +3,7 @@ package local.clashfarmer.desktop.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,10 +23,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -95,9 +106,27 @@ fun FarmerWindowContent(controller: FarmerController) {
     }
 }
 
+/**
+ * The rail, the run strip and the selected tab. Ctrl+1 to Ctrl+5 pick a tab and Ctrl+Tab and
+ * Ctrl+Shift+Tab step through them, wherever the keyboard is. The row takes focus when shown, so
+ * the shortcuts work before anything is clicked; Tab moves on from it into the page.
+ */
 @Composable
-private fun Dashboard(dashboard: FarmerDashboard, host: DashboardHost) {
-    Row(Modifier.fillMaxSize()) {
+internal fun Dashboard(dashboard: FarmerDashboard, host: DashboardHost) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Row(
+        Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { e ->
+                val tab = tabForKey(e.key, e.isCtrlPressed, e.isShiftPressed, dashboard.selectedTab, dashboard.screens.size)
+                    ?: return@onPreviewKeyEvent false
+                if (e.type == KeyEventType.KeyDown) dashboard.selectTab(tab)
+                true
+            }
+            .focusRequester(focus)
+            .focusable()
+    ) {
         TabRail(dashboard)
         Box(Modifier.width(1.dp).fillMaxHeight().background(FarmerColors.line))
         Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -114,6 +143,19 @@ private fun Dashboard(dashboard: FarmerDashboard, host: DashboardHost) {
             }
         }
     }
+}
+
+/** The digit keys Ctrl picks a tab with, Ctrl+1 for the first. */
+private val TAB_DIGITS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine)
+
+/**
+ * The tab a shortcut picks, or null when [key] is not one: Ctrl+1 to Ctrl+[count], and Ctrl+Tab
+ * or Ctrl+Shift+Tab for the next or previous tab after [selected], wrapping at the ends.
+ */
+internal fun tabForKey(key: Key, ctrl: Boolean, shift: Boolean, selected: Int, count: Int): Int? {
+    if (!ctrl || count <= 0) return null
+    if (key == Key.Tab) return (selected + if (shift) count - 1 else 1) % count
+    return TAB_DIGITS.indexOf(key).takeIf { it in 0 until count }
 }
 
 /** The five tabs, top to bottom, under the app icon. */
