@@ -527,6 +527,7 @@ Phone wording remains in shared files (line numbers as of 3c438fb):
 | `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |
 | `desktop/ui/TrayCheckSheetTest.kt` | `profileAt`: the calibration itself, moved to 16:10, and a game area too small | 3 |
+| `desktop/ui/InspectFrameTest.kt` | `inspectFrame`: a 16:10 village read with the 16:9 calibration moved onto its size, the balances read where Clash draws them | 1 |
 | `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, with a shrunk game area, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved`; Apply refusing a point on a screenshot or camera reference of another size (`frameMismatch`), the note for a collector on each, and Enter left to the buttons after a refusal | 14 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/AccountEditorCloseTest.kt` | Close on an untouched sheet, the question after a changed box or switch, Keep editing, and a change put back | 3 |
