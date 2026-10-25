@@ -128,7 +128,8 @@ powershell -ExecutionPolicy Bypass -File .\Package.ps1 -SkipTests    # build and
 It writes `dist\ClashFarmerPC-<version>-<date>.zip` (gitignored) and prints its SHA256. The zip
 holds the `ClashFarmerPC` folder and `packaging\READ-ME-FIRST.txt`: how to unzip and start it, the
 SmartScreen "More info > Run anyway" step (the exe isn't signed), the requirements (GPG, Clash in
-English), calibrate then one supervised attack, and the ban risk. Raise `appVersion` before
+English, a screen at least 900 pixels tall, an account linked to a Supercell ID), calibrate then
+one supervised attack, what to send back when something goes wrong, and the ban risk. Raise `appVersion` before
 sending a new build.
 
 ## Layout

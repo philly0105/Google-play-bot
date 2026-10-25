@@ -10,8 +10,12 @@ account for good. Only use it on an account you are ready to lose.
 
 What you need
 -------------
-- Windows 10 or 11, 64-bit.
+- Windows 10 or 11, 64-bit. It was tested on Windows 11.
+- A screen at least 900 pixels tall, such as 1920x1080. Clash's game area has to be at least
+  720 pixels tall, and a 1366x768 laptop screen can't fit that.
 - Google Play Games for PC, with Clash of Clans installed and signed in.
+- Your Clash account linked to a Supercell ID. The bot recognises your account by the village
+  name and tag in Clash's Settings, which show only for a linked account.
 - Clash of Clans set to English (Settings > Language). The bot reads the game's text.
 
 
@@ -24,22 +28,27 @@ Install
 4. Windows may say "Windows protected your PC". The app isn't signed, so this is expected:
    click More info, then Run anyway. You only do this once.
    If Smart App Control blocks it with no Run anyway button, this PC can't run unsigned apps.
+5. If you use Tailscale, Windows may ask whether to let the app through the firewall. Allowing it
+   turns on the remote control page on your tailnet. Cancel is fine: the bot runs either way.
 
 
 First run
 ---------
 1. Open Clash of Clans in Google Play Games.
-2. In Clash Farmer, open Setup and fix anything it marks in red or amber.
+2. In Clash Farmer, open Setup and fix what it marks in red, and the amber lines you can fix.
+   The Account line stays amber until the first supervised attack (step 4) reads your village,
+   and on Windows 10 the Windows line stays amber.
 3. Calibrate when Setup asks you to. Press "Start from the standard positions", then check
    each troop card against your own battle tray, press "Not in my army" on any hero or the jump
    spell if you don't have it, and press "Save calibration". The army needs one spell, such
-   as Rage, for the bot to cast inside the base: that card can't be left out. The card right
-   of the main troop should not be another troop with a count of x5 or more, because the bot
-   takes that for an event card in front of the tray.
+   as Rage, for the bot to cast five times inside the base, so bring five of it: that card
+   can't be left out. The card right of the main troop should not be another troop with a
+   count of x5 or more, because the bot takes that for an event card in front of the tray.
 4. Start one supervised attack and watch it all the way through before you leave it alone.
 
-Closing the window keeps Clash Farmer running in the notification area (next to the clock).
-To stop it, right-click its icon there and choose Quit.
+Closing the window keeps Clash Farmer running in the notification area (next to the clock; if
+its icon isn't there, click the ^ arrow beside the clock). To stop it, right-click its icon and
+choose Quit.
 
 
 While it plays
@@ -52,6 +61,10 @@ While it plays
   it, or move it to a larger screen. A maximized window is fine; only full screen is not.
 - Don't close Clash's window while Google Play Games is still open. If you do, restart the PC
   before the next run: until then the game ignores the bot's taps.
+- Don't open Clash on your phone or another device during a run. The run then waits 10 minutes
+  and takes the village back, and does that each time until you stop the run on this PC.
+- If a run stops because Clash needs an update, update it in Google Play Games. If that closes
+  Clash's window, restart the PC before the next run, as above.
 - It never spends gems and never signs you in or out.
 - To have runs stop once gold and elixir are full, enter your storage sizes: Setup, Edit
   settings, the capacity boxes. Without them a run keeps attacking until its limit.
@@ -59,8 +72,11 @@ While it plays
 
 Help
 ----
-Setup has an "Open logs folder" button. If something goes wrong, send the newest files from
-that folder (desktop.log is the main one) to whoever gave you Clash Farmer.
+Setup has an "Open logs folder" button. If something goes wrong, send whoever gave you Clash
+Farmer the newest clashfarmer-<date>.jsonl from that folder (what the run did) and desktop.log
+(errors). If a run stopped on a problem, add the newest failure-*.png pictures from
+%LOCALAPPDATA%\ClashFarmerPC\files\captures. These files show your village name, your player
+tag and bits of the game's text.
 
 To update, quit Clash Farmer, delete the old folder and extract the new zip. Your settings are
 kept in %LOCALAPPDATA%\ClashFarmerPC. To remove it completely, delete both.
