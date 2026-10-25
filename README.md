@@ -13,8 +13,10 @@ ban can be permanent.
 - Attacks with the army Clash has trained: Battle, Find a Match, the army check, then heroes,
   abilities, spells and the event card, with the phone's stall watcher and optional early end. It
   reads the result screen (loot, damage, stars) and records every battle.
-- Between attacks it reads the village's storage. It stops when storage is full and nothing is left
-  to spend it on, and it can buy walls when that is turned on for the account.
+- Between attacks it reads the village's storage. Once the account's storage sizes are entered in
+  its settings, it stops when gold and elixir are full and nothing is left to spend them on; without
+  them it attacks until the run's limit, full or not. It can buy walls when that is turned on for
+  the account.
 - It works in the background. Input is posted to the Clash window, so the cursor and the keyboard
   stay yours and Clash can sit behind other windows. Before each run, and before Calibrate,
   Inspect and the tray check, it sizes a 16:9 game back to 1740x978, the size it was calibrated
