@@ -166,7 +166,7 @@ object UpgradeListReader {
         }
         val rows = rowsOf(inside, popup, viewport, pixels, panel)
         val pricedFlush = inside.count { box ->
-            box.right >= popup.right - PRICE_EDGE && !isCountdown(box.text) && hasDigit(box.text)
+            box.right >= popup.right - PRICE_EDGE && !isTimer(box.text, viewport) && hasDigit(box.text)
         }
         val evidence = headers || panel || pricedFlush >= PRICED_ROWS
 
@@ -179,7 +179,7 @@ object UpgradeListReader {
             headerShowing = headers,
             atTop = atTop,
             laboratoryShowing = !evidence && labRows >= LAB_ROWS,
-            items = inside.filterNot { isCountdown(it.text) }
+            items = inside.filterNot { isTimer(it.text, viewport) }
                 .map { PageItem(pageText(it.text), it.center.y) }
                 .sortedBy { it.y },
             builderPanel = panel
@@ -360,7 +360,7 @@ object UpgradeListReader {
             val cards = mutableListOf<MutableList<RecognizedBox>>()
             for (line in clusters) {
                 val card = cards.lastOrNull()
-                val priced = card?.any { it.left >= split && !isCountdown(it.text) && hasDigit(it.text) } == true
+                val priced = card?.any { it.left >= split && !isTimer(it.text, viewport) && hasDigit(it.text) } == true
                 // A section header is its own line, never a card's.
                 val header = line.any { compact(it.text).contains("upgrade") }
                 if (card != null && !priced && !header &&
@@ -392,7 +392,7 @@ object UpgradeListReader {
 
         // On the PC a box that starts in the coin column is the coin, never digits of the price.
         val coin = PcGeometry.pick(viewport, Int.MAX_VALUE, PcGeometry.x(viewport, PC_COIN_COLUMN, Anchor.RIGHT))
-        val prices = cluster.filter { it.left >= split && it.left < coin && !isCountdown(it.text) && hasDigit(it.text) }.sortedBy { it.left }
+        val prices = cluster.filter { it.left >= split && it.left < coin && !isTimer(it.text, viewport) && hasDigit(it.text) }.sortedBy { it.left }
         if (prices.isNotEmpty()) {
             priceText = prices.joinToString(" ") { it.text.trim() }
             priceLeft = prices.first().left
@@ -512,6 +512,17 @@ object UpgradeListReader {
      */
     fun isCountdown(text: String): Boolean = COUNTDOWN.containsMatchIn(text)
 
+    /**
+     * [isCountdown], and on the PC also a timer the recogniser mangled. Its 1 comes back as "I",
+     * its 6 as "G" or "E", a space goes missing or a coin's scrap trails it: "Id B8H", "Gd 9H",
+     * "4d0", "10 9H", "40M 0s" (audit-evidence/spike/geo-list-*.json). Taken for a price, such a
+     * timer on a card's name line stood for the card's price, and the real price on the line below
+     * was dropped. A price always has a run of three digits and a timer never does.
+     */
+    fun isTimer(text: String, viewport: Viewport): Boolean = isCountdown(text) ||
+        (PcGeometry.isPc(viewport) && hasDigit(text) && !PRICE_RUN.containsMatchIn(text) &&
+            text.trim().split(WORD_GAP).any { PC_TIMER_WORD.matches(it) })
+
     private fun hasDigit(text: String): Boolean = text.any { it.isDigit() }
 
     private fun compact(text: String): String = text.lowercase(Locale.ROOT).filter { it in 'a'..'z' }
@@ -538,4 +549,7 @@ object UpgradeListReader {
     private val WORD_GAP = Regex("\\s+")
     private val ABBREVIATED = Regex("\\d\\s*[kKmM]\\b")
     private val COUNTDOWN = Regex("\\b\\d{1,2}\\s*[dhm]\\b|\\b\\d{1,2}\\s*[DHdh]\\s+\\d{1,2}\\s*[HMhm]\\b")
+    /** One word of a PC timer: up to two digits or their lookalikes, a unit, a digit run on. */
+    private val PC_TIMER_WORD = Regex("[0-9IlOoBSGE]{0,2}[0-9]{0,2}[dhHmMs][0-9]?")
+    private val PRICE_RUN = Regex("\\d{3}")
 }
