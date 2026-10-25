@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1991 tests, 1637 copied
-from the phone and the PC's 354 (335 under `desktop/` and `accounts/PcAccountTest.kt`'s 19), and
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1994 tests, 1637 copied
+from the phone and the PC's 357 (337 under `desktop/` and `accounts/PcAccountTest.kt`'s 20), and
 none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
@@ -52,7 +52,7 @@ since the app no longer ships the owner's (`docs/DIVERGENCES.md`).
 
 ## PC tests
 
-335 `@Test` methods in 38 files under `desktop/`, and 19 in `accounts/PcAccountTest.kt`. Their
+337 `@Test` methods in 38 files under `desktop/`, and 20 in `accounts/PcAccountTest.kt`. Their
 fixtures are in `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from
 Blood's game window at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter,
 and a few PNG crops. `identity/pc/blood.png` is
@@ -67,8 +67,8 @@ same strip on the Settings tab and the village at 1860x1162
 | `PcProfilesTest` | `PcProfiles.derive` against Blood's 1740x978 calibration: the same profile at its own size, 1860x1162 and 1565x978 values (Battle inside its button and the storage boxes over their balances on a 16:10 capture), 1920x1080, a round trip, the attack check at four sizes, verification per aspect, refusals, `fitInside`, `plainStopReason` and `SurfaceVerification`; `runSize`, and `startRefusal` sending a calibration not yet verified, moved onto another area, to Calibrate; the army tap on Attack! and clear of the gem and clan buttons, on the 1860x1162 capture and on geo-army's buttons fitted inside each size, and a 16:10 calibration's army tap moved back onto 16:9; on boxes from geo-scout moved by the height, the loot, fee, countdown and first card boxes holding their text as well as at 1740x978 | 22 |
 | `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, capping it to the monitor, moving the calibration onto the size reached (the same profile at 1740x978, unverified at 16:10 until a supervised attack writes surfaces.json and never profile.json), refusing every account but the PC's, refusing unattended starts and the remote page's account check before the account is read, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, `LatestFrame.heightFor`, the daily pruning, and a PC with no battery told apart without changing the guard's reading | 34 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
-| `PcAccountSwitcherTest` | The identity check on the profile menu's Settings strip: the Settings tab by its words, and a template cut at 1740x978 or 1860x1162 matching the strip at both sizes and not the village or the profile tab, and the real 1740x978 and 1860x1162 strips matching each other both ways within the cross-size limit while the real 16:10 village does not | 11 |
-| `accounts/PcAccountTest` (outside `desktop/`) | The fresh install's neutral account and its no-op on an existing index, the template and frame files, a damaged template counting as not read, `forget` and `undoRead`, the name and tag read off the strip, the Settings tab's language row (English as OCR reads it, other languages, not read yet), the refusal texts, and a fresh install's presets (no walls, no "Both accounts") against an existing presets.json left byte for byte | 19 |
+| `PcAccountSwitcherTest` | The identity check on the profile menu's Settings strip: the Settings tab by its words, the village and both menu tabs reading as Clash in English, and a template cut at 1740x978 or 1860x1162 matching the strip at both sizes and not the village or the profile tab, and the real 1740x978 and 1860x1162 strips matching each other both ways within the cross-size limit while the real 16:10 village does not | 12 |
+| `accounts/PcAccountTest` (outside `desktop/`) | The fresh install's neutral account and its no-op on an existing index, the template and frame files, a damaged template counting as not read, `forget` and `undoRead`, the name and tag read off the strip and which part failed when they don't read, Clash's English words told from German and French ones, the refusal texts and their hedged causes, and a fresh install's presets (no walls, no "Both accounts") against an existing presets.json left byte for byte | 20 |
 | `PcBuildersCornerTest` | The builders' counter read again from an upscaled crop of a village frame, through a fake OCR backend | 7 |
 | `PcUpgradeListTest` | The builder panel's mangled timers, the prices beside them, and a card's name read line by line | 5 |
 | `PcReplayTest` | Return Home on a replay's end screen | 5 |
@@ -79,7 +79,7 @@ same strip on the Settings tab and the village at 1860x1162
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
 | `DesktopLogTest` | The desktop log file, and one log per file for every writer | 2 |
 | `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 10 |
-| `PcStopLineTest` | The PC's own stop and refusal reasons in `EventText.stopLine` | 1 |
+| `PcStopLineTest` | The PC's own stop and refusal reasons in `EventText.stopLine`, and the first read's village-not-found advice kept whole | 2 |
 | `SingleInstanceTest` | One app per files directory: the lock in one JVM for the same and separate directories, its release, and a later start raising the first; the same against a second JVM holding the lock; a port file that can't be written; and the start messages | 10 |
 | `RemotePageTest` | Where the remote page listens, with a fake Tailscale address: off without it, on its IPv4, tailnet IPv6 and loopback addresses, following it as it comes, goes and changes, the 10-minute retry after a taken port against the next-check retry after any other failed bind, reopening a listener that stopped, and detection by adapter name; plus the real server on loopback, free and taken, and Java's own bind failures | 19 |
 | `RemoteLinkTest` | The remote link and a new key: 32 hex digits, written to `remote_key.txt`, and on a real server on loopback the old key refused (401) and the new one answered at once, also by a listener opened after the change | 4 |

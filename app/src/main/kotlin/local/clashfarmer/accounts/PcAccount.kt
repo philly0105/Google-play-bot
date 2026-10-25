@@ -44,15 +44,24 @@ object PcAccount {
 
     /**
      * The Settings tab opened, but no name and tag could be read off it. The strip shows them only
-     * for an account linked to a Supercell ID; the language is checked on its own ([NOT_ENGLISH]).
+     * for an account linked to a Supercell ID, but OCR can also miss a name in another alphabet or
+     * misread the tag, so the text names the link as one cause, not the cause. The log has which
+     * part failed (`account_identity_unread`, [identityMiss]).
      */
     const val IDENTITY_UNREADABLE =
         "Could not read your village name and tag in Clash's Settings. They show only when the account is " +
-            "linked to a Supercell ID: in Clash, open Settings and connect Supercell ID, then run one supervised " +
+            "linked to a Supercell ID; if yours isn't, connect it in Clash's Settings. Then run one supervised " +
             "attack again."
 
-    /** Settings shows a language other than English, and the bot reads Clash's English words. */
-    const val NOT_ENGLISH = "Set Clash's language to English (Settings > Language). The bot reads English text."
+    /**
+     * The walk to the village ran out on screens with none of Clash's English words on them
+     * ([readsEnglish]). Clash in another language looks like that, since every screen the bot knows
+     * is known by its English words; so does a window the bot can't read left open over the village.
+     */
+    const val VILLAGE_NOT_FOUND =
+        "Could not find the village in Clash. The bot reads Clash's English words, so if Clash is in another " +
+            "language, set it to English (Settings > Language). Otherwise close any open window in Clash. Then " +
+            "run one supervised attack again."
 
     /** Settings is open, but neither the strip nor the name is the village read on the first run. */
     const val NOT_THE_READ_VILLAGE =
@@ -183,47 +192,41 @@ object PcAccount {
      * line that starts with # is tried as the tag: a village name with digits in it passes the
      * parser's own tag rule. The tag keeps its #, loses OCR's spaces, and must look like a tag.
      */
-    fun readIdentity(boxes: List<RecognizedBox>): SettingsIdentity? {
+    fun readIdentity(boxes: List<RecognizedBox>): SettingsIdentity? = readStrip(boxes).first
+
+    /**
+     * Why [readIdentity] read nothing off [boxes], in a few words for the log, or null when it
+     * read them. It names the part, never the text, since the tag is the player's own.
+     */
+    fun identityMiss(boxes: List<RecognizedBox>): String? = readStrip(boxes).second
+
+    private fun readStrip(boxes: List<RecognizedBox>): Pair<SettingsIdentity?, String?> {
         val lines = boxes.filter { it.text.isNotBlank() }.sortedBy { it.top }
+        if (lines.isEmpty()) return null to "nothing read"
         val hash = lines.indexOfFirst { it.text.trim().startsWith("#") }
         val read = if (hash > 0) SettingsIdentity(lines[hash - 1].text.trim(), lines[hash].text)
-            else AccountIdentityParser.parseSettingsIdentity(lines) ?: return null
+            else AccountIdentityParser.parseSettingsIdentity(lines) ?: return null to "no tag line"
         val tag = AccountIdentityParser.normalizeTag(read.playerTag).replace(" ", "")
         val name = read.villageName.trim()
-        if (!TAG.matches(tag) || name.isBlank() || AccountIdentityParser.normalizeTag(name).replace(" ", "") == tag) return null
-        return SettingsIdentity(name, "#$tag")
+        return when {
+            !TAG.matches(tag) -> null to "tag unreadable"
+            name.isBlank() -> null to "no name"
+            AccountIdentityParser.normalizeTag(name).replace(" ", "") == tag -> null to "name read as the tag"
+            else -> SettingsIdentity(name, "#$tag") to null
+        }
     }
 
     /**
-     * Whether the Settings tab's language row reads English: false when it names another language,
-     * null when the row is not read (no Language label, or nothing under it yet, as while the tab
-     * slides in). The value is the box right under the label. OCR mixes case ("ENglisH") and can
-     * misread a letter, and a wrong stop would block the owner's read, so a value that shares four
-     * letters in order with ENGLISH counts as English. The other languages' own names (Deutsch,
-     * Español, Français, Nederlands and the rest) share at most three.
+     * Whether [rawText] has one of the English words Clash draws on the screens a start passes:
+     * the village's Battle, Build and Attack, the profile menu's Inbox and Settings, and the
+     * buttons of its dialogs. Each is a whole word, so French "Continuer" is not "Continue". The
+     * reader knows the rest of its screens by English words too, so [AccountSwitcher] also counts
+     * any screen it reads.
      */
-    fun englishLanguage(boxes: List<RecognizedBox>): Boolean? {
-        val label = boxes.firstOrNull { AccountIdentityParser.normalize(it.text) == "LANGUAGE" } ?: return null
-        val height = label.bottom - label.top
-        val value = boxes.filter {
-            it !== label && it.top >= label.bottom - height / 2 && it.top <= label.bottom + height * 2 &&
-                it.right > label.left && it.left < label.right
-        }.minByOrNull { it.top } ?: return null
-        val letters = value.text.filter { it.isLetter() }.uppercase()
-        if (letters.length < 2) return null
-        return inOrder(letters, "ENGLISH") >= 4
-    }
+    fun readsEnglish(rawText: String): Boolean = ENGLISH_WORDS.containsMatchIn(AccountIdentityParser.normalize(rawText))
 
-    /** How many letters [a] and [b] share in the same order (their longest common subsequence). */
-    private fun inOrder(a: String, b: String): Int {
-        var previous = IntArray(b.length + 1)
-        for (x in a) {
-            val row = IntArray(b.length + 1)
-            for (j in b.indices) row[j + 1] = if (x == b[j]) previous[j] + 1 else maxOf(previous[j + 1], row[j])
-            previous = row
-        }
-        return previous[b.length]
-    }
+    private val ENGLISH_WORDS =
+        Regex("(^|[^A-Z])(BATTLE|BUILD|ATTACK|INBOX|SETTINGS|OKAY|CANCEL|CONTINUE|RETURN HOME)([^A-Z]|$)")
 
     private val TAG = Regex("^[0-9A-Z]{4,14}$")
 

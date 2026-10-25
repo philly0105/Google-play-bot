@@ -89,6 +89,15 @@ class PcAccountSwitcherTest {
     }
 
     @Test
+    fun `the village and both menu tabs read as Clash in English`() {
+        for (name in listOf("home", "profile-tab", "settings-tab")) assertTrue(name, PcAccount.readsEnglish(text(name)))
+        // Without its English words, the village's numbers, names and Shop are not enough.
+        val words = Regex("(?i)^(battle|build|inbox|settings)$")
+        val stripped = lines("home").map { it.first }.filterNot { words.matches(it) }.joinToString("\n")
+        assertFalse(PcAccount.readsEnglish(stripped))
+    }
+
+    @Test
     fun `the village opens the menu, and the menu's Settings tab is pressed where it reads`() {
         val home = text("home")
         assertTrue(AccountIdentityParser.isVillageHome(home))

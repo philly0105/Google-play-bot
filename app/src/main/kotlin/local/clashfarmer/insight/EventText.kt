@@ -283,6 +283,10 @@ object EventText {
         "account_identity_enrolled" -> "Read your account: ${str(e, "village") ?: "your village"}" to Tone.OK
         // Desktop: a read the check did not confirm, or Setup's Read again (PcAccount.forget).
         "account_identity_forgotten" -> "The bot will read your account again on the next supervised attack" to Tone.WARN
+        // Desktop: which part of the Settings strip failed (PcAccount.identityMiss), never its text.
+        "account_identity_unread" ->
+            "Could not read the name and tag in Clash's Settings" + (str(e, "reason")?.let { " ($it)" } ?: "") to Tone.WARN
+        "start_no_english" -> "No English word showed on Clash's screen, so Clash may be in another language" to Tone.WARN
         "settings_close_failed" -> "The settings menu was still open after ${int(e, "presses") ?: 3} presses of its close button" to Tone.WARN
         "picker_row_selected" -> "Picked ${str(e, "village") ?: "the village"} in the account list" to Tone.NEUTRAL
         "switch_only_completed" -> "Switched to ${str(e, "village") ?: "the account"}; nothing else run" to Tone.OK

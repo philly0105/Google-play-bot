@@ -218,31 +218,37 @@ class PcAccountTest {
     }
 
     @Test
-    fun `the language row reads English as OCR gives it, and stops on another language`() {
-        // Where the Settings tab at 1740x978 has the row (pc-frames, 24 October).
-        fun row(value: String) = listOf(
-            RecognizedBox("Music", 597, 309, 685, 348),
-            RecognizedBox("LaNguage", 805, 472, 944, 510),
-            RecognizedBox(".", 65, 488, 113, 517),
-            RecognizedBox(value, 826, 522, 927, 559),
-            RecognizedBox("Consent Choices", 1184, 605, 1359, 638)
-        )
-        assertEquals(true, PcAccount.englishLanguage(row("ENglisH")))
-        assertEquals(true, PcAccount.englishLanguage(row("EN9lisH")))
-        for (other in listOf("Deutsch", "Français", "Español", "Nederlands", "Svenska", "Italiano", "Polski")) {
-            assertEquals(other, false, PcAccount.englishLanguage(row(other)))
-        }
-        // Not read yet: no label, or nothing under it.
-        assertNull(PcAccount.englishLanguage(row("ENglisH").filter { it.text != "LaNguage" }))
-        assertNull(PcAccount.englishLanguage(row("ENglisH").filter { it.text != "ENglisH" }))
-        assertNull(PcAccount.englishLanguage(emptyList()))
+    fun `a strip that reads as nothing says which part failed, without its text`() {
+        assertEquals("nothing read", PcAccount.identityMiss(emptyList()))
+        assertEquals("no tag line", PcAccount.identityMiss(listOf(box("Farmland", 2))))
+        assertEquals("tag unreadable", PcAccount.identityMiss(listOf(box("Farmland", 2), box("#TE?!", 37))))
+        assertEquals("name read as the tag", PcAccount.identityMiss(listOf(box("TEST2468", 2), box("#TEST2468", 37))))
+        assertNull(PcAccount.identityMiss(listOf(box("Farmland", 2), box("#TEST2468", 37))))
     }
 
     @Test
-    fun `the language and identity refusals say what to do in Clash`() {
-        assertEquals("Set Clash's language to English (Settings > Language). The bot reads English text.", PcAccount.NOT_ENGLISH)
-        assertTrue(PcAccount.IDENTITY_UNREADABLE.contains("Supercell ID"))
-        assertTrue(PcAccount.IDENTITY_UNREADABLE.endsWith("then run one supervised attack again."))
+    fun `Clash's English words are told from another language's`() {
+        // The village and the profile menu in English, as OCR gives them (pc-frames/profile).
+        assertTrue(PcAccount.readsEnglish("SHOP | 3h 31m | **** | Battle | Build"))
+        assertTrue(PcAccount.readsEnglish("ClaNs | Social | INbOX | Settings"))
+        assertTrue(PcAccount.readsEnglish("Return Home"))
+        // The same screens in German and French: the bot knows none of their words.
+        assertFalse(PcAccount.readsEnglish("SHOP | 3h 31m | **** | Kampf | Bauen"))
+        assertFalse(PcAccount.readsEnglish("Clans | Sozial | Posteingang | Einstellungen"))
+        assertFalse(PcAccount.readsEnglish("Combat | Construire | Continuer | Annuler | Parametres"))
+        assertFalse(PcAccount.readsEnglish(""))
+        // Whole words only: a name holding one is not English.
+        assertFalse(PcAccount.readsEnglish("Battlefield Builders"))
+    }
+
+    @Test
+    fun `the village and identity refusals say what to do in Clash, and hedge the cause`() {
+        assertTrue(PcAccount.VILLAGE_NOT_FOUND.contains("set it to English (Settings > Language)"))
+        assertTrue(PcAccount.VILLAGE_NOT_FOUND.contains("Otherwise close any open window in Clash."))
+        assertTrue(PcAccount.IDENTITY_UNREADABLE.contains("if yours isn't, connect it"))
+        for (text in listOf(PcAccount.VILLAGE_NOT_FOUND, PcAccount.IDENTITY_UNREADABLE)) {
+            assertTrue(text, text.endsWith("Then run one supervised attack again."))
+        }
     }
 
     private fun box(text: String, top: Int) = RecognizedBox(text, 50, top, 250, top + 30)

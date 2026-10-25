@@ -89,8 +89,9 @@ read that the check straight after it does not confirm is dropped, so a misread 
 account. Until the account is read, Setup's Account line is amber and unattended starts, and the
 remote page's account check, are refused with "Run one supervised attack first so the bot can read
 your account." Setup's Read account again drops the crop, so the next supervised attack reads the
-account afresh. The read stops with a plain message when Clash's language is not English, or when
-the name and tag don't show because the account is not linked to a Supercell ID.
+account afresh. When the read can't find the village and no English word shows on Clash's screen,
+it stops and says to set Clash to English or close an open window. When the name and tag can't be
+read, it says they show only for an account linked to a Supercell ID.
 
 A fresh install also starts with two presets, "Farm 40" and "2 h", neither building walls; an
 existing `presets.json` is kept as it is.
