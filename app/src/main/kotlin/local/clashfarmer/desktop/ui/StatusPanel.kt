@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import local.clashfarmer.desktop.ui.components.FillBar
 import local.clashfarmer.desktop.ui.components.hoverClick
+import local.clashfarmer.desktop.ui.components.trackKeyboardNav
 import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.FarmerDesktopTheme
 import local.clashfarmer.desktop.ui.theme.FarmerSize
@@ -86,7 +87,7 @@ private fun PanelContent(panel: FarmerOverlay.Panel, overlay: FarmerOverlay) {
     val s = panel.status
     val expanded = panel.expanded
     val shape = RoundedCornerShape(20.dp)
-    Column(Modifier.fillMaxSize().clip(shape).background(FarmerColors.background).border(1.dp, FarmerColors.line, shape)) {
+    Column(Modifier.fillMaxSize().trackKeyboardNav().clip(shape).background(FarmerColors.background).border(1.dp, FarmerColors.line, shape)) {
         Row(
             Modifier.fillMaxWidth().height(OverlayGeometry.HEADER_HEIGHT_DP.dp).padding(start = 6.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically

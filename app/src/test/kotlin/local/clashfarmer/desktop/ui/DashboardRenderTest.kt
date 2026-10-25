@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.CoroutineScope
@@ -138,6 +141,45 @@ class DashboardRenderTest {
         assertEquals(0, tabForKey(Key.Tab, ctrl = true, shift = false, selected = count - 1, count = count))
         assertEquals(count - 1, tabForKey(Key.Tab, ctrl = true, shift = true, selected = 0, count = count))
         assertEquals(null, tabForKey(Key.Tab, ctrl = false, shift = false, selected = 0, count = count))
+    }
+
+    /**
+     * A tab change drops the old page and the control in it that had focus. The tab keys must
+     * still work after that, as they do after a page link such as "Open Setup >" changes the tab.
+     */
+    // The key event factory is marked internal; Compose's version is pinned, so a test may use it.
+    @OptIn(InternalComposeUiApi::class)
+    @Test
+    fun `the tab keys still work after the page that had focus is dropped`() {
+        val store = AccountStore(filesDir)
+        store.ensureMigrated()
+        lateinit var dashboard: FarmerDashboard
+        lateinit var scene: ImageComposeScene
+        onUiThread {
+            dashboard = FarmerDashboard(host)
+            dashboard.bind(pcState(store))
+            scene = ImageComposeScene(1100, 760, Density(1f)) {
+                FarmerDesktopTheme { Dashboard(dashboard, host) }
+            }
+        }
+        var frame = 0L
+        fun frames() = repeat(3) { scene.render(++frame * 16_000_000L) }
+        fun press(key: Key, ctrl: Boolean = false) = onUiThread {
+            scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown, isCtrlPressed = ctrl))
+            scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp, isCtrlPressed = ctrl))
+            frames()
+        }
+        try {
+            onUiThread { frames() }
+            // Past the rail's five tabs into Home's page, so a control there holds focus.
+            repeat(7) { press(Key.Tab) }
+            press(Key.Two, ctrl = true)
+            assertEquals(Tab.RUN.ordinal, dashboard.selectedTab)
+            press(Key.One, ctrl = true)
+            assertEquals(Tab.HOME.ordinal, dashboard.selectedTab)
+        } finally {
+            onUiThread { scene.close() }
+        }
     }
 
     /** The state as FarmerController binds it: the service is up from the app's start, and only Blood shows. */

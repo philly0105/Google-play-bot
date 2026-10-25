@@ -35,7 +35,8 @@ import local.clashfarmer.ui.FarmerTheme
 /**
  * Click handling with the desktop's feedback: a hand cursor, a light wash on hover and a
  * stronger one while pressed. Disabled, it ignores clicks and shows neither. Tab reaches it,
- * Enter or Space clicks it, and a gold ring shows while the keyboard is on it.
+ * Enter or Space clicks it, and a gold ring shows while the keyboard is on it: not after a
+ * click, which focuses it too ([KeyboardNav]).
  */
 @Composable
 fun Modifier.hoverClick(enabled: Boolean = true, shape: Shape = RectangleShape, onClick: () -> Unit): Modifier =
@@ -58,7 +59,7 @@ fun Modifier.hoverClick(enabled: Boolean, shape: Shape, ring: Color, onClick: ()
         .clip(shape)
         .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
         .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
-        .then(if (focused && enabled) Modifier.border(FOCUS_RING, ring, shape) else Modifier)
+        .then(if (focused && enabled && KeyboardNav.active) Modifier.border(FOCUS_RING, ring, shape) else Modifier)
         .drawWithContent {
             drawContent()
             if (wash != Color.Transparent) drawRect(wash)

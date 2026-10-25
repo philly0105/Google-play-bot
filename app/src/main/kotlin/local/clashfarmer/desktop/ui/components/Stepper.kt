@@ -108,6 +108,7 @@ private fun StepButton(symbol: String, description: String, usable: Boolean, fad
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
+    val ring = focused && KeyboardNav.active
     var pressed by remember { mutableStateOf(false) }
     val canStep by rememberUpdatedState(usable)
     val step by rememberUpdatedState(nudge)
@@ -125,7 +126,7 @@ private fun StepButton(symbol: String, description: String, usable: Boolean, fad
             .clip(shape)
             .background(FarmerColors.surfaceStrong)
             .background(wash)
-            .border(if (focused) FOCUS_RING else 1.dp, if (focused) FarmerColors.gold else FarmerColors.line, shape)
+            .border(if (ring) FOCUS_RING else 1.dp, if (ring) FarmerColors.gold else FarmerColors.line, shape)
             .onKeyEvent { e ->
                 if (e.key != Key.Enter && e.key != Key.NumPadEnter && e.key != Key.Spacebar) return@onKeyEvent false
                 if (e.type == KeyEventType.KeyDown && canStep) step()
