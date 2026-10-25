@@ -3,22 +3,27 @@ package local.clashfarmer.desktop
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import local.clashfarmer.accounts.AccountIdentityParser
-import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.accounts.AccountSwitcher
+import local.clashfarmer.accounts.PcAccount
+import local.clashfarmer.accounts.SettingsIdentity
 import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
 import local.clashfarmer.core.Viewport
+import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 
 /**
  * The account check on the PC's frames. The profile menu and its Settings tab were read on Blood
  * at 1740x978 (audit-evidence/live/20261024-134805-profile2); `pc-frames/profile` holds their OCR
- * and the identity strip's crops from the village and the profile tab.
+ * and the identity strip's crops from the village and the profile tab, and `identity/pc/blood.png`
+ * the Settings strip. No Settings tab has been captured at 16:10, so the strip is scaled into a
+ * frame of that size here.
  */
 class PcAccountSwitcherTest {
     private val phone = Viewport(0, 0, 1600, 720)
@@ -60,17 +65,27 @@ class PcAccountSwitcherTest {
     }
 
     @Test
-    fun `the PC reads Blood's identity only, from the strip on its Settings tab`() {
+    fun `the PC reads the identity from the strip on its Settings tab`() {
         assertEquals(AccountSwitcher.SETTINGS_IDENTITY_REGION, AccountSwitcher.identityRegion(phone))
-        assertEquals(setOf(AccountStore.SWEAT_ID, AccountStore.BLOOD_ID), AccountSwitcher.identityTemplates(phone).keys)
         assertEquals(Region(745, 171, 1020, 264), AccountSwitcher.identityRegion(pc))
-        assertEquals(mapOf(AccountStore.BLOOD_ID to "identity/pc/blood.png"), AccountSwitcher.identityTemplates(pc))
         assertEquals(Region(781, 203, 1108, 314), AccountSwitcher.identityRegion(tall))
         // The strip holds the name and the tag, and not the Supercell ID button beside it.
         val settings = lines("settings-tab")
         val strip = AccountSwitcher.identityRegion(pc)
         val inside = settings.filter { (_, box) -> strip.contains((box.left + box.right) / 2, (box.top + box.bottom) / 2) }
-        assertEquals(listOf("Blood", AccountStore.BLOOD_PLAYER_TAG), inside.map { it.first })
+        assertEquals(2, inside.size)
+        assertEquals("Blood", inside[0].first)
+        assertTrue(inside[1].first.startsWith("#"))
+        // What enrolment reads off it: the name, and the tag as read.
+        val read = PcAccount.readIdentity(inside.map { (text, box) -> RecognizedBox(text, box.left, box.top, box.right, box.bottom) })
+        assertEquals(SettingsIdentity("Blood", inside[1].first), read)
+    }
+
+    @Test
+    fun `the Settings tab is known by its words, and the profile tab and village are not it`() {
+        assertTrue(AccountSwitcher.settingsTabShowing(text("settings-tab")))
+        assertFalse(AccountSwitcher.settingsTabShowing(text("profile-tab")))
+        assertFalse(AccountSwitcher.settingsTabShowing(text("home")))
     }
 
     @Test
@@ -103,6 +118,46 @@ class PcAccountSwitcherTest {
         assertTrue("$blood", AccountSwitcher.settingsPanelShowing(listOf(blood)))
         val village = AccountSwitcher.identityDifference(frame(tall, png("/pc-frames/profile/strip-village.png"), strip), strip, template)
         assertFalse("$village", AccountSwitcher.settingsPanelShowing(listOf(village)))
+    }
+
+    @Test
+    fun `a template read at 1740x978 matches its strip there and at 16 by 10`() {
+        val dir = Files.createTempDirectory("pc-identity").toFile()
+        try {
+            val native = AccountSwitcher.identityRegion(pc)
+            PcAccount.saveTemplate(dir, PcAccount.ID, frame(pc, png("/identity/pc/blood.png"), native), native)
+            val template = PcAccount.loadTemplate(dir, PcAccount.ID)!!
+            assertEquals(pc, template.frame)
+            assertMatches(template.bitmap, pc)
+            assertMatches(template.bitmap, tall)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
+    fun `a template read at 16 by 10 matches its strip there and at 1740x978`() {
+        val dir = Files.createTempDirectory("pc-identity").toFile()
+        try {
+            val strip = AccountSwitcher.identityRegion(tall)
+            PcAccount.saveTemplate(dir, PcAccount.ID, frame(tall, png("/identity/pc/blood.png"), strip), strip)
+            val template = PcAccount.loadTemplate(dir, PcAccount.ID)!!
+            assertEquals(tall, template.frame)
+            assertEquals(strip.width, template.bitmap.width)
+            assertEquals(strip.height, template.bitmap.height)
+            assertMatches(template.bitmap, tall)
+            // Larger than the 1740x978 strip, so the template is scaled down to it.
+            assertMatches(template.bitmap, pc)
+        } finally { dir.deleteRecursively() }
+    }
+
+    /** [template] matches Blood's strip on a frame of [display]'s size, and the village and profile tab there do not. */
+    private fun assertMatches(template: Bitmap, display: Viewport) {
+        val strip = AccountSwitcher.identityRegion(display)
+        val blood = AccountSwitcher.identityDifference(frame(display, png("/identity/pc/blood.png"), strip), strip, template)
+        assertTrue("$display: $blood", AccountSwitcher.settingsPanelShowing(listOf(blood)))
+        for (name in listOf("strip-village", "strip-profile-tab")) {
+            val other = AccountSwitcher.identityDifference(frame(display, png("/pc-frames/profile/$name.png"), strip), strip, template)
+            assertFalse("$display $name: $other", AccountSwitcher.settingsPanelShowing(listOf(other)))
+        }
     }
 
     private fun png(name: String): Bitmap = javaClass.getResourceAsStream(name)!!.use { BitmapFactory.decodeStream(it)!! }

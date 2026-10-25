@@ -599,12 +599,22 @@ class FarmerService(
     }
 
     /**
-     * Desktop: the PC runs only Blood, the user's call on 24 October. A run on another account
-     * would have the account check switch accounts in Clash.
+     * Desktop: the PC runs one account ([local.clashfarmer.accounts.PcAccount]), the user's call
+     * on 24 October. A run on another account would have the account check switch accounts in Clash.
      */
     private fun refuseOtherAccounts(vararg accounts: local.clashfarmer.accounts.AccountRecord) {
-        accounts.firstOrNull { it.id != local.clashfarmer.accounts.AccountStore.BLOOD_ID }?.let {
-            throw IllegalStateException("The PC runs only ${local.clashfarmer.accounts.AccountStore.BLOOD_VILLAGE_NAME}, not ${it.villageName}")
+        accounts.firstOrNull { it.id != local.clashfarmer.accounts.PcAccount.ID }?.let {
+            throw IllegalStateException(local.clashfarmer.accounts.PcAccount.otherAccountRefused(it.villageName))
+        }
+    }
+
+    /**
+     * Desktop: an account whose name and tag the bot has not read yet is read by a watched run,
+     * which opens Clash's Settings for it. An unattended start waits for that.
+     */
+    private fun refuseUnreadAccounts(vararg accounts: local.clashfarmer.accounts.AccountRecord) {
+        if (accounts.any { !local.clashfarmer.accounts.PcAccount.enrolled(filesDir, it.id) }) {
+            throw IllegalStateException(local.clashfarmer.accounts.PcAccount.ENROL_FIRST)
         }
     }
 
@@ -772,6 +782,7 @@ class FarmerService(
         }
         refuseWhilePending()
         refuseOtherAccounts(account1, account2)
+        refuseUnreadAccounts(account1, account2)
 
         val combinedRunId = java.util.UUID.randomUUID().toString()
         beginRunSnapshots()
@@ -904,8 +915,12 @@ class FarmerService(
                     )
                     try {
                         ScreenReader().use { reader ->
-                            local.clashfarmer.accounts.AccountSwitcher(this@FarmerService, reader)
-                                .ensureAccount(target, switchToken)
+                            val switcher = local.clashfarmer.accounts.AccountSwitcher(this@FarmerService, reader)
+                            // Desktop: a check started by hand reads an account not read yet, as a
+                            // watched run does.
+                            val checked = if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, target.id)) target
+                                else switcher.enrol(target, switchToken)
+                            switcher.ensureAccount(checked, switchToken)
                         }
                     } finally {
                         // The job's end, so no pause is carried: kept, an idle Pause pressed after
@@ -1102,6 +1117,7 @@ class FarmerService(
         }
         refuseWhilePending()
         refuseOtherAccounts(account)
+        if (!supervised) refuseUnreadAccounts(account)
 
         val maxMinutes = overrideMaxMinutes ?: (if (wallOnly) 30 else account.settings.maxMinutes)
         beginRunSnapshots()
@@ -1229,8 +1245,13 @@ class FarmerService(
             )
             try {
                 ScreenReader().use { reader ->
-                    local.clashfarmer.accounts.AccountSwitcher(this, reader)
-                        .ensureAccount(account, switchToken, reclaimTakeover = !resuming)
+                    val switcher = local.clashfarmer.accounts.AccountSwitcher(this, reader)
+                    // Desktop: an account not read yet is read first, by a watched run only.
+                    val checked = if (local.clashfarmer.accounts.PcAccount.enrolled(filesDir, account.id)) account else {
+                        if (!supervised) throw StopException(local.clashfarmer.accounts.PcAccount.ENROL_FIRST)
+                        switcher.enrol(account, switchToken).also { AppLog.setAccountContext(it.id, it.villageName) }
+                    }
+                    switcher.ensureAccount(checked, switchToken, reclaimTakeover = !resuming)
                 }
             } finally {
                 stopBetweenRuns("Account identity verified")

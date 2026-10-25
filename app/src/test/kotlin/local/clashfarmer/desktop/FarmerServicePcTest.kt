@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import local.clashfarmer.accounts.AccountStore
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.core.DeviceHealth
 import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
@@ -251,10 +252,35 @@ class FarmerServicePcTest {
         val sweat = accounts.first { it.id == AccountStore.SWEAT_ID }
         val blood = accounts.first { it.id == AccountStore.BLOOD_ID }
         assertThrows(IllegalStateException::class.java) { service.startSwitchOnly(sweat) }
-        assertThrows(IllegalStateException::class.java) { service.startSupervisedAccount(sweat) }
+        val refused = assertThrows(IllegalStateException::class.java) { service.startSupervisedAccount(sweat) }
+        assertEquals(PcAccount.otherAccountRefused("Sweat"), refused.message)
         assertThrows(IllegalStateException::class.java) { service.startCombinedRun(blood, sweat, 1, 1) }
         assertFalse(service.isBusy)
         service.startSwitchOnly(blood)
         assertTrue(service.isBusy)
+    }
+
+    @Test
+    fun `before the account is read an unattended start is refused and a watched one is not`() {
+        service.connectTransport()
+        PcAccount.seedIfFresh(filesDir)
+        val account = AccountStore(filesDir).ensureMigrated().single()
+        val refused = assertThrows(IllegalStateException::class.java) { service.startFarmingAccount(account) }
+        assertEquals(PcAccount.ENROL_FIRST, refused.message)
+        assertThrows(IllegalStateException::class.java) { service.startTimedFarmingAccount(account) }
+        assertThrows(IllegalStateException::class.java) { service.startCombinedRun(account, account, 1, 1) }
+        assertFalse(service.isBusy)
+        // A supervised attack starts, and reads the account in its account check.
+        service.startSupervisedAccount(account)
+    }
+
+    @Test
+    fun `once the account is read an unattended start goes ahead`() {
+        service.connectTransport()
+        PcAccount.seedIfFresh(filesDir)
+        val account = AccountStore(filesDir).ensureMigrated().single()
+        PcAccount.saveTemplate(filesDir, account.id, Bitmap.createBitmap(1740, 978, Bitmap.Config.ARGB_8888),
+            local.clashfarmer.core.Region(745, 171, 1020, 264))
+        service.startFarmingAccount(account)
     }
 }
