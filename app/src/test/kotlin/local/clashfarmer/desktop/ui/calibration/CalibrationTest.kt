@@ -84,7 +84,7 @@ class CalibrationTest {
         val groups = AttackPlanner.buildDeployment(army, kotlin.random.Random(1)).map { it.name }
         assertTrue(groups.toString(), "king" in groups && "queen" in groups)
         assertTrue(groups.toString(), groups.none { it in setOf("warden", "champion", "jumps") })
-        // King and Queen still measure the tray's card width for the event tray.
+        // The tray is still read for an event card.
         assertNotNull(AttackPlanner.trayBadgeRegions(army))
 
         // The cards every attack needs, and a card not set, are left alone.
@@ -103,15 +103,16 @@ class CalibrationTest {
     @Test
     fun `an army without the Queen or the King still has its tray read for an event card`() {
         val starter = StarterProfile.load()
-        // The standard positions put the heroes 110 px apart.
+        // The standard positions put the heroes 110 px apart. On the PC the tray is read at the
+        // width Clash draws whatever the taps are (AttackPlanner.cardPitch); the phone's
+        // measuring is AttackPlannerTest's.
         assertEquals(110, cardWidth(starter))
         // A hero the account lacks has no card in the tray, so the cards after it sit one card left.
         val noQueen = listOf("warden" to 539, "champion" to 649, "rages" to 771, "jumps" to 881)
             .fold(withoutCard(starter, "queen")) { p, (name, x) -> applyTarget(p, name, Point(x, 903)) }
         assertEquals(110, cardWidth(noQueen))
         assertEquals(Point(539, 903), AttackPlanner.withEventCard(noQueen).troopAnchors["king"])
-        // Not in my army pressed on the Queen with the Warden left at its standard position: the
-        // King and the Warden are two cards apart there, and the Warden and the Champion one.
+        // Not in my army pressed on the Queen with the Warden left at its standard position.
         assertEquals(110, cardWidth(withoutCard(starter, "queen")))
         val noKing = listOf("queen" to 429, "warden" to 539, "champion" to 649)
             .fold(withoutCard(starter, "king")) { p, (name, x) -> applyTarget(p, name, Point(x, 903)) }
