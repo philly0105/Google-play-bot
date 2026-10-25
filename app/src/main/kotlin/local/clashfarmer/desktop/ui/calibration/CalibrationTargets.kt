@@ -9,57 +9,172 @@ import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.recognition.WallConfig
 import local.clashfarmer.recognition.WallCurrencyConfig
 
-/** One point calibration saves: its key, its line in the list, and what to click on the frame. */
-class CalibrationTarget(val name: String, val label: String, val description: String)
+/**
+ * One point calibration saves: its key, its line in the list, what to click on the frame, the
+ * game screen it is on ([group]), and whether an attack needs it ([required]).
+ */
+class CalibrationTarget(
+    val name: String,
+    val label: String,
+    val description: String,
+    val group: String,
+    val required: Boolean = false
+)
 
 /** The name of the one target Apply adds to a list instead of setting. */
 internal const val COLLECTOR = "collector"
 
+/** The game area's corners, which a capture sets on the PC ([targetEnabled]). */
+internal val VIEWPORT_TARGETS = setOf("vp_tl", "vp_br")
+
+/** The game screens [CALIBRATION_TARGETS] are grouped by, as the list's headers say them. */
+private const val GAME_AREA = "Game area"
+private const val VILLAGE = "Village"
+private const val ATTACK_MENU = "Attack menu and army"
+private const val SCOUT = "Scout screen"
+private const val TRAY = "Battle tray"
+private const val MAP = "Battle map"
+private const val RESULT = "Battle result"
+private const val WALLS = "Wall panel"
+private const val COLLECTORS = "Collectors"
+
 /**
- * The phone's 38 targets in the phone's order, which Apply walks. The descriptions say "click"
+ * The phone's 38 targets, grouped by the game screen each is clicked on, in the order Apply walks
+ * them: a user captures one screen and sets its points before moving on. The phone numbered them
+ * in the order they were added, with the attack's screens mixed. The descriptions say "click"
  * where the phone said "tap", and the viewport corners no longer mention the phone's status and
  * navigation bars: the PC frame is the game surface alone.
+ *
+ * The troop cards are named for what the attack does with them (AttackPlanner), not for the
+ * owner's army: the main troop is dropped all around the base, the spell is cast five times
+ * inside it, the optional jump spell once in the middle, and each hero only when its card is set.
+ * [CalibrationTarget.required] marks what [PhoneProfile.validateForAttack] asks for.
  */
 val CALIBRATION_TARGETS: List<CalibrationTarget> = listOf(
-    CalibrationTarget("vp_tl", "1. Viewport Top-Left", "Click the top-left edge of the Clash rendering area."),
-    CalibrationTarget("vp_br", "2. Viewport Bottom-Right", "Click the bottom-right edge of the Clash rendering area."),
-    CalibrationTarget("village_neutral", "3. Village Neutral Grass", "Click empty grass in village to dismiss popups safely."),
-    CalibrationTarget("attack", "4. Button: Attack", "Click the 'Attack' button on Home screen."),
-    CalibrationTarget("find_match", "5. Button: Find Match", "Click 'Find a Match' button on Attack menu."),
-    CalibrationTarget("army", "6. Tab: Army", "Click 'Army' / 'Train Troops' tab."),
-    CalibrationTarget("return_home", "7. Button: Return Home", "Click 'Return Home' button on Battle Result screen."),
-    CalibrationTarget("end_battle", "8. Button: End Battle", "Click 'End Battle' / 'Surrender' during battle."),
-    CalibrationTarget("valkyries", "9. Troop: Valkyries", "Click the middle of the Valkyries card on battle deployment bar. Use a bar without the event card."),
-    CalibrationTarget("rages", "10. Spell: Rage", "Click the middle of the Rage spell card on battle deployment bar."),
-    CalibrationTarget("jumps", "11. Spell: Jump (Optional)", "Click the middle of the Jump spell card on battle deployment bar."),
-    CalibrationTarget("hero_drop", "12. Hero Drop Point", "Click default deployment location for heroes."),
-    CalibrationTarget("king", "13. Hero: Barbarian King", "Click the middle of the King card on deployment bar."),
-    CalibrationTarget("queen", "14. Hero: Archer Queen", "Click the middle of the Queen card on deployment bar."),
-    CalibrationTarget("warden", "15. Hero: Grand Warden", "Click the middle of the Warden card on deployment bar."),
-    CalibrationTarget("champion", "16. Hero: Royal Champion", "Click the middle of the Royal Champion card, or your fourth hero's, on deployment bar."),
-    CalibrationTarget("perim_1_start", "17. Perimeter 1 Start", "Click start corner of Perimeter Edge 1."),
-    CalibrationTarget("perim_1_end", "18. Perimeter 1 End", "Click end corner of Perimeter Edge 1."),
-    CalibrationTarget("perim_2_start", "19. Perimeter 2 Start", "Click start corner of Perimeter Edge 2."),
-    CalibrationTarget("perim_2_end", "20. Perimeter 2 End", "Click end corner of Perimeter Edge 2."),
-    CalibrationTarget("perim_3_start", "21. Perimeter 3 Start", "Click start corner of Perimeter Edge 3."),
-    CalibrationTarget("perim_3_end", "22. Perimeter 3 End", "Click end corner of Perimeter Edge 3."),
-    CalibrationTarget("perim_4_start", "23. Perimeter 4 Start", "Click start corner of Perimeter Edge 4."),
-    CalibrationTarget("perim_4_end", "24. Perimeter 4 End", "Click end corner of Perimeter Edge 4."),
-    CalibrationTarget("bulk_button", "25. Wall: Upgrade More Button", "Click 'Upgrade More' button on wall panel."),
-    CalibrationTarget("remove_button", "26. Wall: Remove Wall Button", "Click 'Remove Wall' / minus button on wall panel."),
-    CalibrationTarget("gold_cost_btn", "27. Wall: Gold Upgrade Button", "Click Gold upgrade button on wall panel."),
-    CalibrationTarget("elixir_cost_btn", "28. Wall: Elixir Upgrade Button", "Click Elixir upgrade button on wall panel."),
-    CalibrationTarget("next", "29. Scout: Next Button", "On a scout screen, click the 'Next' button."),
-    CalibrationTarget("scout_gold", "30. Scout: Gold Loot", "Click the first digit of the gold under 'Available Loot'."),
-    CalibrationTarget("scout_elixir", "31. Scout: Elixir Loot", "Click the first digit of the elixir under 'Available Loot'."),
-    CalibrationTarget("scout_dark", "32. Scout: Dark Elixir Loot", "Click the first digit of the dark elixir under 'Available Loot'."),
-    CalibrationTarget("scout_countdown", "33. Scout: Countdown", "Click the middle of the seconds under 'Battle starts in'."),
-    CalibrationTarget("scout_fee", "34. Scout: Next Price", "Click just left of the gold coin beside the price under 'Next'."),
-    CalibrationTarget("home_gold", "35. Village: Gold Balance", "On the village screen, click the middle of your gold amount."),
-    CalibrationTarget("home_elixir", "36. Village: Elixir Balance", "On the village screen, click the middle of your elixir amount."),
-    CalibrationTarget("home_dark", "37. Village: Dark Elixir Balance", "On the village screen, click the middle of your dark elixir amount."),
-    CalibrationTarget(COLLECTOR, "38. Collector (adds one)", "Show the camera reference, then click a gold mine, elixir collector or drill. Each Apply adds one.")
+    CalibrationTarget("vp_tl", "Game area, top-left corner", "Click the top-left corner of the Clash game area.", GAME_AREA),
+    CalibrationTarget("vp_br", "Game area, bottom-right corner", "Click the bottom-right corner of the Clash game area.", GAME_AREA),
+    CalibrationTarget("village_neutral", "Empty grass",
+        "Click empty grass in the village, away from buildings. The bot clicks here to close windows safely.", VILLAGE),
+    CalibrationTarget("attack", "Attack! button", "Click the Attack! button in the village's bottom-left corner.", VILLAGE, required = true),
+    CalibrationTarget("home_gold", "Gold balance", "Click the middle of your gold amount at the top right of the village.", VILLAGE),
+    CalibrationTarget("home_elixir", "Elixir balance", "Click the middle of your elixir amount at the top right of the village.", VILLAGE),
+    CalibrationTarget("home_dark", "Dark elixir balance", "Click the middle of your dark elixir amount at the top right of the village.", VILLAGE),
+    CalibrationTarget("find_match", "Find a Match button", "After Attack!, click Find a Match.", ATTACK_MENU, required = true),
+    CalibrationTarget("army", "Attack! on the army screen", "After Find a Match, Clash shows your army. Click its Attack! button.", ATTACK_MENU),
+    CalibrationTarget("next", "Next button", "On a scout screen, click the Next button.", SCOUT),
+    CalibrationTarget("scout_gold", "Gold loot", "Click the first digit of the gold under Available Loot.", SCOUT),
+    CalibrationTarget("scout_elixir", "Elixir loot", "Click the first digit of the elixir under Available Loot.", SCOUT),
+    CalibrationTarget("scout_dark", "Dark elixir loot", "Click the first digit of the dark elixir under Available Loot.", SCOUT),
+    CalibrationTarget("scout_countdown", "Countdown", "Click the middle of the seconds under Battle starts in.", SCOUT),
+    CalibrationTarget("scout_fee", "Next price", "Click just left of the gold coin beside the price under Next.", SCOUT),
+    CalibrationTarget("end_battle", "End Battle button", "Click the End Battle button at the bottom left.", SCOUT),
+    CalibrationTarget("valkyries", "Main troop card (e.g. Valkyries)",
+        "The troop the bot drops all around the base, such as Valkyries. Click the middle of its card. " +
+            "Use a tray without the event card.", TRAY, required = true),
+    CalibrationTarget("rages", "Spell cast inside (e.g. Rage)",
+        "The spell the bot casts five times inside the base, such as Rage. Click the middle of its card.", TRAY, required = true),
+    CalibrationTarget("jumps", "Jump spell card (optional)",
+        "Optional: a spell the bot casts once in the middle of the base, such as Jump. Click the middle of its card.", TRAY),
+    CalibrationTarget("king", "Barbarian King (skip if you don't have it)", "Click the middle of the Barbarian King's card.", TRAY),
+    CalibrationTarget("queen", "Archer Queen (skip if you don't have it)", "Click the middle of the Archer Queen's card.", TRAY),
+    CalibrationTarget("warden", "Grand Warden (skip if you don't have it)", "Click the middle of the Grand Warden's card.", TRAY),
+    CalibrationTarget("champion", "Fourth hero (skip if you don't have it)",
+        "Click the middle of the Royal Champion's card, or your fourth hero's.", TRAY),
+    CalibrationTarget("hero_drop", "Hero drop point", "Click where the heroes should land, just outside the base.", MAP),
+    CalibrationTarget("perim_1_start", "Edge 1 start", "Click the start of the first edge the main troop is dropped along.", MAP, required = true),
+    CalibrationTarget("perim_1_end", "Edge 1 end", "Click the end of the first edge.", MAP, required = true),
+    CalibrationTarget("perim_2_start", "Edge 2 start", "Click the start of the second edge.", MAP, required = true),
+    CalibrationTarget("perim_2_end", "Edge 2 end", "Click the end of the second edge.", MAP, required = true),
+    CalibrationTarget("perim_3_start", "Edge 3 start", "Click the start of the third edge.", MAP, required = true),
+    CalibrationTarget("perim_3_end", "Edge 3 end", "Click the end of the third edge.", MAP, required = true),
+    CalibrationTarget("perim_4_start", "Edge 4 start", "Click the start of the fourth edge.", MAP, required = true),
+    CalibrationTarget("perim_4_end", "Edge 4 end", "Click the end of the fourth edge.", MAP, required = true),
+    CalibrationTarget("return_home", "Return Home button", "After a battle, click Return Home on the result screen.", RESULT, required = true),
+    CalibrationTarget("bulk_button", "Upgrade More button", "With a wall selected, click Upgrade More.", WALLS),
+    CalibrationTarget("remove_button", "Remove wall button", "On the wall panel, click Remove Wall (the minus button).", WALLS),
+    CalibrationTarget("gold_cost_btn", "Gold upgrade button", "On the wall panel, click the gold upgrade button.", WALLS),
+    CalibrationTarget("elixir_cost_btn", "Elixir upgrade button", "On the wall panel, click the elixir upgrade button.", WALLS),
+    CalibrationTarget(COLLECTOR, "Collector (each Apply adds one)",
+        "Show the camera reference, then click a gold mine, elixir collector or drill. Each Apply adds one.", COLLECTORS)
 )
+
+/** The targets the progress line counts: all but the game area's corners, which always have a value. */
+internal val COUNTED_TARGETS: List<CalibrationTarget> = CALIBRATION_TARGETS.filter { it.name !in VIEWPORT_TARGETS }
+
+/**
+ * Whether [name] may be picked and applied on [profile]. A PC capture always fills the frame, so
+ * the game area's corners are set by Capture there: PcGeometry scales by the viewport, and a
+ * stray click on a corner would shrink it. A phone-shaped profile keeps them.
+ */
+internal fun targetEnabled(profile: PhoneProfile, name: String): Boolean =
+    name !in VIEWPORT_TARGETS || !PcGeometry.isPc(profile.viewport)
+
+/**
+ * Whether [profile] has a value for the target [name]. A perimeter edge's end counts only once
+ * the edge has two different ends, since Apply fills an edge's missing end with the clicked one.
+ */
+internal fun isSet(profile: PhoneProfile, name: String): Boolean {
+    perimeterEnd(name)?.let { (index, start) ->
+        val (first, second) = profile.perimeterSegments.getOrNull(index) ?: return false
+        return first != second && (if (start) first else second) != Point(0, 0)
+    }
+    return when (name) {
+        in VIEWPORT_TARGETS -> true
+        in TROOP_CARDS -> name in profile.troopAnchors
+        "hero_drop" -> profile.heroDrop != null
+        "bulk_button" -> profile.wallConfig?.bulkButton != null
+        "remove_button" -> profile.wallConfig?.removeButton != null
+        "gold_cost_btn" -> profile.wallConfig?.currencies?.containsKey("gold") == true
+        "elixir_cost_btn" -> profile.wallConfig?.currencies?.containsKey("elixir") == true
+        COLLECTOR -> profile.collectionTargets.isNotEmpty()
+        else -> name in profile.stateAnchors || savedBox(profile, name) != null
+    }
+}
+
+/**
+ * The point saved for the target [name] on [profile], drawn on the frame and where the arrow keys
+ * start from; null for a box target, the collector, the game area's corners and a target not set.
+ */
+internal fun savedPoint(profile: PhoneProfile, name: String): Point? {
+    if (!isSet(profile, name)) return null
+    perimeterEnd(name)?.let { (index, start) ->
+        val edge = profile.perimeterSegments[index]
+        return if (start) edge.first else edge.second
+    }
+    return when (name) {
+        in TROOP_CARDS -> profile.troopAnchors[name]
+        "hero_drop" -> profile.heroDrop
+        "bulk_button" -> profile.wallConfig?.bulkButton
+        "remove_button" -> profile.wallConfig?.removeButton
+        "gold_cost_btn" -> profile.wallConfig?.currencies?.get("gold")?.buttonPoint
+        "elixir_cost_btn" -> profile.wallConfig?.currencies?.get("elixir")?.buttonPoint
+        else -> profile.stateAnchors[name]
+    }
+}
+
+/** The box saved for the target [name] on [profile]: a card's area or where a number is read; null for the rest. */
+internal fun savedBox(profile: PhoneProfile, name: String): Region? = when (name) {
+    in TROOP_CARDS -> profile.troopRois[name]
+    "scout_gold" -> profile.scoutLootRois[Resource.GOLD]
+    "scout_elixir" -> profile.scoutLootRois[Resource.ELIXIR]
+    "scout_dark" -> profile.scoutLootRois[Resource.DARK_ELIXIR]
+    "scout_countdown" -> profile.scoutCountdownRoi
+    "scout_fee" -> profile.scoutFeeRoi
+    "home_gold" -> profile.homeResourceRois[Resource.GOLD]
+    "home_elixir" -> profile.homeResourceRois[Resource.ELIXIR]
+    "home_dark" -> profile.homeResourceRois[Resource.DARK_ELIXIR]
+    else -> null
+}
+
+private val TROOP_CARDS = setOf("valkyries", "rages", "jumps", "king", "queen", "warden", "champion")
+
+/** The perimeter edge [name] belongs to, from 0, and whether it is the edge's start; null for any other target. */
+private fun perimeterEnd(name: String): Pair<Int, Boolean>? {
+    val match = PERIMETER.matchEntire(name) ?: return null
+    return match.groupValues[1].toInt() - 1 to (match.groupValues[2] == "start")
+}
+
+private val PERIMETER = Regex("""perim_(\d)_(start|end)""")
 
 /**
  * [profile] with [pt] saved for the target named [name], as the phone's Apply wrote it. The

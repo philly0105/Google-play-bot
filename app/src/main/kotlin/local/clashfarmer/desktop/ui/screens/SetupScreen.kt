@@ -35,6 +35,7 @@ import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
 import local.clashfarmer.desktop.ui.PcChecklist
 import local.clashfarmer.desktop.ui.TrayCheckSheet
+import local.clashfarmer.desktop.ui.calibration.StarterProfile
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.CheckRow
 import local.clashfarmer.desktop.ui.components.PrimaryButton
@@ -300,6 +301,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             account to listOf(PcChecklist.account(account, enrolled[account.id])) +
                 SetupChecklist.account(account, profiles[account.id], findings[account.id].orEmpty(),
                     state.profileError.takeIf { account.id == state.selectedId }, builders[account.id], nowMs)
+                    .map(StarterProfile::setupLine)
         }
         return Checklist(machineLines, accounts)
     }
