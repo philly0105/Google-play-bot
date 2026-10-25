@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.accounts.AccountStore
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.core.Launch
 import local.clashfarmer.core.PresetStore
 import local.clashfarmer.core.RunPlan
@@ -41,13 +42,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * [loaded] with only the account the PC runs, Blood. Every screen and every start reads the accounts
- * through this, so Sweat's checks never sit in Setup or Activity; its record and files stay where
- * AccountStore keeps them, and FarmerService refuses it whatever asks.
+ * [loaded] with only the account the PC runs, [PcAccount.ID]. Every screen and every start reads
+ * the accounts through this, so the owner's second phone account never sits in Setup or Activity;
+ * its record and files stay where AccountStore keeps them, and FarmerService refuses it whatever asks.
  */
 internal fun pcAccounts(loaded: DashboardLoader.Accounts) = loaded.copy(
-    accounts = loaded.accounts.filter { it.id == AccountStore.BLOOD_ID },
-    profiles = loaded.profiles.filterKeys { it == AccountStore.BLOOD_ID }
+    accounts = loaded.accounts.filter { it.id == PcAccount.ID },
+    profiles = loaded.profiles.filterKeys { it == PcAccount.ID }
 )
 
 /** A message at the foot of the window, the phone's Toast. A class, so two equal texts are two toasts. */
@@ -153,7 +154,7 @@ class FarmerController(
             toast(BUSY)
             return
         }
-        val id = accountId ?: runCatching { accountStore.selectedId() }.getOrNull() ?: AccountStore.BLOOD_ID
+        val id = accountId ?: runCatching { accountStore.selectedId() }.getOrNull() ?: PcAccount.ID
         calibration?.close()
         calibration = CalibrationModel(this, id, onBack = ::closeCalibration)
     }

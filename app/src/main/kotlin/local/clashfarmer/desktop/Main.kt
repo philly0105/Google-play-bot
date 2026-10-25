@@ -17,6 +17,7 @@ import androidx.compose.ui.window.isTraySupported
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import local.clashfarmer.accounts.AccountStore
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.desktop.ui.FarmerController
 import local.clashfarmer.desktop.ui.FarmerWindowContent
 import local.clashfarmer.desktop.ui.StatusPanelWindow
@@ -42,10 +43,12 @@ fun main() {
     // A packaged app's standard error goes nowhere, and the copied code prints its failures there.
     System.setErr(PrintStream(LineOutput(services.log), true, Charsets.UTF_8))
     RunTray.supported = isTraySupported
-    // The PC runs only Blood, so the dashboard opens on it.
+    // The PC runs one account, so the dashboard opens on it. A fresh install gets that account
+    // as a neutral record first, so the phone's seeding of its own two accounts never runs.
+    PcAccount.seedIfFresh(services.filesDir)
     AccountStore(services.filesDir).run {
         ensureMigrated()
-        select(AccountStore.BLOOD_ID)
+        select(PcAccount.ID)
     }
     val service = FarmerService(services.filesDir, services.host, services.surface)
     // Android connected the service on its main thread; the Swing thread is Dispatchers.Main here.
