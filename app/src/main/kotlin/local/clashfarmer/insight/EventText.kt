@@ -60,7 +60,7 @@ object EventText {
         "storage_read", "builders_read", "builders_read_disagree", "device_health", "device_health_failed",
         "balance_unreadable", "balance_implausible", "amount_unreadable", "scout_loot_unreadable",
         "scout_countdown_unreadable", "scout_fee_unreadable", "battle_loot_unreadable", "result_loot_unreadable",
-        "result_damage_unreadable", "result_frame", "stars_damage_conflict", "frame_encode_failed",
+        "result_loot_leading_one", "result_damage_unreadable", "result_frame", "stars_damage_conflict", "frame_encode_failed",
         // Opponent search.
         "opponent_accepted", "opponent_fallback", "opponent_skipped", "opponent_battle_started",
         "opponent_selection_uncalibrated", "opponent_next_held",
@@ -236,6 +236,7 @@ object EventText {
         "early_end_no_button" -> "The End Battle button was not found" to Tone.WARN
         "result_frame" -> "Read the battle result screen" to Tone.NEUTRAL
         "result_loot_unreadable" -> "Result loot could not be read" to Tone.WARN
+        "result_loot_leading_one" -> "Put back the leading 1 the result loot read dropped" to Tone.NEUTRAL
         "result_damage_unreadable" -> "Result damage could not be read" to Tone.WARN
         "battle_loot_unreadable" -> "Loot left in the battle could not be read" to Tone.NEUTRAL
         "stars_damage_conflict" -> "Stars and damage on the result screen disagree" to Tone.WARN

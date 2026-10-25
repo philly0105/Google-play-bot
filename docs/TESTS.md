@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 2031 tests, 1637 copied
-from the phone and the PC's 394 (373 under `desktop/` and `accounts/PcAccountTest.kt`'s 21), and
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 2032 tests, 1637 copied
+from the phone and the PC's 395 (374 under `desktop/` and `accounts/PcAccountTest.kt`'s 21), and
 none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
@@ -52,7 +52,7 @@ since the app no longer ships the owner's (`docs/DIVERGENCES.md`).
 
 ## PC tests
 
-373 `@Test` methods in 41 files under `desktop/`, and 21 in `accounts/PcAccountTest.kt`. Their
+374 `@Test` methods in 41 files under `desktop/`, and 21 in `accounts/PcAccountTest.kt`. Their
 fixtures are in `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from
 Blood's game window at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter,
 and a few PNG crops. `identity/pc/blood.png` is
@@ -73,7 +73,7 @@ same strip on the Settings tab and the village at 1860x1162
 | `PcUpgradeListTest` | The builder panel's mangled timers, the prices beside them, and a card's name read line by line | 5 |
 | `PcReplayTest` | Return Home on a replay's end screen | 5 |
 | `PcBattleDamageTest` | The battle's damage with the PC's End Battle label, or a star's stray glyph, between the word and the value, and the result screen sweeping in | 5 |
-| `PcBattleResultTest` | The result screen's loot rows, stars and damage box at the PC's lengths, at 1740x978 and on a result captured at 1860x1162, and the damage box holding all of the digits' green ink with the label moved 4 px each way | 6 |
+| `PcBattleResultTest` | The result screen's loot rows, stars and damage box at the PC's lengths, at 1740x978 and on a result captured at 1860x1162, and the damage box holding all of the digits' green ink with the label moved 4 px each way, and a leading 1 the reader dropped put back at both sizes but not where the ink's glyphs disagree with the read | 7 |
 | `PcRatePromptTest` | LATER on Play's rating dialog | 3 |
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |

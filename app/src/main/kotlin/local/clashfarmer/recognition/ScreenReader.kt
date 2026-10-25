@@ -513,15 +513,21 @@ class ScreenReader : AutoCloseable {
 
     /**
      * One "You got" row of the result screen; null when the cuts do not agree, or when what they
-     * agree on has fewer or more digits than the row's ink has glyphs.
+     * agree on has fewer or more digits than the row's ink has glyphs, unless the one more is a
+     * leading 1 the cuts dropped.
      */
     suspend fun readResultLoot(bitmap: Bitmap, roi: Region): Long? {
         val raw = cutReadings(bitmap, roi, SCOUT_CUTS, scale = 3)
         val read = LootPanelReader.lootAmount(raw)
-        val glyphs = BattleResultReader.glyphCount(roi, Viewport(0, 0, bitmap.width, bitmap.height)) { x, y ->
+        val viewport = Viewport(0, 0, bitmap.width, bitmap.height)
+        val pixel = { x: Int, y: Int ->
             if (x in 0 until bitmap.width && y in 0 until bitmap.height) bitmap.getPixel(x, y) else null
         }
+        val glyphs = BattleResultReader.glyphCount(roi, viewport, pixel)
         val loot = read?.takeIf { BattleResultReader.inkAgrees(it, glyphs) }
+            ?: read?.let { BattleResultReader.withLeadingOne(it, roi, viewport, pixel) }?.also {
+                AppLog.log("result_loot_leading_one", "roi" to roi.toString(), "read" to read, "loot" to it)
+            }
         if (loot == null) AppLog.log("result_loot_unreadable", "roi" to roi.toString(), "raw" to raw.joinToString(" | "),
             "read" to read, "glyphs" to glyphs)
         return loot

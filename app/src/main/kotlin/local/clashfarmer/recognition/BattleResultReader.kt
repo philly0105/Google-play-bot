@@ -125,9 +125,15 @@ object BattleResultReader {
 
     /** [glyphCount], at the PC's lengths when [viewport] is a PC frame. */
     fun glyphCount(roi: Region, viewport: Viewport?, pixel: (Int, Int) -> Int?): Int? {
+        val glyphs = glyphRuns(roi, viewport, pixel) ?: return null
+        val wide = viewport?.takeIf(PcGeometry::isPc)?.let { PcGeometry.length(it, PC_WIDE_GLYPH) } ?: WIDE_GLYPH
+        return glyphs.size + glyphs.count { it.last - it.first + 1 > wide }
+    }
+
+    /** The runs [glyphCount] counts, from the right, or null when it cannot tell them. */
+    private fun glyphRuns(roi: Region, viewport: Viewport?, pixel: (Int, Int) -> Int?): List<IntRange>? {
         val pc = viewport?.takeIf(PcGeometry::isPc)
         val gap = pc?.let { PcGeometry.length(it, PC_GLYPH_GAP) } ?: GLYPH_GAP
-        val wide = pc?.let { PcGeometry.length(it, PC_WIDE_GLYPH) } ?: WIDE_GLYPH
         val edge = pc?.let { PcGeometry.length(it, PC_EDGE) } ?: EDGE
         val inked = (roi.left until roi.right).filter { x ->
             (roi.top until roi.bottom).count { y -> pixel(x, y)?.let(::digitFill) == true } >= INK_PER_COLUMN
@@ -144,7 +150,7 @@ object BattleResultReader {
             }
         }
         val clear = glyphs.last().first - roi.left > edge && roi.right - 1 - glyphs.first().last > edge
-        return (glyphs.size + glyphs.count { it.last - it.first + 1 > wide }).takeIf { clear }
+        return glyphs.takeIf { clear }
     }
 
     /**
@@ -153,6 +159,33 @@ object BattleResultReader {
      * glyphs, so the short read is dropped rather than recorded.
      */
     fun inkAgrees(value: Long, glyphs: Int?): Boolean = glyphs == value.toString().length
+
+    /**
+     * On the PC's frames a 1 is 9 or 10 px wide at 1740x978 and 11 or 12 at 1860x1162, and every
+     * other digit 18 or more. A group's digits stand at most 6 px apart, the groups 16 or more.
+     */
+    private const val PC_ONE_WIDTH = 14
+    private const val PC_GROUP_GAP = 11
+
+    /**
+     * [read] with the leading 1 its row's ink shows put back, or null. At 1860x1162 on 25 October
+     * every cut of four frames read 1 247 184 elixir as 247 184, and two other rows lost their 1
+     * the same way: the 1 stands alone, a group's gap left of the rest. [inkAgrees] refused those
+     * reads, so the loot went unrecorded. Only on a PC frame whose ink is one glyph more than
+     * [read]'s digits, the leftmost a 1's width and alone in its group, and every glyph after it
+     * as narrow as a 1 where [read] has a 1 and only there.
+     */
+    fun withLeadingOne(read: Long, roi: Region, viewport: Viewport, pixel: (Int, Int) -> Int?): Long? {
+        if (!PcGeometry.isPc(viewport)) return null
+        val glyphs = glyphRuns(roi, viewport, pixel)?.asReversed() ?: return null
+        val digits = read.toString()
+        if (glyphs.size != digits.length + 1 || digits.length % 3 != 0) return null
+        val one = PcGeometry.length(viewport, PC_ONE_WIDTH)
+        fun narrow(glyph: IntRange) = glyph.last - glyph.first + 1 <= one
+        val alone = glyphs[1].first - glyphs[0].last - 1 >= PcGeometry.length(viewport, PC_GROUP_GAP)
+        val ones = digits.indices.all { narrow(glyphs[it + 1]) == (digits[it] == '1') }
+        return "1$digits".toLong().takeIf { narrow(glyphs[0]) && alone && ones }
+    }
 
     private fun digitFill(argb: Int): Boolean {
         val r = argb shr 16 and 0xFF

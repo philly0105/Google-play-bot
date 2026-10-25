@@ -213,7 +213,7 @@ x 759-984, y 799-888 on `live-1740-result`.
 
 ## Readers that still fail
 
-The five below were fixed on 25 October from captures and logs. None of the fixes has run live yet.
+The six below were fixed on 25 October from captures and logs. None of the fixes has run live yet.
 
 1. The builders' counter read from the whole frame on 3 of the 65 captures that show it. When a
    village frame reads no count, `ScreenReader.observe` now reads `Builders.pcCornerRegion`,
@@ -238,6 +238,11 @@ The five below were fixed on 25 October from captures and logs. None of the fixe
    The result screen's "Total damage: 0%" sweeping in is no longer logged as
    `stall_damage_unreadable`. `waiting_unrecognized` stays as the phone logs it, a neutral event.
    Unlike fixes 1-4, neither change takes the frame's size, so both apply on the phone too.
+6. At 1860x1162 a result row's leading 1, alone before the first group, was dropped by every cut:
+   1 247 184 read as 247 184, and 1 512 953 and 1 501 482 lost their 1 too. The ink count refused
+   the short reads, so the loot went unrecorded. `BattleResultReader.withLeadingOne` puts the 1
+   back when the ink shows one glyph more, the leftmost a 1's width and a group's gap from the
+   rest, and the read's own 1s on the other narrow glyphs.
 
 ## Tests
 
@@ -271,7 +276,8 @@ The `corner-*` fixtures hold the lines the sidecar's recogniser read, offline, f
 
 `PcBattleResultTest` also reads raw RGB crops of the two result frames: `result-1740-rows.rgb` and
 `result-1740-stars.rgb` from `live-1740-result`'s PNG, and `result-1860-stars.rgb`, 400x140 from
-(740, 180), from `live-1860-result`'s.
+(740, 180), from `live-1860-result`'s. `result-1860-rows.rgb`, 320x230 from (680, 495), is the rows
+of `audit-evidence/live/20261025-065005-results1610/1792936962785.png`, whose elixir lost its 1.
 
 Some inputs are built in the test rather than captured. The 1565x978 HUD boxes come from the image
 by correlation. The 16:10 list and recipes screens are the 1740x978 captures moved by the

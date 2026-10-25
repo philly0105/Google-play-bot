@@ -8,6 +8,8 @@ import local.clashfarmer.recognition.BattleResultReader
 import local.clashfarmer.recognition.RecognizedBox
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,6 +27,11 @@ import org.junit.Test
  *
  * result-1740-damage.rgb and result-1860-damage.rgb are the damage digits of those two frames,
  * 180x90 from (780, 120) and 180x110 from (840, 140).
+ *
+ * result-1860-rows.rgb is the rows of a result at 1860x1162 from 25 October, 320x230 from
+ * (680, 495) of audit-evidence/live/20261025-065005-results1610/1792936962785.png: 1 212 550 gold,
+ * 1 247 184 elixir and 12 497 dark elixir, with "You got:" read at (875, 462, 989, 502). Every
+ * cut of four frames read the elixir as 247 184.
  */
 class PcBattleResultTest {
 
@@ -64,6 +71,7 @@ class PcBattleResultTest {
     private val wideStars = Crop("result-1860-stars", 740, 180, 400, 140)
     private val damage = Crop("result-1740-damage", 780, 120, 180, 90)
     private val wideDamage = Crop("result-1860-damage", 840, 140, 180, 110)
+    private val wideRows = Crop("result-1860-rows", 680, 495, 320, 230)
     private val loot = listOf(Resource.GOLD to 1_346_371L, Resource.ELIXIR to 474_889L, Resource.DARK_ELIXIR to 4_314L)
 
     @Test
@@ -87,6 +95,31 @@ class PcBattleResultTest {
                 assertTrue("$resource $dy", BattleResultReader.inkAgrees(value, glyphs))
             }
         }
+    }
+
+    @Test
+    fun `a leading 1 the reader dropped is put back when the ink shows it alone`() {
+        val youGot = RecognizedBox("You got:", 875, 462, 989, 502)
+        for (dy in -8..8) {
+            val regions = BattleResultReader.lootRegions(listOf(youGot.copy(top = youGot.top + dy, bottom = youGot.bottom + dy)), wide)!!
+            val gold = regions.getValue(Resource.GOLD)
+            val elixir = regions.getValue(Resource.ELIXIR)
+            val dark = regions.getValue(Resource.DARK_ELIXIR)
+            assertFalse("$dy", BattleResultReader.inkAgrees(247_184, BattleResultReader.glyphCount(elixir, wide, wideRows::pixel)))
+            assertEquals("$dy", 1_247_184L, BattleResultReader.withLeadingOne(247_184, elixir, wide, wideRows::pixel))
+            assertEquals("$dy", 1_212_550L, BattleResultReader.withLeadingOne(212_550, gold, wide, wideRows::pixel))
+            // Not a read that kept the 1 and lost a later digit, nor one whose 1s fall on wide glyphs.
+            assertNull("$dy", BattleResultReader.withLeadingOne(124_718, elixir, wide, wideRows::pixel))
+            assertNull("$dy", BattleResultReader.withLeadingOne(212_550, elixir, wide, wideRows::pixel))
+            // Nor a 1 inside its group: 12 497 read short is left short.
+            assertNull("$dy", BattleResultReader.withLeadingOne(2_497, dark, wide, wideRows::pixel))
+            assertNull("$dy", BattleResultReader.withLeadingOne(1_247_184, elixir, wide, wideRows::pixel))
+        }
+        // At 1740x978 the 1 of 1 346 371 comes back too; 4 314 has no 1 to put back.
+        val regions = BattleResultReader.lootRegions(boxes, pc)!!
+        assertEquals(1_346_371L, BattleResultReader.withLeadingOne(346_371, regions.getValue(Resource.GOLD), pc, rows::pixel))
+        assertNull(BattleResultReader.withLeadingOne(314, regions.getValue(Resource.DARK_ELIXIR), pc, rows::pixel))
+        assertNull(BattleResultReader.withLeadingOne(74_889, regions.getValue(Resource.ELIXIR), pc, rows::pixel))
     }
 
     @Test
