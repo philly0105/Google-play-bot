@@ -72,13 +72,48 @@ val publishSidecar by tasks.registering(Exec::class) {
     }
 }
 
+// The version is set once, as appVersion in gradle.properties. build-info.properties carries it
+// and the commit to the app (desktop/BuildInfo.kt), so Setup and desktop.log name the build.
+val appVersion = providers.gradleProperty("appVersion").get()
+val appCommit = runCatching {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim()
+}.getOrDefault("")
+
+val buildInfo by tasks.registering {
+    val out = layout.buildDirectory.dir("generated/buildInfo")
+    val text = "version=$appVersion\ncommit=$appCommit\n"
+    inputs.property("text", text)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("build-info.properties").asFile
+        file.parentFile.mkdirs()
+        file.writeText(text)
+    }
+}
+
+sourceSets {
+    main {
+        resources.srcDir(buildInfo)
+    }
+}
+
 compose.desktop {
     application {
         mainClass = "local.clashfarmer.desktop.MainKt"
         nativeDistributions {
             packageName = "ClashFarmerPC"
-            packageVersion = "1.0.0"
+            packageVersion = appVersion
+            description = "Clash Farmer PC"
+            vendor = "Clash Farmer"
+            copyright = "Not affiliated with or endorsed by Supercell."
             appResourcesRootDir.set(appResources)
+            windows {
+                // FarmerIcon (desktop/ui/theme/FarmerIcon.kt) drawn at 16 to 256 px.
+                iconFile.set(project.file("icons/ClashFarmerPC.ico"))
+            }
         }
     }
 }
