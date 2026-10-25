@@ -211,7 +211,7 @@ class TimelineTest {
         assertEquals(1, groups.size)
         assertEquals(Tone.BAD, groups.single().tone)
         assertEquals("Saved the screen and log for the stop", groups.single().lines.first().text)
-        assertEquals("Stopped: the helper service shut down", groups.single().lines[1].text)
+        assertEquals("Stopped: Clash Farmer closed", groups.single().lines[1].text)
     }
 
     @Test

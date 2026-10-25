@@ -189,7 +189,7 @@ object EventText {
         "account_skipped" -> {
             val why = when (str(e, "reason")) {
                 CompletionReason.TIME_LIMIT.key -> "not enough time left" + (int(e, "leftMinutes")?.let { " ($it min)" } ?: "")
-                CompletionReason.DEVICE_GUARD.key -> "the phone needs a rest"
+                CompletionReason.DEVICE_GUARD.key -> "the battery is low"
                 null -> "no reason given"
                 else -> stopLine(str(e, "reason"))
             }
@@ -441,8 +441,8 @@ object EventText {
         "balance_implausible" -> "A balance reading looked wrong and was ignored" to Tone.NEUTRAL
         "amount_unreadable" -> "An amount could not be read" to Tone.NEUTRAL
         "amount_second_frame" -> "Read an amount on a second frame" to Tone.NEUTRAL
-        "device_health" -> "Phone: ${health(e)}" to Tone.NEUTRAL
-        "device_guard_stop" -> "Ending at home to protect the phone: ${health(e)}" to Tone.WARN
+        "device_health" -> "PC: ${health(e)}" to Tone.NEUTRAL
+        "device_guard_stop" -> "Ending at home to save the battery: ${health(e)}" to Tone.WARN
         "device_health_failed" -> "Battery and temperature could not be read" to Tone.NEUTRAL
         "frame_encode_failed" -> "A live frame could not be saved" to Tone.NEUTRAL
 
@@ -462,8 +462,8 @@ object EventText {
         "retention_failed" -> "Old captures and logs could not be cleaned up" to Tone.NEUTRAL
 
         // App and service.
-        "service_connected" -> "Helper service connected" to Tone.NEUTRAL
-        "service_destroyed" -> "Helper service shut down" to Tone.WARN
+        "service_connected" -> "Clash Farmer started" to Tone.NEUTRAL
+        "service_destroyed" -> "Clash Farmer closed" to Tone.WARN
         "main_activity_opened" -> "App opened" to Tone.NEUTRAL
         "handle_action" -> "Button pressed in the app" to Tone.NEUTRAL
         "new_intent_action" -> "The app was asked to act" to Tone.NEUTRAL
@@ -527,14 +527,14 @@ object EventText {
             }
             CompletionReason.WALL_PENDING -> "Finished: an earlier wall purchase still needs checking$after" to Tone.BAD
             CompletionReason.TIME_LIMIT -> "Finished: time limit reached$after" to Tone.OK
-            CompletionReason.DEVICE_GUARD -> "Finished early to protect the phone$after${detail?.let { ": ${guardText(it)}" } ?: ""}" to Tone.WARN
+            CompletionReason.DEVICE_GUARD -> "Finished early to save the battery$after${detail?.let { ": ${guardText(it)}" } ?: ""}" to Tone.WARN
             null -> "Finished$after" to Tone.OK
         }
     }
 
     /**
      * The headline word for how a run ended: Complete, Goal reached, Storage full, Walls pending,
-     * Time limit, Phone guard. [short] gives the session-row word: Done, Goal, Full, Walls, Time, Guard.
+     * Time limit, Battery guard. [short] gives the session-row word: Done, Goal, Full, Walls, Time, Guard.
      * Anything else, a stop reason included, is Stopped.
      */
     fun endWord(reasonKey: String?, short: Boolean = false): String = when (CompletionReason.fromKey(reasonKey ?: "")) {
@@ -543,7 +543,7 @@ object EventText {
         CompletionReason.STORAGE_FULL -> if (short) "Full" else "Storage full"
         CompletionReason.WALL_PENDING -> if (short) "Walls" else "Walls pending"
         CompletionReason.TIME_LIMIT -> if (short) "Time" else "Time limit"
-        CompletionReason.DEVICE_GUARD -> if (short) "Guard" else "Phone guard"
+        CompletionReason.DEVICE_GUARD -> if (short) "Guard" else "Battery guard"
         null -> "Stopped"
     }
 
@@ -562,21 +562,33 @@ object EventText {
     fun stopLine(reason: String?): String {
         if (reason.isNullOrBlank()) return "no reason given"
         var r = reason.trim()
-        for (prefix in listOf("Session is stopped: ", "Run error: ", "Active session interrupted: ")) r = r.removePrefix(prefix)
+        // A crash's message is raw exception text; the PC says where the details are instead.
+        val crashed = r.startsWith("Run error: ") || r.startsWith("Switch error: ")
+        for (prefix in listOf("Session is stopped: ", "Run error: ", "Switch error: ", "Active session interrupted: ")) r = r.removePrefix(prefix)
         // Match on the reason alone, not on the screen text read after it.
         r = cutDump(r)
         val low = r.lowercase(Locale.ROOT)
         return when {
-            r.contains(UserStop.FLOATING_PANEL) || r.contains("Overlay Stop clicked") -> "you pressed Stop on the floating panel"
+            r.contains(UserStop.FLOATING_PANEL) || r.contains("Overlay Stop clicked") -> "you pressed Stop on the status panel"
             r.contains(UserStop.DASHBOARD) -> "you pressed Stop in the app"
             r.contains(UserStop.REMOTE) -> "you pressed Stop on the remote page"
-            r.contains(UserStop.NOTIFICATION) -> "you pressed Stop in the notification"
+            r.contains(UserStop.NOTIFICATION) -> "you chose Stop from the tray icon"
             r.contains(UserStop.SCREEN_OFF) -> "the screen turned off"
             AppSwitchLatch.isHoldTimeout(r) -> "the notification shade stayed open for ${AppSwitchLatch.HOLD_CAP_MS / 60_000} minutes"
-            low.startsWith("service destroyed") -> "the helper service shut down"
-            low.contains("screenshot capture failed") -> "the screen could not be captured"
-            low.contains("app switched to") || low.contains("not in foreground") -> "Clash left the screen"
-            low.contains("device is locked") -> "the phone was locked"
+            low.startsWith("service destroyed") -> "Clash Farmer closed"
+            // The PC's own stops (FarmerService), each with what to do next.
+            low.startsWith("the clash window was closed") -> "the Clash window was closed; restart the PC, then start again"
+            low.startsWith("no calibration profile for ") ->
+                "${r.substring("No calibration profile for ".length).trim()} is not calibrated; calibrate it in Setup"
+            low.contains("could not be started through google play games") ->
+                "Google Play Games did not open Clash; open Clash by hand, then start again"
+            low.contains("drawing a blank screen") -> "Clash stayed on a blank screen; wait for it to load, then start again"
+            low.startsWith("the village is not on screen") ->
+                "Clash was not on the village; close any open window in Clash, then start again"
+            low.startsWith("timed out waiting for clash of clans") -> "the Clash window did not open in time; open Clash, then start again"
+            low.contains("screenshot capture failed") -> "the Clash window could not be captured"
+            low.contains("app switched to") || low.contains("not in foreground") -> "the Clash window could not be found"
+            low.contains("device is locked") -> "Windows was locked"
             r.contains(Policy.VILLAGE_TAKEN) || low.contains("another device") -> "the village was opened on another device"
             r.contains(PopupGuard.SERVER_DIALOG) || low.contains("lost its connection") -> "Clash lost its server connection"
             r.contains(PopupGuard.MAINTENANCE_OVER) -> "Clash came back from a maintenance break"
@@ -612,6 +624,7 @@ object EventText {
                 val m = Regex("""^(.+?) ended before quota reached \((\d+)/(\d+) attacks\)""").find(r)!!
                 "${m.groupValues[1]} ended early (${m.groupValues[2]} of ${m.groupValues[3]} attacks)"
             }
+            crashed -> "something went wrong; the Technical log on the Activity tab has the details"
             else -> clean(r)
         }
     }

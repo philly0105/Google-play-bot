@@ -177,7 +177,7 @@ class CalibrationHealthTest {
         assertTrue(attack.detail, attack.detail.startsWith("Attack workflow configuration incomplete. Missing:"))
         assertEquals("Not calibrated", CalibrationHealth.calibrationLine(null))
         assertEquals("Needs one supervised attack", CalibrationHealth.calibrationLine(profile(sweatAnchors, verified = false)))
-        assertEquals("Verified on this phone", CalibrationHealth.calibrationLine(profile(sweatAnchors)))
+        assertEquals("Verified on this PC", CalibrationHealth.calibrationLine(profile(sweatAnchors)))
     }
 
     @Test

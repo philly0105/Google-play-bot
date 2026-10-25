@@ -335,7 +335,7 @@ object Policy {
         wallsOnly || (supervised && attacks == 1)
 
     fun verificationRequired(villageName: String): String =
-        "$villageName has not earned verification on this phone. Run \"Supervised attack\" " +
+        "$villageName has not earned verification on this PC. Run \"Supervised attack\" " +
             "once and let it return to the village; that attack earns it."
 
     /**

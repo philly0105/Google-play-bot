@@ -124,9 +124,9 @@ object Problems {
                 "device_guard_stop" -> add(Problem(
                     key = "guard:${time ?: e.toString().hashCode()}",
                     tone = Tone.WARN,
-                    title = prefixed(who, "ended early to protect the phone"),
-                    detail = (EventText.describe(e)?.text ?: "The battery or heat guard ended the run at home") +
-                        ". Let the phone cool or charge before the next run.",
+                    title = prefixed(who, "ended early to save the battery"),
+                    detail = (EventText.describe(e)?.text ?: "The battery guard ended the run at home") +
+                        ". Plug the laptop in before the next run.",
                     timeMs = time,
                     accountId = accountId,
                     action = Problem.Action.DISMISS,
@@ -162,7 +162,7 @@ object Problems {
                 tone = Tone.WARN,
                 title = "Remote page refused $peer",
                 detail = "${Format.count(list.size, "request")} from $peer ${if (list.size == 1) "was" else "were"} refused " +
-                    "(no key, a wrong key, or not on Tailscale). If this was not you, check who can reach the phone.",
+                    "(no key, a wrong key, or not on Tailscale). If this was not you, check who can reach this PC.",
                 timeMs = Format.parseTime(list.last().optString("time")),
                 accountId = null,
                 action = Problem.Action.DISMISS,
