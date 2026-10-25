@@ -546,8 +546,10 @@ class FarmerService(
             val profiles = accounts.associate { it.id to runCatching { store.readProfile(it.id) }.getOrNull() }
             val now = System.currentTimeMillis()
             val zone = java.time.ZoneId.systemDefault()
-            plan.readiness(accounts, profiles, connected = true, busy = isBusy, selectedId = selected, nowMs = now, zone = zone)
-                .reason?.let { throw IllegalStateException(it) }
+            // Desktop: in Run's words, as its notice shows them, not the validator's, which name anchors and ROIs.
+            local.clashfarmer.ui.screens.ComposerState.readiness(plan, accounts, profiles, connected = true, busy = isBusy,
+                selectedId = selected, nowMs = now, zone = zone)
+                .firstOrNull()?.let { throw IllegalStateException(it) }
             val picked = plan.accountIds.map { id ->
                 accounts.firstOrNull { it.id == id } ?: throw IllegalStateException("No such account")
             }

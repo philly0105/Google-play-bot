@@ -34,13 +34,35 @@ class RunNotifier {
          * What [notice] says in a Windows notification. FarmerService's stop notice carries the
          * stop reason as logged ("Stopped from floating panel", "Run error: ..."), with no account;
          * it shows the plain line the Activity tab gives that reason instead, under [account], the
-         * account that was running, when known. Every other notice is already written for people
-         * and names its account, so it shows as it is.
+         * account that was running, when known. A start set for later that did not run keeps its
+         * "Farm at 07:00: " and gives the reason in PC words ([scheduledReason]). Every other
+         * notice is already written for people and names its account, so it shows as it is.
          */
         internal fun shown(notice: RunNotice, account: String?): RunNotice {
+            if (notice.title == SCHEDULED_TITLE) {
+                val m = SCHEDULED_TEXT.find(notice.text) ?: return notice
+                return notice.copy(text = "${m.groupValues[1]}: ${scheduledReason(m.groupValues[2])}")
+            }
             if (notice.kind == RunNotice.Kind.FINISHED || RunNotice.stopped(null, notice.text) != notice) return notice
             val line = EventText.stopLine(notice.text).replaceFirstChar { it.uppercase() }
             return RunNotice.stopped(account, notice.text).copy(text = "$line.")
+        }
+
+        /** FarmerService's title for a start set for later that did not run. */
+        private const val SCHEDULED_TITLE = "Scheduled start did not run"
+        /** "<label> at HH:MM: <reason>", as FarmerService writes it. */
+        private val SCHEDULED_TEXT = Regex("""^(.*? at \d{2}:\d{2}): (.*)$""", RegexOption.DOT_MATCHES_ALL)
+
+        /**
+         * Why a start set for later did not run, in PC words. FarmerService's own reasons name
+         * the phone's helper service and a sleeping phone; the rest are written for people
+         * already, a refused calibration included (FarmerService words it as Run does).
+         */
+        internal fun scheduledReason(reason: String): String = when (reason) {
+            "The helper stopped before the start time", "The helper service shut down" ->
+                "Clash Farmer was closed before the start time; set the start again"
+            "The phone was asleep at the start time" -> "The PC was asleep at the start time; set the start again"
+            else -> reason
         }
     }
 

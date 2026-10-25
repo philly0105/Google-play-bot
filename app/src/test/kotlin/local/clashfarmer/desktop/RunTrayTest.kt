@@ -65,6 +65,20 @@ class RunTrayTest {
     }
 
     @Test
+    fun `a scheduled start that did not run says why in PC words`() {
+        fun scheduled(text: String) = RunNotice(RunNotice.Kind.NEEDS_YOU, "Scheduled start did not run", text)
+        assertEquals(scheduled("Farm at 07:00: Clash Farmer was closed before the start time; set the start again"),
+            RunNotifier.shown(scheduled("Farm at 07:00: The helper stopped before the start time"), "Blood"))
+        assertEquals(scheduled("Blood at 23:30: Clash Farmer was closed before the start time; set the start again"),
+            RunNotifier.shown(scheduled("Blood at 23:30: The helper service shut down"), null))
+        assertEquals(scheduled("Night: 2 h at 01:05: The PC was asleep at the start time; set the start again"),
+            RunNotifier.shown(scheduled("Night: 2 h at 01:05: The phone was asleep at the start time"), null))
+        // Run's own words pass through.
+        val refused = scheduled("Blood at 07:00: Blood calibration is incomplete; finish it in Setup")
+        assertEquals(refused, RunNotifier.shown(refused, null))
+    }
+
+    @Test
     fun `the tray gets the plain stop line`() {
         RunTray.supported = true
         RunNotifier().post(RunNotice.stopped(null, UserStop.NOTIFICATION))

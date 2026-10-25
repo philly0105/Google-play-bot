@@ -189,6 +189,9 @@ below.
   - Every call to `RunNotifier` and `FarmerOverlay` is kept.
     Failures only the PC has (keeping awake, the Resume launch, Setup's launch) print to
     `System.err`, since `insight/EventText.kt` describes no event for them.
+  - A start set for later checks its plan through `ComposerState.readiness` rather than
+    `RunPlan.readiness`, so a refused calibration reaches its notice in Run's words, not the
+    validator's, which name anchors and ROIs.
   - Added `launchClash()`, Setup's Open Clash of Clans: it starts Clash and returns at once, and
     sends nothing while a run is active or a Clash window exists. `captureNormalizedVillage`'s
     `returnToActivityClass` defaults to null, as `captureClashGame`'s does.
@@ -203,7 +206,9 @@ below.
   `controlAction` and `command(Intent)`; the tray's Pause, Resume and Stop call `FarmerService`.
   `post` shows `FarmerService.stop`'s notice through `shown`: its raw stop reason becomes
   `EventText.stopLine`'s sentence, under the running account's name from `AppLog`'s run context.
-  `notification_posted` still logs the raw reason. Every other notice is shown as built.
+  `notification_posted` still logs the raw reason. The "Scheduled start did not run" notice keeps
+  its "<label> at HH:MM: " and `scheduledReason` rewrites the reasons that name the phone's helper
+  service or a sleeping phone. Every other notice is shown as built.
 - `service/FarmerOverlay.kt`: no Context parameter. The ticker, `tick`, `lastEarned`,
   `updateStatus`'s five seconds and `setVisible` are the phone's, run on the Swing thread, and
   publish a `Panel` that `desktop/ui/StatusPanel.kt` draws as an always-on-top window that never
