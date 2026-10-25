@@ -18,8 +18,8 @@ ban can be permanent.
 - It works in the background. Input is posted to the Clash window, so the cursor and the keyboard
   stay yours and Clash can sit behind other windows. Before each run, and before Calibrate,
   Inspect and the tray check, it sizes the game back to 1740x978, the size it was calibrated at.
-- It never spends gems and never presses a button on a dialog that shows a gem price. It runs only
-  the Blood account and never signs accounts in or out.
+- It never spends gems and never presses a button on a dialog that shows a gem price. It runs one
+  account, the one signed in to Clash on this PC, and never signs accounts in or out.
 - The dashboard has the phone's tabs (Home, Run, Stats, Activity, Setup); Ctrl+1 to Ctrl+5 and
   Ctrl+Tab move between them, and Tab moves between controls. The app also has a tray icon,
   Windows notifications, and the phone's remote page and API on port 8765, reachable only over
@@ -30,9 +30,9 @@ ban can be permanent.
 
 ## Requirements
 
-- Windows 11 with Google Play Games for PC, Clash of Clans installed, and Blood signed in. On
-  Windows 10, Windows draws a yellow frame around the game while the bot captures it, and the bot
-  has not been tested there; Setup shows an amber Windows line.
+- Windows 11 with Google Play Games for PC, Clash of Clans installed and signed in, set to English.
+  On Windows 10, Windows draws a yellow frame around the game while the bot captures it, and the
+  bot has not been tested there; Setup shows an amber Windows line.
 - The PC must stay unlocked with the screen on during a run. Locking it or letting the screen turn
   off stops the game's picture, and the bot stops the run with a message saying so. A start set
   for later keeps the PC awake with the screen on until it fires, and does not run if the PC is
@@ -61,11 +61,22 @@ The version is `appVersion` in `gradle.properties`, and only there. The exe, Set
 `desktop.log` and the package name all read it.
 
 Setup has a line for each thing a run needs: the Clash window, the text reader (the sidecar's
-OCR), the tray icon, battery, the remote page (which needs Tailscale), and per account the
-calibration, the troop tray, walls, the goal and rules, and builders. Open Clash from the Game
-window line, calibrate Blood, then run one supervised attack. Unattended runs stay locked until a
-supervised attack has verified the account's profile. The bottom of Setup names the version and
-has Open logs folder.
+OCR), the tray icon, battery, the remote page (which needs Tailscale), and per account whether the
+bot has read it, the calibration, the troop tray, walls, the goal and rules, and builders. Open
+Clash from the Game window line, calibrate the account, then run one supervised attack.
+Unattended runs stay locked until a supervised attack has verified the account's profile. The
+bottom of Setup names the version and has Open logs folder.
+
+A fresh install starts with one account called "Your village". The first supervised attack opens
+Clash's Settings, reads the village name and tag, and keeps a crop of that strip in
+`accounts\<id>\identity.png` with the frame size it was cut at in `identity.json`. Every later run
+checks Settings against that crop before it starts; a crop cut at 1740x978 matches Clash at
+1860x1162 and the other way round (tested on real captures of both; other sizes are untested). A
+read that the check straight after it does not confirm is dropped, so a misread can't lock the
+account. Until the account is read, Setup's Account line is amber and unattended starts, and the
+remote page's account check, are refused with "Run one supervised attack first so the bot can read
+your account." Setup's Read account again drops the crop, so the next supervised attack reads the
+account afresh.
 
 Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu.
 Starting the app again while it runs opens its window instead of a second copy. App data, logs and

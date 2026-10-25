@@ -1,7 +1,6 @@
 package local.clashfarmer.accounts
 
 import kotlinx.coroutines.delay
-import android.graphics.BitmapFactory
 import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.core.Point
@@ -29,6 +28,15 @@ class AccountSwitcher(
 ) {
     companion object {
         const val MAX_IDENTITY_DIFFERENCE = 8.0
+
+        /**
+         * Desktop: the limit for a strip and template of different sizes, Clash at 16:10 against a
+         * template cut at 16:9 or the other way round. Scaling blurs the letters' edges: the real
+         * 1740x978 and 1860x1162 Settings strips differ by 10.7 and 11.4 across sizes, where either
+         * against itself is 0. The village and the profile tab behind the strip differ by 52 to 88,
+         * and the phone's two accounts' strips by 23 at one size.
+         */
+        const val MAX_CROSS_SCALE_IDENTITY_DIFFERENCE = 14.0
         const val EXPECTED_WIDTH = 1600
         const val EXPECTED_HEIGHT = 720
 
@@ -65,10 +73,7 @@ class AccountSwitcher(
         val PC_SETTINGS_IDENTITY_REGION = Region(745, 171, 1020, 264)
         val PC_LAYOUT_EDITOR_CLOSE = Point(1676, 62)
 
-        /** The PC's identity templates, cut at 1740x978. Only Blood runs on the PC. */
-        val PC_IDENTITY_TEMPLATES = mapOf(AccountStore.BLOOD_ID to "identity/pc/blood.png")
-
-        /** The PC never presses the switch arrows: it runs Blood only. */
+        /** The PC never presses the switch arrows: it runs one account ([PcAccount]). */
         const val PC_SWITCH_REFUSED = "The PC does not switch accounts"
 
         /** The phone's 1600x720, or a PC game surface ([PcGeometry.isPc]) of any size. */
@@ -84,19 +89,22 @@ class AccountSwitcher(
             if (PcGeometry.isPc(display)) PcGeometry.region(display, PC_SETTINGS_IDENTITY_REGION, Anchor.CENTRE)
             else SETTINGS_IDENTITY_REGION
 
-        /** The identity templates by account id for a frame of [display]'s size. */
-        fun identityTemplates(display: Viewport): Map<String, String> =
-            if (PcGeometry.isPc(display)) PC_IDENTITY_TEMPLATES
-            else mapOf(AccountStore.SWEAT_ID to "identity/sweat.png", AccountStore.BLOOD_ID to "identity/blood.png")
-
         /**
          * [ImageMatcher.gainCorrectedDifference] of [region] of [screen] against [template]. A
          * region of another size than the template, on a PC frame of another height than the one
-         * it was cut at, is scaled to the template's size first.
+         * it was cut at, is compared at the smaller of the two sizes: a template cut on a taller
+         * frame is scaled down to the region, and a region larger than its template is scaled
+         * down to the template. Scaling up would blur one side and add to the difference.
          */
         fun identityDifference(screen: android.graphics.Bitmap, region: Region, template: android.graphics.Bitmap): Double? {
             if (region.width == template.width && region.height == template.height) {
                 return ImageMatcher.gainCorrectedDifference(screen, region, template)
+            }
+            if (template.height > region.height && region.right <= screen.width && region.bottom <= screen.height) {
+                val smaller = android.graphics.Bitmap.createScaledBitmap(template, region.width, region.height, true)
+                return try {
+                    ImageMatcher.gainCorrectedDifference(screen, region, smaller)
+                } finally { smaller.recycle() }
             }
             val left = region.left.coerceIn(0, screen.width - 1)
             val top = region.top.coerceIn(0, screen.height - 1)
@@ -113,6 +121,36 @@ class AccountSwitcher(
         /** Settings is open when an enrolled identity template matches its row. */
         fun settingsPanelShowing(differences: List<Double?>) =
             differences.any { it != null && it <= MAX_IDENTITY_DIFFERENCE }
+
+        /**
+         * Desktop: the most [identityDifference] may be for [template] to match [region]:
+         * [MAX_IDENTITY_DIFFERENCE] at one size, [MAX_CROSS_SCALE_IDENTITY_DIFFERENCE] when one of
+         * them is scaled to the other.
+         */
+        fun identityLimit(region: Region, template: android.graphics.Bitmap): Double =
+            if (region.width == template.width && region.height == template.height) MAX_IDENTITY_DIFFERENCE
+            else MAX_CROSS_SCALE_IDENTITY_DIFFERENCE
+
+        /** Desktop: whether [region] of [screen] shows [template], within [identityLimit]. */
+        fun identityMatches(screen: android.graphics.Bitmap, region: Region, template: android.graphics.Bitmap): Boolean {
+            val difference = identityDifference(screen, region, template)
+            return difference != null && difference <= identityLimit(region, template)
+        }
+
+        /**
+         * Desktop: the profile menu on its Settings tab, by its words, for an account with no
+         * template yet. The tab has the Supercell ID strip and the sound and language settings;
+         * the profile tab has none of them (pc-frames/profile).
+         */
+        fun settingsTabShowing(rawText: String): Boolean {
+            val text = AccountIdentityParser.normalize(rawText)
+            return AccountIdentityParser.isProfileMenu(rawText) && text.contains("SUPERCELL") &&
+                (text.contains("MUSIC") || text.contains("LANGUAGE"))
+        }
+
+        /** Desktop: frames [enrol] reads the Settings tab on, and the wait before each. */
+        const val ENROL_READS = 3
+        const val ENROL_READ_GAP_MS = 800L
 
         /** Presses of the profile menu's X before the close is given up on. */
         const val SETTINGS_CLOSE_ATTEMPTS = 3
@@ -221,7 +259,7 @@ class AccountSwitcher(
             // arrows are on it and the profile tab has something else there.
             if (sentOrHeld {
                     service.transport.tapButton(SWITCH_ARROWS_BTN, runToken, decidedOn = identityAt, afterPause = {
-                        look(runToken) { settingsPanelShowing(identityDifferences(it)) }
+                        look(runToken) { identityShowing(it) }
                     })
                 }) break
             if (++heldArrows >= HELD_TAP_TRIES) throw StopException(TapAfterHold.HELD)
@@ -278,6 +316,90 @@ class AccountSwitcher(
     }
 
     /**
+     * Desktop: [enrol], then [ensureAccount] against what it read. Nothing checks a read until
+     * that second look, so a read the check does not confirm is undone: the template goes and the
+     * record is put back ([undoEnrol]). A misread name, the wrong account in Clash or a strip
+     * caught as it slid in would otherwise lock the account, every later start stopping on a
+     * template that never matches. The next supervised run reads it again.
+     */
+    suspend fun enrolAndCheck(target: AccountRecord, runToken: Long, reclaimTakeover: Boolean = true): AccountRecord {
+        val store = AccountStore(service.filesDir)
+        val before = store.load().firstOrNull { it.id == target.id } ?: throw StopException("Account not found")
+        return try {
+            enrol(target, runToken).also { ensureAccount(it, runToken, reclaimTakeover) }
+        } catch (e: Exception) {
+            // A stop or cancellation too: an unchecked read is not kept.
+            undoEnrol(before, e)
+            throw e
+        }
+    }
+
+    private fun undoEnrol(before: AccountRecord, cause: Exception) {
+        if (!PcAccount.undoRead(service.filesDir, before)) return
+        AppLog.log("account_identity_forgotten", "where" to "check", "reason" to (cause.message ?: cause.javaClass.simpleName).take(200))
+    }
+
+    /**
+     * Desktop: reads the account Clash is on into [target], which has no identity template yet
+     * ([PcAccount]). It walks to the village and opens Settings with the same presses the check
+     * uses, knowing the Settings tab by its words, reads the name and tag off the Supercell ID
+     * strip, saves the record and then the strip's crop, and closes Settings, also when the read
+     * fails. Returns [target] with the name and tag read, for [ensureAccount] to check against the
+     * new template.
+     */
+    private suspend fun enrol(target: AccountRecord, runToken: Long): AccountRecord {
+        val display = service.currentDisplayViewport()
+        if (display == null || !PcGeometry.isPc(display)) {
+            throw StopException("Could not read your account: the game area is " +
+                (display?.let { "${it.width}x${it.height}" } ?: "not found"))
+        }
+        service.overlay?.updateStatus("Reading your account in Clash's Settings...")
+        reclaimTakenVillage(runToken, reclaimTakeover = true)
+        returnHomeBeforeCheck(runToken, ownBattle = false)
+        openSettings(runToken, byText = true)
+        // Settings is open from here, so a failed read closes it rather than leave it over the village.
+        val read = try {
+            readAndSave(target, runToken)
+        } catch (e: Exception) {
+            runCatching { closeSettings(runToken) }
+            throw e
+        }
+        closeSettings(runToken)
+        return target.copy(villageName = read.villageName, playerTag = read.playerTag)
+    }
+
+    /**
+     * Reads the open Settings tab's name and tag, up to [ENROL_READS] frames apart, and saves the
+     * first that reads: the tab's contents slide in after its words show, and OCR can miss the
+     * tag on one frame and not the next.
+     */
+    private suspend fun readAndSave(target: AccountRecord, runToken: Long): SettingsIdentity {
+        repeat(ENROL_READS) {
+            delay(ENROL_READ_GAP_MS)
+            val frame = service.transport.capture(runToken)
+            try {
+                val observation = screenReader.observe(frame.bitmap, acquisitionTimeMs = frame.timestampMs)
+                val screen = Viewport(0, 0, frame.bitmap.width, frame.bitmap.height)
+                val region = identityRegion(screen)
+                val identity = if (!settingsTabShowing(observation.rawText)) null
+                    else PcAccount.readIdentity(screenReader.observeRegion(frame.bitmap, region, scale = 5).boxes)
+                if (identity != null) {
+                    val store = AccountStore(service.filesDir)
+                    val stored = store.load().firstOrNull { it.id == target.id }
+                        ?: throw StopException("Account not found")
+                    store.update(stored.copy(villageName = identity.villageName, playerTag = identity.playerTag))
+                    PcAccount.saveTemplate(service.filesDir, target.id, frame.bitmap, region)
+                    // The tag is the player's own; the log, which a person may share, keeps the name only.
+                    AppLog.log("account_identity_enrolled", "village" to identity.villageName,
+                        "width" to screen.width, "height" to screen.height)
+                    return identity
+                }
+            } finally { frame.bitmap.recycle() }
+        }
+        throw StopException(PcAccount.IDENTITY_UNREADABLE)
+    }
+
+    /**
      * Settings opens only over the village, and a start can find Clash on the army screen, a
      * result, an open menu or under a popup. Walks back within [ReturnHome.START_BOUND_MS].
      */
@@ -293,7 +415,7 @@ class AccountSwitcher(
             val (observation, settingsOpen) = try {
                 val obs = screenReader.observe(frame.bitmap, acquisitionTimeMs = frame.timestampMs)
                 // Attack! stays visible behind Settings, so only an unread frame is checked for it.
-                obs to (obs.state == ScreenState.UNKNOWN && settingsPanelShowing(identityDifferences(frame.bitmap)))
+                obs to (obs.state == ScreenState.UNKNOWN && identityShowing(frame.bitmap))
             } finally { frame.bitmap.recycle() }
             val text = observation.rawText
             if (Policy.anotherDeviceConnected(text)) throw StopException(Policy.VILLAGE_TAKEN)
@@ -376,7 +498,11 @@ class AccountSwitcher(
         }
     }
 
-    private suspend fun openSettings(runToken: Long) {
+    /**
+     * Opens the profile menu on its Settings tab. It is known by the account's template, or with
+     * [byText], for an account with no template yet, by the tab's words ([settingsTabShowing]).
+     */
+    private suspend fun openSettings(runToken: Long, byText: Boolean = false) {
         val deadline = System.currentTimeMillis() + 30_000L
         val held0 = service.heldMs
         var lastState = ScreenState.UNKNOWN
@@ -387,12 +513,14 @@ class AccountSwitcher(
             val frame = service.transport.capture(runToken)
             val observation = try {
                 // Attack! stays visible behind the panel, so look for the panel before the village.
-                if (settingsPanelShowing(identityDifferences(frame.bitmap))) return
+                if (identityShowing(frame.bitmap)) return
                 screenReader.observe(frame.bitmap, acquisitionTimeMs = frame.timestampMs)
             } finally { frame.bitmap.recycle() }
             lastState = observation.state
             lastText = observation.rawText
             if (Policy.anotherDeviceConnected(observation.rawText)) throw StopException(Policy.VILLAGE_TAKEN)
+            // Before the profile menu below, which would press the tab again.
+            if (byText && settingsTabShowing(observation.rawText)) return
             // The store gets Back and nothing else, before anything below can read it as the village.
             if (Policy.showsShop(observation.rawText)) {
                 if (!backOutOfShop(observation, runToken, "settings", popupTaps)) delay(750)
@@ -597,22 +725,31 @@ class AccountSwitcher(
                 decidedOn = frame.timestampMs
                 try {
                     AccountIdentityParser.isProfileMenu(screenReader.observe(frame.bitmap).rawText) ||
-                        settingsPanelShowing(identityDifferences(frame.bitmap))
+                        identityShowing(frame.bitmap)
                 } finally { frame.bitmap.recycle() }
             }
         )
         if (!closed) AppLog.log("settings_close_failed", "presses" to SETTINGS_CLOSE_ATTEMPTS)
     }
 
-    private fun identityDifferences(screen: android.graphics.Bitmap): List<Double?> {
-        val display = Viewport(0, 0, screen.width, screen.height)
-        return identityTemplates(display).values.map { name ->
-            val template = service.assets.open(name).use(BitmapFactory::decodeStream)
-                ?: throw StopException("Identity template could not be loaded: $name")
+    /**
+     * Desktop: each account's own template from its folder ([PcAccount]), where the phone's two
+     * were app assets. An account not read yet has none, and nothing is compared for it. Only the
+     * account the PC runs is looked at, so another account's folder, the owner's second phone
+     * account, can't stop this one's check.
+     */
+    private fun templates(accounts: List<AccountRecord>): List<Pair<AccountRecord, PcAccount.Template>> =
+        accounts.filter { it.id == PcAccount.ID }
+            .mapNotNull { account -> PcAccount.loadTemplate(service.filesDir, account.id)?.let { account to it } }
+
+    /** Whether [screen] shows an account's Settings strip, at its own size or another ([identityMatches]). */
+    private fun identityShowing(screen: android.graphics.Bitmap): Boolean {
+        val region = identityRegion(Viewport(0, 0, screen.width, screen.height))
+        return templates(AccountStore(service.filesDir).load()).map { (_, template) ->
             try {
-                identityDifference(screen, identityRegion(display), template)
-            } finally { template.recycle() }
-        }
+                identityMatches(screen, region, template.bitmap)
+            } finally { template.bitmap.recycle() }
+        }.any { it }
     }
 
     private suspend fun readSettingsIdentity(runToken: Long): SettingsIdentity {
@@ -622,25 +759,26 @@ class AccountSwitcher(
             val region = identityRegion(display)
             val obs = screenReader.observeRegion(frame.bitmap, region, scale = 5)
             val enrolled = AccountStore(service.filesDir).load()
-            val matches = enrolled.mapNotNull { account ->
-                val templateName = identityTemplates(display)[account.id] ?: return@mapNotNull null
+            val matches = templates(enrolled).mapNotNull { (account, template) ->
                 val villageVisible = obs.boxes.any {
                     AccountIdentityParser.normalize(it.text) == AccountIdentityParser.normalize(account.villageName)
                 }
-                val template = service.assets.open(templateName).use(BitmapFactory::decodeStream)
-                    ?: throw StopException("Identity template could not be loaded for ${account.villageName}")
-                val difference = try {
-                    identityDifference(frame.bitmap, region, template)
-                } finally { template.recycle() }
+                val (difference, limit) = try {
+                    identityDifference(frame.bitmap, region, template.bitmap) to identityLimit(region, template.bitmap)
+                } finally { template.bitmap.recycle() }
                 AppLog.log(
                     "account_identity_candidate", "village" to account.villageName,
-                    "villageVisible" to villageVisible, "visualDifference" to difference
+                    "villageVisible" to villageVisible, "visualDifference" to difference,
+                    "templateFrame" to "${template.frame.width}x${template.frame.height}"
                 )
-                if (villageVisible && difference != null && difference <= MAX_IDENTITY_DIFFERENCE) account else null
+                if (villageVisible && difference != null && difference <= limit) account else null
             }
             when (matches.size) {
                 1 -> SettingsIdentity(matches.single().villageName, matches.single().playerTag)
-                0 -> throw StopException("Current account identity is unreadable or is not one of the enrolled accounts")
+                0 -> throw StopException(
+                    if (PcGeometry.isPc(display)) PcAccount.NOT_THE_READ_VILLAGE
+                    else "Current account identity is unreadable or is not one of the enrolled accounts"
+                )
                 else -> throw StopException("Current account identity is ambiguous; refusing to switch")
             }
         } finally {

@@ -15,7 +15,9 @@ the phone side.
   move the real cursor or need the Clash window in front. Input goes to the GPG window directly.
   Only if GPG ignores that kind of input do we fall back to real mouse input, and we tell the user.
 - Only the Blood account is signed in on the PC for now. Account switching is ported unchanged and
-  proven once a second account is signed in.
+  proven once a second account is signed in. (Since 25 October the app runs one account, whatever
+  is signed in, and reads its identity on the first supervised run, so a friend can use it on their
+  own account. On this PC that account is still Blood.)
 - The PC bot replaces the phone bot. No coordination with the phone.
 - Full permission to drive Clash on this PC for Blood: inspect, calibrate, real attacks, unattended
   runs. Never spend gems. Blood's walls are maxed, so no wall purchase can be proven live; the
@@ -48,7 +50,7 @@ app/src/main/kotlin/
   local/clashfarmer/...       the phone tree, copied (see file classes below)
   local/clashfarmer/desktop/  everything Windows-specific: native bridge, OCR backend, window
                               control, tray, notifications, Compose UI
-app/src/main/resources/       remote.html, identity images, app icon
+app/src/main/resources/       remote.html, app icon
 app/src/test/kotlin/          the phone tree's JVM tests, copied
 native/ClashFarmer.Native/    C# .NET 8 sidecar: WGC capture, PaddleOCR, window input
 ```
@@ -99,6 +101,8 @@ test compiles unchanged, and record the move.
 | Floating overlay | Small always-on-top window with status, Pause and Stop |
 | Notifications | Windows notifications from the tray icon |
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
+| Sweat and Blood, seeded with the owner's names and tags | One account in Blood's id slot (`accounts/PcAccount.kt`). A fresh install seeds it as "Your village" |
+| Identity templates shipped as app assets | `accounts\<id>\identity.png` and `identity.json` in the data folder, cut by the account's first supervised run and dropped again if the check straight after does not confirm it |
 | Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules. It listens only on the Tailscale adapter's addresses (IPv4 and tailnet IPv6) and 127.0.0.1, while Tailscale is connected (`desktop/RemotePage.kt`) |
 
 ### Resolution and screen geometry

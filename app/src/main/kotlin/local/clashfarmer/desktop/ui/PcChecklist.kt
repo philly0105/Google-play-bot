@@ -1,5 +1,7 @@
 package local.clashfarmer.desktop.ui
 
+import local.clashfarmer.accounts.AccountRecord
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.PcInfo
@@ -12,8 +14,9 @@ import local.clashfarmer.ui.screens.SetupChecklist
 /**
  * Setup's lines about this PC that the phone didn't have or that read differently here: the game
  * window and tray icon in place of the phone's accessibility and notification lines, the text
- * reader, and the remote page. Pure, so their rules run in JVM tests. They are [CheckLine]s like
- * the rest, so [SetupChecklist.ready], badge and primaryFix count them as they counted the phone's.
+ * reader, the remote page, and the account's line about its identity. Pure, so their rules run in
+ * JVM tests. They are [CheckLine]s like the rest, so [SetupChecklist.ready], badge and primaryFix
+ * count them as they counted the phone's.
  */
 object PcChecklist {
     const val GAME_WINDOW = "game_window"
@@ -131,5 +134,23 @@ object PcChecklist {
         else -> CheckLine(REMOTE, "Remote page",
             "${status.tailscale}:${RemoteServer.PORT} on your tailnet. The copied link holds the key; keep it private.",
             "On", Tone.OK, counts = false)
+    }
+
+    const val ACCOUNT = "account_identity"
+
+    /**
+     * Whether the bot has read [account] off Clash's Settings ([PcAccount]); [enrolled] is null
+     * before the files are read. Until it has, only a supervised run can start, so the line is
+     * amber. No fix: the read is part of a run, which the person starts from Run.
+     */
+    fun account(account: AccountRecord, enrolled: Boolean?): CheckLine = when (enrolled) {
+        null -> CheckLine(ACCOUNT, "Account", "Checking whether the bot has read your account.",
+            SetupChecklist.chip(Tone.NEUTRAL), Tone.NEUTRAL, counts = false)
+        false -> CheckLine(ACCOUNT, "Account",
+            "Not read yet. The first supervised attack opens Clash's Settings to read your village name and tag. " +
+                "Other runs wait until then.", "Not read", Tone.WARN)
+        true -> CheckLine(ACCOUNT, "Account",
+            "Each run checks that Clash's Settings shows ${account.villageName} before it starts. " +
+                "If that is the wrong account, press ${PcAccount.READ_AGAIN}.", "Read", Tone.OK)
     }
 }

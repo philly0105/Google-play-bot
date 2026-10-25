@@ -349,13 +349,16 @@ class AccountStore(private val root: File) {
         val BLOOD_ID: String =
             UUID.nameUUIDFromBytes("local.clashfarmer.account.blood".toByteArray(Charsets.UTF_8)).toString()
 
+        // Desktop: placeholders where the phone had the owner's Supercell names and tags, which
+        // must not ship. The owner's index already holds the real ones, and a fresh install is
+        // seeded by PcAccount before this seeding can run.
         const val SWEAT_VILLAGE_NAME = "Sweat"
-        const val SWEAT_SUPERCELL_NAME = "Philly0105"
-        const val SWEAT_PLAYER_TAG = "#8YQCYG2RU"
+        const val SWEAT_SUPERCELL_NAME = "Supercell ID 1"
+        const val SWEAT_PLAYER_TAG = "#UNREAD1"
 
         const val BLOOD_VILLAGE_NAME = "Blood"
-        const val BLOOD_SUPERCELL_NAME = "VastMaNiSh"
-        const val BLOOD_PLAYER_TAG = "#Y2G29YJQ8"
+        const val BLOOD_SUPERCELL_NAME = "Supercell ID 2"
+        const val BLOOD_PLAYER_TAG = "#UNREAD2"
 
         val INITIAL_MIGRATION_IDS: Set<String> = setOf(SWEAT_ID, BLOOD_ID)
 

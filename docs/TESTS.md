@@ -2,8 +2,9 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1887 tests, 1637 copied
-from the phone and the PC's 250, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1913 tests, 1637 copied
+from the phone and the PC's 276 (261 under `desktop/` and `accounts/PcAccountTest.kt`'s 15), and
+none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -12,7 +13,7 @@ Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line
 
 | Phone path (under `android/`) | PC path | Files | Same blob as the phone |
 | --- | --- | --- | --- |
-| `app/src/test/java/` | `app/src/test/kotlin/` | 113: 110 test classes and the helpers `core/WallPhone.kt`, `insight/LogFixtures.kt`, `recognition/UpgradeListFixture.kt` | 108; five are edited (below) |
+| `app/src/test/java/` | `app/src/test/kotlin/` | 113: 110 test classes and the helpers `core/WallPhone.kt`, `insight/LogFixtures.kt`, `recognition/UpgradeListFixture.kt` | 107; six are edited (below) |
 | `app/src/test/resources/` | `app/src/test/resources/` | 23: `hero-cards/` 7, `result-frames/` 15, `upgrade-list/` 1 | 23 |
 | `calibration/live-2026-09-17/phone-profile.json` | `calibration/live-2026-09-17/phone-profile.json` at the repo root | 1 | 1 |
 
@@ -45,18 +46,28 @@ the new sentences, and `EventTextTest` adds two tests: the PC's own stop reasons
 reason that names no exception text. These edits
 are also in `docs/DIVERGENCES.md`.
 
+`accounts/AccountStoreTest.kt`, the seeding test: the two accounts' Supercell names and tags are
+`AccountStore`'s placeholders, "Supercell ID 1", "#UNREAD1", "Supercell ID 2" and "#UNREAD2",
+since the app no longer ships the owner's (`docs/DIVERGENCES.md`).
+
 ## PC tests
 
-250 `@Test` methods in 32 files under `desktop/`. Their fixtures are in
-`app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
-at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, and a few PNG crops.
+261 `@Test` methods in 32 files under `desktop/`, and 15 in `accounts/PcAccountTest.kt`. Their
+fixtures are in `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from
+Blood's game window at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter,
+and a few PNG crops.
+Blood's Settings strip at 1740x978, the template the app shipped before each account cut its own;
+`identity/pc/blood-1860x1162.png` and `pc-frames/profile/strip-village-1860x1162.png` are the
+same strip on the Settings tab and the village at 1860x1162
+(`audit-evidence/live/20261025-034323-profile3`). They are test data only.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
-| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but Blood, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, `LatestFrame.heightFor`, and the daily pruning | 23 |
+| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but the PC's, refusing unattended starts and the remote page's account check before the account is read, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, `LatestFrame.heightFor`, and the daily pruning | 27 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
-| `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
+| `PcAccountSwitcherTest` | The identity check on the profile menu's Settings strip: the Settings tab by its words, and a template cut at 1740x978 or 1860x1162 matching the strip at both sizes and not the village or the profile tab, and the real 1740x978 and 1860x1162 strips matching each other both ways within the cross-size limit while the real 16:10 village does not | 11 |
+| `accounts/PcAccountTest` (outside `desktop/`) | The fresh install's neutral account and its no-op on an existing index, the template and frame files, a damaged template counting as not read, `forget` and `undoRead`, the name and tag read off the strip, and the refusal texts | 15 |
 | `PcBuildersCornerTest` | The builders' counter read again from an upscaled crop of a village frame, through a fake OCR backend | 7 |
 | `PcUpgradeListTest` | The builder panel's mangled timers, the prices beside them, and a card's name read line by line | 5 |
 | `PcReplayTest` | Return Home on a replay's end screen | 5 |
@@ -75,7 +86,7 @@ at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, a
 | `platform/ClashWindowWatcherTest` | The Clash window lookup, a window opened again by the same game process (and a new game's window that starts hidden, which is not), `pcInfo` and a failed start | 14 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar, and old frames on a locked PC, a dark display and a still village | 14 |
 | `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including frame age, the window's process and full screen, `sessionState`, and `pcInfo` with Clash unknown, and hello's text reader error | 15 |
-| `ui/` (ten files) | The Compose UI; see `docs/UI.md` | 68 |
+| `ui/` (ten files) | The Compose UI; see `docs/UI.md` | 70 |
 
 ## When they run
 
@@ -84,9 +95,11 @@ at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter, a
   nothing is written there.
 - `EventTextTest.everyLoggedEventHasAPlainSentence` needs every event name logged under
   `src/main/kotlin` (outside `insight/`) to be one `EventText` knows, and more than 150 of them.
-  The tree logs 250 names: 246 of the phone's 251, `surface_resized`, `surface_aspect_differs`
-  and `surface_resize_failed`, which the PC's `FarmerService` logs when it sizes the game, and
-  `clash_launch_failed`, which it logs when starting Clash fails. The
+  The tree logs 252 names: 246 of the phone's 251, `surface_resized`, `surface_aspect_differs`
+  and `surface_resize_failed`, which the PC's `FarmerService` logs when it sizes the game,
+  `clash_launch_failed`, which it logs when starting Clash fails, and `account_identity_enrolled`
+  and `account_identity_forgotten`, which `AccountSwitcher` logs when it reads an account and when
+  it drops a read the check did not confirm (Setup's Read account again logs the second too). The
   phone's other five come from Android-only code: `app_switched_recovering`,
   `capture_layout_wait_timeout`, `notification_failed` and `screen_off_receiver_failed` from its
   `FarmerService` and `RunNotifier`, and `intent_action_rejected` from `MainActivity`. Any new

@@ -78,12 +78,15 @@ again; the log replays its history only on the first call, so that is harmless.
 The controller never sets `FarmerService.helperActivityVisible` and never touches the overlay's
 visibility. The overlay is its own window, and the PC bot works the game in the background.
 
-The PC runs only Blood. `pcAccounts` drops every other account from what the controller reads,
-both the tick it binds and its starts, so Sweat's calibration and wall lines never sit in Setup
-or Activity, and Home has no second-account card. With one account Run hides the account
-picker, the Both preset and the Switch account tool (`shownPresets`), and Stats hides its
-All/account filter. Sweat's record and files stay on disk. `Main.kt` selects Blood at each start, and calibration falls back to Blood. The
-built-in "Both accounts" preset is kept and refused with "Both needs two accounts".
+The PC runs one account, `PcAccount.ID` (Blood's id slot, so the owner's files stay put).
+`pcAccounts` drops every other account from what the controller reads, both the tick it binds and
+its starts, so the owner's second phone account never sits in Setup or Activity, and Home has no
+second-account card. With one account Run hides the account picker, the Both preset and the
+Switch account tool (`shownPresets`), and Stats hides its All/account filter. That account's
+record and files stay on disk. `Main.kt` calls `PcAccount.seedIfFresh` before `ensureMigrated`,
+so a fresh install gets one neutral account, "Your village", and never the phone's two; then it
+selects `PcAccount.ID` at each start, and calibration falls back to it. The built-in "Both
+accounts" preset is kept and refused with "Both needs two accounts".
 
 ## Actions
 
@@ -93,9 +96,11 @@ is on, with the toast "Wait for the current operation or stop the bot first." an
 shows an alert titled for what was asked (`actionFailure`): "Could not start the run" for
 `plan:`, `supervised` and `walls`, "Could not choose that account" for `select:` and
 `switch_only:`, "Could not clear the marker" for `acknowledge_wall:`, else "Something went
-wrong". Its message is the reason when the code worded one, such as the service's "The PC runs
-only Blood, not Sweat."; any other exception reads "Something went wrong. The Technical log on
-the Activity tab has the details." and its text stays in the log.
+wrong". Its message is the reason when the code worded one, such as the service's "Clash Farmer
+runs one account on this PC, and Sweat is not it." or, for an unattended start before the
+account is read, "Run one supervised attack first so the bot can read your account."; any other
+exception reads "Something went wrong. The Technical log on the Activity tab has the details."
+and its text stays in the log.
 
 | Action | What it does |
 | --- | --- |
@@ -108,7 +113,7 @@ the Activity tab has the details." and its text stays in the log.
 | `supervised`, `walls` | One supervised attack, or walls only, on the selected account |
 | `plan:<json>` | Checks readiness against the files again, starts the plan, keeps it as the last one |
 | `select:<id>` | Selects the account |
-| `switch_only:<id>` | Switches to the account without farming |
+| `switch_only:<id>` | Checks the account without farming (`startSwitchOnly(readAccount = true)`), reading it first if it has not been read |
 | `acknowledge_wall:<id>` | Asks "Acknowledge pending purchase", then clears the marker. Logs `pending_purchase_acknowledged` |
 | `edit:<id>` | Opens the account editor; open during a run too, with Save off |
 | `history` | Opens Stats |
@@ -281,6 +286,15 @@ Setup:
   connected)" in grey; amber when port 8765 is taken, or when Windows won't bind the Tailscale
   address yet (as after sleep), each with its own text and retry time; or "On" with the Tailscale
   IPv4 address.
+- Each account's block opens with an Account line (`PcChecklist.account`) saying whether the bot
+  has read the account off Clash's Settings (`PcAccount.enrolled`, read with the other files on
+  IO). Not read is amber, "Not read", with no fix, and says the first supervised attack reads the
+  village name and tag and other runs wait until then. Read is green, names the village and points
+  to the block's Read account again button, shown only once the account is read. That button
+  (`PcAccount.forget`, refused with "Wait for the current run to finish." during a run) drops the
+  identity template, toasts "The next supervised attack will read your account again." and turns
+  the line amber. The block's header shows the tag only once the account is read, so a fresh
+  install never shows a placeholder tag.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
 - Copy link shows only while the remote page is on, and puts the link on the AWT clipboard. The
@@ -382,7 +396,7 @@ Phone wording remains in shared files (line numbers as of 3c438fb):
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `desktop/ui/PcChecklistTest.kt` | The Game window, Windows, Text reader, Tray icon and Remote page lines, including a 1860x1162 surface, a window closed by hand or opened again, full screen, Google Play Games or Clash missing, a failed start, the Windows 10 line and a reader that failed to load, and how they count toward ready, the tab dot and the primary fix | 22 |
+| `desktop/ui/PcChecklistTest.kt` | The Game window, Windows, Text reader, Tray icon, Remote page and Account lines, including a 1860x1162 surface, a window closed by hand or opened again, full screen, Google Play Games or Clash missing, a failed start, the Windows 10 line and a reader that failed to load and an account not read yet, and how they count toward ready, the tab dot and the primary fix | 24 |
 | `desktop/SingleInstanceTest.kt` | The lock per files directory, its release, a later start raising the first, the same from a second JVM, and the start messages | 10 |
 | `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |

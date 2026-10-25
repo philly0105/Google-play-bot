@@ -232,14 +232,14 @@ class AccountStoreTest {
             // Account identity details
             assertEquals(AccountStore.SWEAT_ID, sweat.id)
             assertEquals("Sweat", sweat.villageName)
-            assertEquals("Philly0105", sweat.supercellName)
-            assertEquals("#8YQCYG2RU", sweat.playerTag)
+            assertEquals("Supercell ID 1", sweat.supercellName)
+            assertEquals("#UNREAD1", sweat.playerTag)
             assertFalse("Initial wallsEnabled must be false", sweat.settings.wallsEnabled)
 
             assertEquals(AccountStore.BLOOD_ID, blood.id)
             assertEquals("Blood", blood.villageName)
-            assertEquals("VastMaNiSh", blood.supercellName)
-            assertEquals("#Y2G29YJQ8", blood.playerTag)
+            assertEquals("Supercell ID 2", blood.supercellName)
+            assertEquals("#UNREAD2", blood.playerTag)
             assertFalse("Initial wallsEnabled must be false", blood.settings.wallsEnabled)
 
             // Legacy files must remain untouched

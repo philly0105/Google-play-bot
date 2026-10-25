@@ -279,6 +279,10 @@ object EventText {
         "account_switch_start" -> "Checking which village is signed in" to Tone.NEUTRAL
         "account_switch_verify_failed" -> "Account switch could not be confirmed: ${stopLine(str(e, "reason"))}" to Tone.BAD
         "account_identity_candidate" -> "Checking whether this is ${str(e, "village") ?: "the account"}" to Tone.NEUTRAL
+        // Desktop: the first watched run on a fresh install reads the account (PcAccount).
+        "account_identity_enrolled" -> "Read your account: ${str(e, "village") ?: "your village"}" to Tone.OK
+        // Desktop: a read the check did not confirm, or Setup's Read again (PcAccount.forget).
+        "account_identity_forgotten" -> "The bot will read your account again on the next supervised attack" to Tone.WARN
         "settings_close_failed" -> "The settings menu was still open after ${int(e, "presses") ?: 3} presses of its close button" to Tone.WARN
         "picker_row_selected" -> "Picked ${str(e, "village") ?: "the village"} in the account list" to Tone.NEUTRAL
         "switch_only_completed" -> "Switched to ${str(e, "village") ?: "the account"}; nothing else run" to Tone.OK
