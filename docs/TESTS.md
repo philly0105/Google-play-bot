@@ -1,11 +1,12 @@
 # Tests
 
-The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`. None
-of this has been compiled or run yet: the agent sandbox that copied the tests blocks Gradle. The
-counts below count source files and annotations, not results.
+The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
+the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1754 tests, the phone's 1635
+and the PC's 119, and none failed.
 
-Run them with `.\Build.ps1 :app:test`. The test task ends with one line,
-`Tests: N ran, N passed, N failed, N skipped`, to hold against the 1635 below.
+Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
+`Tests: N ran, N passed, N failed, N skipped`.
 
 ## Copied
 
@@ -36,6 +37,29 @@ reads the same screenshots through the desktop shims is not written.
 the phone keeps in `src/main/java` and this repo in `src/main/kotlin`. No assertion changed. The
 edit is also in `docs/DIVERGENCES.md`.
 
+## PC tests
+
+119 `@Test` methods in 18 files under `desktop/`. Their fixtures are in
+`app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
+at 1740x978 and 1860x1162, and a few PNG crops.
+
+| Test | Covers | Tests |
+| --- | --- | --- |
+| `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
+| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, and refusing every account but Blood | 14 |
+| `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
+| `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |
+| `PcBattleResultTest` | The result screen's loot rows and stars at the PC's lengths | 3 |
+| `PcRatePromptTest` | LATER on Play's rating dialog | 3 |
+| `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
+| `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
+| `DesktopLogTest` | The desktop log file | 1 |
+| `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 5 |
+| `platform/ClashWindowWatcherTest` | The Clash window lookup | 4 |
+| `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar | 9 |
+| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar` | 9 |
+| `ui/` (five files) | The Compose UI; see `docs/UI.md` | 37 |
+
 ## When they run
 
 - Gradle runs the tests from the module directory, `app/`. `EventTextTest` and `PhoneProfileTest`
@@ -43,19 +67,21 @@ edit is also in `docs/DIVERGENCES.md`.
   nothing is written there.
 - `EventTextTest.everyLoggedEventHasAPlainSentence` needs every event name logged under
   `src/main/kotlin` (outside `insight/`) to be one `EventText` knows, and more than 150 of them.
-  The tree as committed logs 210 of the phone's 251 names and none the phone lacks. The other 41
-  come from `MainActivity.kt`, `CalibrationActivity.kt` and `ui/TrayCheckSheet.kt` (to be rewritten
-  in Compose) and from the `FarmerService` and `RunNotifier` bodies that are stubs for now. Any new
+  The tree logs 249 names: 246 of the phone's 251, and `surface_resized`, `surface_aspect_differs`
+  and `surface_resize_failed`, which the PC's `FarmerService` logs when it sizes the game. The
+  phone's other five come from Android-only code: `app_switched_recovering`,
+  `capture_layout_wait_timeout`, `notification_failed` and `screen_off_receiver_failed` from its
+  `FarmerService` and `RunNotifier`, and `intent_action_rejected` from `MainActivity`. Any new
   `log("...")` in desktop code, the Compose UI included, needs a sentence in `insight/EventText.kt`
   or this test fails.
-- The tests reach the class 3 files only through members kept line for line:
+- The phone's tests reach the class 3 files only through members kept line for line:
   `FarmerService.CLASH_PACKAGE`, the top-level `awaitClashRead`, `RunNotifier.withdraws`,
   `OverlayGeometry`, `RunNotice`, `LiveStatus`, and `AndroidTransport.kt`'s `swipeStrokes`,
   `SwipeStroke`, `afterDrag` and `AfterDrag`. None reaches a `TODO` body.
 - Several tests call `internal` members (`RunNotifier.withdraws`, `AccountEditor.saveEnabled`, the
   swipe helpers). That works because the tests are in the same Gradle module as the code.
-- The tests import nothing from `android.*` or ML Kit. Of the main files that do, they call only
+- The phone's tests import nothing from `android.*` or ML Kit. Of the main files that do, they call only
   parts that touch no shim except the `SystemClock` one: `RunGuard`, the companion functions of
   `ScreenReader` and `AccountSwitcher`, `ImageMatcher`'s pixel arithmetic, and the top-level
   `runWithReader` (`core/LocalRunner.kt`) and `wallSignature` (`core/AndroidWallDevice.kt`). No
-  test needs an OCR backend.
+  test needs a real OCR backend.
