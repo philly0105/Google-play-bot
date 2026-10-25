@@ -1,5 +1,7 @@
 package local.clashfarmer.recognition
 
+import local.clashfarmer.core.PcGeometry
+import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
 import local.clashfarmer.core.Viewport
@@ -57,6 +59,10 @@ object UpgradeListReader {
     /**
      * Since Clash 18.647 a row is a card: the name, then its price about 22 px lower and flush
      * right. A line this close under a row that has no price yet is that row's second line.
+     *
+     * On the PC it is 32 px at 1740x978 scaled with the frame's height ([PcGeometry]): there a
+     * card's second line sits 22-29 px under its name (audit-evidence/spike/geo-list-*.json), which
+     * at 1860x1162 would be 27-34 px and split three of those cards. No list is captured at 16:10.
      */
     private const val CARD_LINE_GAP = 32
 
@@ -66,6 +72,25 @@ object UpgradeListReader {
      * name: read as the card's leftmost word it took the name, and a Wall row would be lost.
      */
     private const val ICON_COLUMN = 50
+
+    /**
+     * The PC's [ICON_COLUMN], in pixels at 1740x978, scaled with the frame's height ([PcGeometry]).
+     * Its badges read wider and end later: "se" and "20" end at x 1336 and 1344, up to 72 px into
+     * the panel, and with 50 they were glued onto "Giant Bomb x 8" and "Hero Hunter Poison Effect"
+     * (audit-evidence/spike/geo-list-end.json). Card names start at x 1346 and end far past the
+     * cut. Rows in progress have no icon and start at x 1283, so a name there shorter than about
+     * 65 px, such as Bomb, is cut too; a row in progress is never a Wall, since walls upgrade at once.
+     */
+    private const val PC_ICON_COLUMN = 80
+
+    /**
+     * The PC panel's currency icons, an x at 1740x978 kept from the right edge: one column from
+     * here to the frame's edge, whatever the boxes say. Prices end by x 1700 and the coin's yellow
+     * fills x 1708 to 1724; the reader returns the coin alone as a "0" from x 1699 or 1702, or runs
+     * a price on over it to x 1734, and either way the icon region after the price missed it
+     * (audit-evidence/spike/geo-list-end.json and .png). The elixir drop sits in the same column.
+     */
+    private const val PC_COIN_COLUMN = 1696
 
     /** A card's price line ends about 25 px below its name's (Blood's Wall row, 14 October). */
     private const val CARD_PRICE_DROP = 30
@@ -320,7 +345,9 @@ object UpgradeListReader {
     private fun rowsOf(
         all: List<RecognizedBox>, popup: Region, viewport: Viewport, pixels: (Region) -> IntArray, panel: Boolean
     ): List<Row> {
-        val boxes = if (panel) all.filter { it.right >= popup.left + ICON_COLUMN } else all
+        val iconColumn = PcGeometry.pick(viewport, ICON_COLUMN, PcGeometry.length(viewport, PC_ICON_COLUMN))
+        val cardLineGap = PcGeometry.pick(viewport, CARD_LINE_GAP, PcGeometry.length(viewport, CARD_LINE_GAP))
+        val boxes = if (panel) all.filter { it.right >= popup.left + iconColumn } else all
         val split = popup.left + (popup.width * NAME_SPLIT).toInt()
         val clusters = mutableListOf<MutableList<RecognizedBox>>()
         for (box in boxes.sortedBy { it.center.y }) {
@@ -337,7 +364,7 @@ object UpgradeListReader {
                 // A section header is its own line, never a card's.
                 val header = line.any { compact(it.text).contains("upgrade") }
                 if (card != null && !priced && !header &&
-                    line.map { it.center.y }.average() - card.minOf { it.center.y } <= CARD_LINE_GAP
+                    line.map { it.center.y }.average() - card.minOf { it.center.y } <= cardLineGap
                 ) card += line else cards += line
             }
             return cards.mapNotNull { cluster -> rowOf(cluster, popup, split, viewport, pixels, panel) }
@@ -363,7 +390,9 @@ object UpgradeListReader {
         var priceTop = 0
         var priceBottom = 0
 
-        val prices = cluster.filter { it.left >= split && !isCountdown(it.text) && hasDigit(it.text) }.sortedBy { it.left }
+        // On the PC a box that starts in the coin column is the coin, never digits of the price.
+        val coin = PcGeometry.pick(viewport, Int.MAX_VALUE, PcGeometry.x(viewport, PC_COIN_COLUMN, Anchor.RIGHT))
+        val prices = cluster.filter { it.left >= split && it.left < coin && !isCountdown(it.text) && hasDigit(it.text) }.sortedBy { it.left }
         if (prices.isNotEmpty()) {
             priceText = prices.joinToString(" ") { it.text.trim() }
             priceLeft = prices.first().left
@@ -425,7 +454,8 @@ object UpgradeListReader {
                     payable = null
                 } else {
                     // The 18.647 panel draws the coin after the digits, on the price's own line.
-                    val edge = if (panel) Region(
+                    val edge = if (panel && PcGeometry.isPc(viewport)) Region(coin, priceTop, viewport.right, priceBottom)
+                    else if (panel) Region(
                         priceRight, priceTop, (priceRight + ICON_REACH).coerceAtMost(viewport.right), priceBottom
                     ) else Region(
                         (priceLeft - ICON_REACH).coerceAtLeast(viewport.left), top,

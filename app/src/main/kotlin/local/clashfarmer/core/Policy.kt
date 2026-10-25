@@ -126,10 +126,12 @@ object Policy {
         return QUIT_BODY.containsMatchIn(text) || QUIT_TITLE.containsMatchIn(text)
     }
 
-    // "quit the game", with OCR's 1 or l for the i, 3 for an e and a space it may drop.
-    private val QUIT_BODY = Regex("\\bqu[i1l]t ?th[e3] ?gam[e3]\\b")
-    // "Confirm Exit", read "CONFiRM Bxit" on 8 October: any one letter, or none, before "xit".
-    private val QUIT_TITLE = Regex("\\bc[o0]nf[i1l]rm ?[a-z0-9]?x[i1l]t\\b")
+    // "quit the game", with OCR's 1 or l for the i, 3 for an e and a space it may drop. The PC's
+    // reader made "the" "Che" (audit-evidence/spike/geo-after-deselect.json).
+    private val QUIT_BODY = Regex("\\bqu[i1l]t ?[tc]h[e3] ?gam[e3]\\b")
+    // "Confirm Exit", read "CONFiRM Bxit" on 8 October: any one letter, or none, before "xit". The
+    // PC's reader made the t a plus, "CONfiRM Exi+", so the t may be missing.
+    private val QUIT_TITLE = Regex("\\bc[o0]nf[i1l]rm ?[a-z0-9]?x[i1l]t?\\b")
 
     private val STATE_RULES = listOf(
         ScreenState.REWARD to listOf("pick a reward"),
@@ -216,7 +218,13 @@ object Policy {
         // Or both: "Bale" on Blood's village after the reward chest at 08:40:33 UTC.
         ScreenState.HOME to listOf(" bale ", " build "),
         // Or reads its l as an i: "Battie" on Sweat's village at 10:37 UTC.
-        ScreenState.HOME to listOf(" battie ", " build ")
+        ScreenState.HOME to listOf(" battie ", " build "),
+        // The PC's reader made the first t an f: "Baftle" on Blood's village under the quit
+        // prompt, audit-evidence/spike/geo-after-deselect.json.
+        ScreenState.HOME to listOf(" baftle ", " build "),
+        // Or the second: "Batfle" on six of Blood's village frames at 1860x1162 on 24 October,
+        // audit-evidence/live/20261024-030816-profile/00-home.json among them.
+        ScreenState.HOME to listOf(" batfle ", " build ")
     )
 
     private val AMOUNT_REGEX = Regex("^(?:[0-9]+|[0-9]{1,3}(?:[ ,][0-9]{3})+)$")

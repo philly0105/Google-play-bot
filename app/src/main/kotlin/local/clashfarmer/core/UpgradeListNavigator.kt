@@ -1,5 +1,6 @@
 package local.clashfarmer.core
 
+import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.log.AppLog
 import local.clashfarmer.recognition.Observation
 import local.clashfarmer.recognition.RecognizedBox
@@ -490,12 +491,17 @@ private val LIST_WALL_NAME = Regex("a[l1i|!]{1,2}\\s*[x×]\\s*[0-9oils]")
  * A price is at least [MIN_CARD_PRICE] and not on the counters' line above Build: the builder
  * counter's split half "071@1474,543,1513,563" on ARMY frames and a badge "6@1509,574,1521,591"
  * on the store button passed for cards and cost a wall panel its price pass (UO-18 round 2).
+ *
+ * On the PC, at 1740x978, the column is x 1272-1740 and y 63-873, and the list's prices end at
+ * x 1708-1738 while the village's balances end by 1678 (audit-evidence/spike/geo-list-*.json and
+ * geo-home.json), so flush is right of 1694. The phone's 1500 would take every balance for a card.
+ * The column and the balances both keep to the right edge ([PcGeometry]), and so does flush.
  */
 internal fun upgradeListCardShowing(boxes: List<RecognizedBox>, viewport: Viewport): Boolean {
-    val left = viewport.left + viewport.width * 1118 / 1600
-    val flush = viewport.left + viewport.width * 1500 / 1600
-    val top = viewport.top + viewport.height * 60 / 720
-    val bottom = viewport.top + viewport.height * 625 / 720
+    val left = PcGeometry.pick(viewport, viewport.left + viewport.width * 1118 / 1600, PcGeometry.x(viewport, 1272, Anchor.RIGHT))
+    val flush = PcGeometry.pick(viewport, viewport.left + viewport.width * 1500 / 1600, PcGeometry.x(viewport, 1694, Anchor.RIGHT))
+    val top = PcGeometry.pick(viewport, viewport.top + viewport.height * 60 / 720, PcGeometry.y(viewport, 63))
+    val bottom = PcGeometry.pick(viewport, viewport.top + viewport.height * 625 / 720, PcGeometry.y(viewport, 873))
     return boxes.any { box ->
         box.center.x >= left && box.center.y in top..bottom &&
             (LIST_WALL_NAME.containsMatchIn(box.text.lowercase(Locale.ROOT)) ||

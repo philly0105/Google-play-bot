@@ -1,5 +1,6 @@
 package local.clashfarmer.core
 
+import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.recognition.RecognizedBox
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -32,6 +33,16 @@ object Builders {
 
     /** The builders' counter starts left of this; the goblin's starts near x 1475. */
     private const val CORNER_BUILDERS_LEFT = 1450.0 / 1600
+
+    /**
+     * The same line and split on the PC, in pixels of 1740x978 kept from the right edge
+     * ([PcGeometry]): the builders' "0/6" at x 1576-1642, y 774-804, the goblin's "0/1" beside it
+     * near x 1680 (audit-evidence/spike/geo-home.json). At 16:10 the "0/6" reads at x 1667-1746,
+     * y 920-954 of 1860x1162 (audit-evidence/live/20261024-034034-dragmeasure/4a-right150.json),
+     * and sits at x 1400-1466, y 774-804 of the same frame resized to 1565x978.
+     */
+    private val PC_CORNER = Region(1569, 756, 1723, 816)
+    private const val PC_CORNER_BUILDERS_LEFT = 1632
 
     /** One glyph free, a slash, one digit total. The top bar's "O" for a zero is taken as one. */
     private val COUNT = Regex("^([0-9OoDQ])\\s*/\\s*([0-9])$")
@@ -103,7 +114,7 @@ object Builders {
     private fun readCorner(boxes: List<RecognizedBox>, viewport: Viewport): BuilderCount? {
         if (viewport.width <= 0 || viewport.height <= 0) return null
         val first = corner(boxes, viewport)
-            .filter { (it.left - viewport.left).toDouble() / viewport.width <= CORNER_BUILDERS_LEFT }
+            .filter { (it.left - viewport.left).toDouble() / viewport.width <= PcGeometry.pick(viewport, CORNER_BUILDERS_LEFT, PcGeometry.xFraction(viewport, PC_CORNER_BUILDERS_LEFT, Anchor.RIGHT)) }
             .minByOrNull { it.left } ?: return null
         val text = first.text.map { if (it.isWhitespace()) ' ' else it }.joinToString("")
         val token = TOKEN.find(text) ?: return null
@@ -117,6 +128,7 @@ object Builders {
     /** Whether [box] is centred on the 18.647 counters' line above Build. */
     fun inCorner(box: RecognizedBox, viewport: Viewport): Boolean {
         if (viewport.width <= 0 || viewport.height <= 0) return false
+        if (PcGeometry.isPc(viewport)) return PcGeometry.region(viewport, PC_CORNER, Anchor.RIGHT).holds(box.center)
         val x = (box.center.x - viewport.left).toDouble() / viewport.width
         val y = (box.center.y - viewport.top).toDouble() / viewport.height
         return x in CORNER_LEFT..CORNER_RIGHT && y in CORNER_TOP..CORNER_BOTTOM

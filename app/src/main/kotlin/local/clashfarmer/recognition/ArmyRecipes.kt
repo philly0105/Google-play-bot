@@ -1,5 +1,7 @@
 package local.clashfarmer.recognition
 
+import local.clashfarmer.core.PcGeometry
+import local.clashfarmer.core.PcGeometry.Anchor
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.ScreenState
 import local.clashfarmer.core.Viewport
@@ -86,25 +88,41 @@ object ArmyRecipes {
      */
     const val TAB_UNKNOWN = "The screen stayed unrecognized as My Army, so Attack! was not pressed"
 
-    /** Part of the screen as fractions of the viewport. */
-    private data class Band(val left: Double, val top: Double, val right: Double, val bottom: Double) {
+    /**
+     * Part of the screen as fractions of the viewport; [pc], when given, on the PC's frames
+     * ([PcGeometry]), wide enough for 16:9 and for either way the screen may scale at 16:10.
+     */
+    private data class Band(val left: Double, val top: Double, val right: Double, val bottom: Double, val pc: Band? = null) {
         fun holds(point: Point, viewport: Viewport): Boolean {
             if (viewport.width <= 0 || viewport.height <= 0) return false
+            if (pc != null && PcGeometry.isPc(viewport)) return pc.holds(point, viewport)
             val x = (point.x - viewport.left).toDouble() / viewport.width
             val y = (point.y - viewport.top).toDouble() / viewport.height
             return x in left..right && y in top..bottom
         }
     }
 
-    /** "MY ARMY" at (356,55)-(460,72) and "Saved Recipes" at (726,57)-(874,74). */
-    private val MY_ARMY_LABEL = Band(0.15, 0.03, 0.35, 0.14)
-    private val SAVED_RECIPES_LABEL = Band(0.40, 0.03, 0.60, 0.14)
+    /**
+     * "MY ARMY" at (356,55)-(460,72) and "Saved Recipes" at (726,57)-(874,74). The PC draws this
+     * screen as the phone's scaled about 1.185 around the centre; at 1740x978 the labels read at
+     * (333,121)-(474,159) and (773,123)-(966,161) (audit-evidence/spike/geo-army.json). At 16:10
+     * the screen may keep that scale by the height, which puts My Army's centre at x 0.20, or fit the
+     * narrower width, which puts it at y 0.18; the PC bands take both.
+     */
+    private val MY_ARMY_LABEL = Band(0.15, 0.03, 0.35, 0.14, pc = Band(0.12, 0.08, 0.34, 0.22))
+    private val SAVED_RECIPES_LABEL = Band(0.40, 0.03, 0.60, 0.14, pc = Band(0.39, 0.08, 0.61, 0.22))
 
-    /** The list's Use, Edit and Share, centred at x 1352-1353. */
-    private val BUTTON_COLUMN = Band(0.80, 0.14, 0.89, 1.0)
+    /**
+     * The list's Use, Edit and Share, centred at x 1352-1353. On the PC at x 1524 of 1740, 0.876,
+     * and at 16:10 x 0.918 if the screen keeps its scale by the height (geo-recipes.json).
+     */
+    private val BUTTON_COLUMN = Band(0.80, 0.14, 0.89, 1.0, pc = Band(0.80, 0.14, 0.95, 1.0))
 
-    /** My Army's "Boost" over "ARMY" and over "HeROes", at y 117 to 149. */
-    private val BOOST_ROW = Band(0.55, 0.12, 0.85, 0.26)
+    /**
+     * My Army's "Boost" over "ARMY" and over "HeROes", at y 117 to 149. On the PC at x 1212 and 1428,
+     * y 210-232 of 1740x978 (geo-army.json); at 16:10, HeROes at x 0.857, or the row at y 0.264.
+     */
+    private val BOOST_ROW = Band(0.55, 0.12, 0.85, 0.26, pc = Band(0.55, 0.12, 0.90, 0.30))
 
     /** A title's left edge: 251-252 as read, 175 when the drag handle merged into it. */
     private const val TITLE_LEFT_MIN = 160.0 / 1600
@@ -112,6 +130,15 @@ object ArmyRecipes {
 
     /** Left of this a title box may start with the drag handle read as a letter. */
     private const val TITLE_COLUMN = 240.0 / 1600
+
+    /**
+     * The PC's, x at 1740x978 kept from the centre ([PcGeometry]): titles start at x 210
+     * (audit-evidence/spike/geo-recipes.json), so the column is the phone's 11 px gap scaled, and
+     * the handle-merged minimum is the phone's 160 mapped about the centre, an estimate: no merged
+     * title has been read on the PC.
+     */
+    private const val PC_TITLE_COLUMN = 197
+    private const val PC_TITLE_LEFT_MIN = 112
 
     /** Below the tab row; the list starts at about y 105. */
     private const val LIST_TOP = 95.0 / 720
@@ -125,6 +152,14 @@ object ArmyRecipes {
      * the top of a scrolled list (Use@1334,133) sits right where it is.
      */
     private const val USE_CENTRE_MIN = 170.0 / 720
+
+    /**
+     * The PC's, the phone's 170 mapped about the centre: Boost Heroes ends at y 247 of 978 there,
+     * and the first card's Use is centred at 277. A fraction of the height holds wherever the
+     * screen scales by the height. If it fits the width at 16:10 instead, Boost Heroes ends at
+     * y 0.278 of the height, past this line, and the first Use sits at 0.305: unverified.
+     */
+    private const val PC_USE_CENTRE_MIN = 264.0 / 978
 
     private const val USE_SLACK = 4.0 / 720
 
@@ -194,7 +229,7 @@ object ArmyRecipes {
     private fun titleBoxes(boxes: List<RecognizedBox>, viewport: Viewport): List<RecognizedBox> {
         if (viewport.width <= 0 || viewport.height <= 0) return emptyList()
         return boxes.filter {
-            fraction(it.left, viewport.left, viewport.width) in TITLE_LEFT_MIN..TITLE_LEFT_MAX &&
+            fraction(it.left, viewport.left, viewport.width) in PcGeometry.pick(viewport, TITLE_LEFT_MIN, PcGeometry.xFraction(viewport, PC_TITLE_LEFT_MIN, Anchor.CENTRE))..TITLE_LEFT_MAX &&
                 fraction(it.top, viewport.top, viewport.height) >= LIST_TOP
         }.sortedBy { it.top }
     }
@@ -206,10 +241,10 @@ object ArmyRecipes {
     fun find(boxes: List<RecognizedBox>, viewport: Viewport, wanted: String): RecipeCard? {
         val uses = boxes.filter {
             compact(it.text) == "use" && BUTTON_COLUMN.holds(it.center, viewport) &&
-                fraction(it.center.y, viewport.top, viewport.height) >= USE_CENTRE_MIN
+                fraction(it.center.y, viewport.top, viewport.height) >= PcGeometry.pick(viewport, USE_CENTRE_MIN, PC_USE_CENTRE_MIN)
         }
         for (title in titleBoxes(boxes, viewport)) {
-            val stray = fraction(title.left, viewport.left, viewport.width) < TITLE_COLUMN
+            val stray = fraction(title.left, viewport.left, viewport.width) < PcGeometry.pick(viewport, TITLE_COLUMN, PcGeometry.xFraction(viewport, PC_TITLE_COLUMN, Anchor.CENTRE))
             if (!titleMatches(title.text, wanted, stray)) continue
             val use = uses.filter { (it.top - title.top).toDouble() / viewport.height in USE_GAP_MIN..USE_GAP_MAX }
                 .minByOrNull { it.top - title.top }
@@ -248,7 +283,7 @@ object ArmyRecipes {
     fun describe(boxes: List<RecognizedBox>, viewport: Viewport, wanted: String): String {
         find(boxes, viewport, wanted)?.let { return "title@${it.title.center.y} use@${it.use.center.x},${it.use.center.y}" }
         val title = titleBoxes(boxes, viewport).firstOrNull {
-            titleMatches(it.text, wanted, fraction(it.left, viewport.left, viewport.width) < TITLE_COLUMN)
+            titleMatches(it.text, wanted, fraction(it.left, viewport.left, viewport.width) < PcGeometry.pick(viewport, TITLE_COLUMN, PcGeometry.xFraction(viewport, PC_TITLE_COLUMN, Anchor.CENTRE)))
         } ?: return "no title"
         val use = boxes.filter {
             compact(it.text) == "use" && BUTTON_COLUMN.holds(it.center, viewport) &&
@@ -316,10 +351,13 @@ object ArmyRecipes {
      * the left, the Use column at the right and the bot's panel at the top left. Held at its end
      * ([HOLD_MS]), it should move the list the drag's 300 px and no further, so a card is never
      * carried past the top in one step and each comes into view with its Use below its title.
-     * Reversed, it is the way back up for a second try.
+     * Reversed, it is the way back up for a second try. On the PC the cards are 296 px apart at
+     * 1740x978, so the same card and a fifth is 355 px, along the phone's x 1080 mapped to 1202 and
+     * kept from the centre.
      */
-    fun listSwipe(viewport: Viewport): Pair<Point, Point> =
-        scaled(viewport, 1080.0 / 1600, 600.0 / 720) to scaled(viewport, 1080.0 / 1600, 300.0 / 720)
+    fun listSwipe(viewport: Viewport): Pair<Point, Point> = PcGeometry.pick(viewport,
+        scaled(viewport, 1080.0 / 1600, 600.0 / 720) to scaled(viewport, 1080.0 / 1600, 300.0 / 720),
+        PcGeometry.point(viewport, 1202, 773, Anchor.CENTRE) to PcGeometry.point(viewport, 1202, 418, Anchor.CENTRE))
 
     private fun scaled(viewport: Viewport, fx: Double, fy: Double) = Point(
         viewport.left + (viewport.width * fx).roundToInt(),
