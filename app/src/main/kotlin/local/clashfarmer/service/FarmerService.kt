@@ -91,6 +91,8 @@ class FarmerService(
             "so the bot's taps would not reach the game. Restart the PC, then start again."
         /** Desktop: a start set for later woken late; PendingStart's own reason names the phone. */
         const val PC_ASLEEP = "The PC was asleep at the start time"
+        /** Desktop: a start set for later that found the PC locked or its screen off, so the game sent no picture. */
+        const val PC_LOCKED_AT_START = "The PC was locked or its screen was off at the start time. Leave it unlocked with the screen on"
 
         /** Why a start is refused while Inspect or the tray check holds Clash on screen. */
         const val INSPECTING = "The app is reading the game screen for Inspect or the tray check; try again when it ends"
@@ -507,6 +509,7 @@ class FarmerService(
             }
             pendingStart = start
             pendingStore.write(start)
+            awakeForStart = true
             pendingJob = serviceScope.launch {
                 // The delay does not count while the phone sleeps, so the wall clock is reread
                 // at least every slice of awake time; firePendingStart refuses a start woken late.
@@ -521,7 +524,7 @@ class FarmerService(
                 firePendingStart(start)
             }
         }
-        sendKeepSystemAwake()
+        sendKeepAwake()
         overlay?.updateStatus("${start.label} starts at ${clockTime(atMs)}")
     }
 
@@ -530,7 +533,7 @@ class FarmerService(
         dropPendingStart("You cancelled it", notify = false)
     }
 
-    private fun firePendingStart(start: PendingStart) {
+    private suspend fun firePendingStart(start: PendingStart) {
         synchronized(pendingLock) {
             // A service replaced without being destroyed leaves its start to the new one's report.
             if (replaced || pendingStart !== start) return
@@ -538,10 +541,11 @@ class FarmerService(
             pendingJob = null
             pendingStore.clear()
         }
-        sendKeepSystemAwake()
         try {
             // Desktop: the phone's reason names the phone.
             PendingStart.lateProblem(start.atMs, System.currentTimeMillis())?.let { throw IllegalStateException(PC_ASLEEP) }
+            // Desktop: the two checks below read Android and pass on the PC; this one reads Windows.
+            pcProblemAtStart()?.let { throw IllegalStateException(it) }
             val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
             if (power?.isInteractive != true) throw IllegalStateException("The phone's screen is off")
             if (!isDeviceUnlocked()) throw IllegalStateException("The phone is locked")
@@ -570,8 +574,22 @@ class FarmerService(
             runCatching { local.clashfarmer.core.PresetStore(filesDir).setLast(start.asSet) }
         } catch (e: Exception) {
             refusePendingStart(start, e.message ?: "It could not start", notify = true)
+        } finally {
+            // Desktop: let go only now, so a run that started holds the PC itself first and the
+            // screen never gets the chance to go dark in between.
+            awakeForStart = false
+            sendKeepAwake()
         }
     }
+
+    /**
+     * Desktop: why a start set for later can't run on the PC now, or null. Windows sends no
+     * picture of the game while the PC is locked or its screen is off, so a run started then
+     * would stop at its first look; it is refused instead with a reason the user can act on. A
+     * state the sidecar can't read lets the start go ahead, as before.
+     */
+    internal suspend fun pcProblemAtStart(): String? =
+        if (host.sessionState()?.framesStopped == true) PC_LOCKED_AT_START else null
 
     /** Cancels the start set for later, if there is one, and logs why. */
     private fun dropPendingStart(reason: String, notify: Boolean) {
@@ -585,7 +603,8 @@ class FarmerService(
             pendingStore.clear()
             pending
         }
-        sendKeepSystemAwake()
+        awakeForStart = false
+        sendKeepAwake()
         refusePendingStart(start, reason, notify)
     }
 
@@ -719,9 +738,11 @@ class FarmerService(
      * named [event]: LatestFrame's scaled copy, 480 wide at the frame's shape.
      *
      * Desktop: also writes one fresh capture of the game window at its real size next to it, as
-     * `<name>-full.png`, because a reader that failed needs the pixels it read. It is skipped when
-     * the window is minimized, closed or gone, and when the capture does not come within a few
-     * seconds. Both files count toward the failure snapshots StorageRetention keeps.
+     * `<name>-full.png`: the screen just after the failure, up to a few seconds later and possibly
+     * after a recovery has moved on, not the frame the failing step read. It shows the full detail
+     * the small copy loses. It is skipped when the window is minimized, closed or gone, and when
+     * the capture does not come within a few seconds. Both files count toward the failure
+     * snapshots StorageRetention keeps, so a failure with both takes two of its places.
      */
     fun saveFailureSnapshot(event: String) {
         val frame = latestFrame.scaled ?: return
@@ -2056,8 +2077,8 @@ class FarmerService(
         // notice on the same id, which would hide this one.
         if (!isBusy) dropPendingStart("The helper service shut down", notify = true)
         // Desktop: a start kept on file for the next connect no longer holds the PC awake.
-        shutDown = true
-        sendKeepSystemAwake()
+        awakeForStart = false
+        sendKeepAwake()
         stop("Service destroyed")
         // The ongoing notice shares one id across services; a replaced one leaves the new one's.
         if (!replaced) notifier?.cancelLive()
@@ -2129,44 +2150,27 @@ class FarmerService(
         }
     }
 
-    /** Desktop: tells [host] what [awakeRuns] wants now, one call at a time, so the last call sent is the current want. */
+    /**
+     * Desktop: true from [scheduleStart] until its start has fired or been dropped. A start set
+     * for later holds the system and the display awake as a run does: the PC's idle sleep would
+     * make it late, and Windows sends no picture of the game once the screen goes dark, which
+     * the run would stop on (SidecarGameSurface.FRAMES_STOPPED). The phone held nothing and was
+     * refused when its screen was off at the start time.
+     */
+    @Volatile
+    private var awakeForStart = false
+
+    /** Desktop: tells [host] what [awakeRuns] and [awakeForStart] want now, one call at a time, so the last call sent is the current want. */
     private fun sendKeepAwake() {
         awakeScope.launch {
             awakeLock.withLock {
-                val on = awakeRuns.get() > 0
+                val on = awakeRuns.get() > 0 || awakeForStart
                 try {
                     host.keepAwake(on)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     System.err.println("FarmerService: keeping the PC awake ($on) failed: ${e.message}")
-                }
-            }
-        }
-    }
-
-    /** Desktop: set by [onDestroy], after which a start still on file holds nothing awake. */
-    @Volatile
-    private var shutDown = false
-
-    /**
-     * Desktop: holds the system awake, not the display, while a start is set for later, so the
-     * PC's idle sleep doesn't make it late. The phone's start woke up late as well, when the phone
-     * slept, and was refused then; PendingStart still refuses one that is late. Sent one call at a
-     * time with the run's hold, so the last call sent is the current want. The display may still
-     * turn off meanwhile, rather than stay lit for hours; whether the run's own hold, which
-     * includes the display, turns it back on when the start fires is untested.
-     */
-    private fun sendKeepSystemAwake() {
-        awakeScope.launch {
-            awakeLock.withLock {
-                val on = pendingStart != null && !shutDown
-                try {
-                    host.keepSystemAwake(on)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    System.err.println("FarmerService: keeping the PC awake for a start ($on) failed: ${e.message}")
                 }
             }
         }

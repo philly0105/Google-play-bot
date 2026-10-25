@@ -62,6 +62,7 @@ internal static class Win32
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);

@@ -580,6 +580,7 @@ object EventText {
             low.contains("opened again while google play games kept the game running") ->
                 "the Clash window was opened again while the game kept running, so restart the PC"
             low.startsWith("the pc was asleep") -> "the PC was asleep at the start time"
+            low.startsWith("the pc was locked or its screen was off") -> "the PC was locked or its screen was off at the start time"
             low.contains("screenshot capture failed") -> "the screen could not be captured"
             low.contains("app switched to") || low.contains("not in foreground") -> "Clash left the screen"
             low.contains("device is locked") -> "the phone was locked"

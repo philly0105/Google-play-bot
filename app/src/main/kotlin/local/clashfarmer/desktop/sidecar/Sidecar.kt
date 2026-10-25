@@ -26,9 +26,6 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
     /** What [keepAwake] last asked for. The power requests die with a sidecar, so a new one is told again. */
     @Volatile private var awake = false
 
-    /** What [keepSystemAwake] last asked for, told again to a new sidecar in the same way. */
-    @Volatile private var systemAwake = false
-
     suspend fun request(op: String, args: JSONObject = JSONObject(), payload: ByteArray? = null, timeoutMs: Long = TIMEOUT_MS): Reply =
         connection().call(op, args, payload, timeoutMs)
 
@@ -136,15 +133,6 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
         }
     }
 
-    /** Holds the PC awake, not the display, for a start set for later. */
-    suspend fun keepSystemAwake(on: Boolean) {
-        try {
-            request("keepSystemAwake", JSONObject().put("on", on))
-        } finally {
-            systemAwake = on
-        }
-    }
-
     /** Whether the PC is locked and the display on; null where Windows doesn't say. */
     suspend fun sessionState(): SessionState {
         val json = request("sessionState").json
@@ -153,7 +141,7 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
 
     suspend fun pcInfo(): PcInfo {
         val json = request("pcInfo").json
-        return PcInfo(json.getInt("osBuild"), json.getBoolean("gpgInstalled"), json.getBoolean("clashInstalled"))
+        return PcInfo(json.getInt("osBuild"), json.getBoolean("gpgInstalled"), json.optBooleanOrNull("clashInstalled"))
     }
 
     suspend fun input(): InputState {
@@ -172,7 +160,6 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
         val fresh = withContext(Dispatchers.IO) { connect() }
         try {
             if (awake) fresh.call("keepAwake", JSONObject().put("on", true), timeoutMs = TIMEOUT_MS)
-            if (systemAwake) fresh.call("keepSystemAwake", JSONObject().put("on", true), timeoutMs = TIMEOUT_MS)
         } catch (e: Exception) {
             fresh.close()
             throw e
@@ -245,8 +232,8 @@ data class SessionState(val locked: Boolean?, val displayOn: Boolean?) {
     val framesStopped: Boolean get() = locked == true || displayOn == false
 }
 
-/** [osBuild] 22000 and later is Windows 11. */
-data class PcInfo(val osBuild: Int, val gpgInstalled: Boolean, val clashInstalled: Boolean)
+/** [osBuild] 22000 and later is Windows 11. [clashInstalled] is null when the sidecar could not tell. */
+data class PcInfo(val osBuild: Int, val gpgInstalled: Boolean, val clashInstalled: Boolean?)
 
 /** Points are game surface pixels. A tap is a stroke whose two ends are the same point. */
 data class Stroke(val fromX: Int, val fromY: Int, val toX: Int, val toY: Int, val ms: Long)

@@ -108,7 +108,6 @@ internal sealed class Server(Stream input, Stream output)
         "launch" => Done(() => Launch(Str(r, "url"))),
         "power" => Power(),
         "keepAwake" => Done(() => SystemState.KeepAwake(Bool(r, "on"))),
-        "keepSystemAwake" => Done(() => PcState.KeepSystemAwake(Bool(r, "on"))),
         "input" => Activity(),
         "sessionState" => SessionState(),
         "pcInfo" => PcInfo(),
@@ -164,11 +163,17 @@ internal sealed class Server(Stream input, Stream output)
         return (new JsonObject { ["locked"] = locked, ["displayOn"] = displayOn }, []);
     }
 
-    private static (JsonObject, byte[]) PcInfo() =>
-        (new JsonObject
+    private static (JsonObject, byte[]) PcInfo()
+    {
+        // A shortcut scan that fails leaves Clash unknown rather than failing the whole answer.
+        bool? clash;
+        try { clash = PcState.ClashInstalled(); }
+        catch (Exception) { clash = null; }
+        return (new JsonObject
         {
-            ["osBuild"] = PcState.OsBuild(), ["gpgInstalled"] = PcState.GpgInstalled(), ["clashInstalled"] = PcState.ClashInstalled()
+            ["osBuild"] = PcState.OsBuild(), ["gpgInstalled"] = PcState.GpgInstalled(), ["clashInstalled"] = clash
         }, []);
+    }
 
     private (JsonObject, byte[]) Capture(JsonObject r)
     {

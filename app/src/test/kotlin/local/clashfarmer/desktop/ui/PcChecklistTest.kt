@@ -156,6 +156,9 @@ class PcChecklistTest {
     fun `everything installed and no window is the plain open line`() {
         val line = PcChecklist.gameWindow(WindowStatus(checked = true, pc = PcInfo(22631, gpgInstalled = true, clashInstalled = true)))
         assertEquals("Not open", line.chip)
+        // A shortcut scan that could not tell says nothing about Clash.
+        val unknown = PcChecklist.gameWindow(WindowStatus(checked = true, pc = PcInfo(22631, gpgInstalled = true, clashInstalled = null)))
+        assertEquals("Not open", unknown.chip)
     }
 
     @Test

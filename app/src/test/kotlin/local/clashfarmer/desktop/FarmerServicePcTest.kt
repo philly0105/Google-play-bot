@@ -21,6 +21,7 @@ import local.clashfarmer.desktop.platform.ScreenshotCallback
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.sidecar.PowerState
+import local.clashfarmer.desktop.sidecar.SessionState
 import local.clashfarmer.desktop.sidecar.SidecarException
 import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.recognition.PhoneProfile
@@ -77,13 +78,20 @@ class FarmerServicePcTest {
 
         override suspend fun power(): PowerState = battery()
 
-        override suspend fun keepAwake(on: Boolean) {}
+        /** Every keepAwake call, in order. */
+        val awake = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
 
-        /** Every keepSystemAwake call, in order. */
-        val systemAwake = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
+        override suspend fun keepAwake(on: Boolean) {
+            awake += on
+        }
 
-        override suspend fun keepSystemAwake(on: Boolean) {
-            systemAwake += on
+        /** What [sessionState] answers, and how many times it was asked. */
+        @Volatile var session: SessionState? = null
+        @Volatile var sessionAsked = 0
+
+        override suspend fun sessionState(): SessionState? {
+            sessionAsked++
+            return session
         }
     }
 
@@ -283,14 +291,50 @@ class FarmerServicePcTest {
         assertTrue(done())
     }
 
+    private val laterPlan
+        get() = local.clashfarmer.core.RunPlan(listOf(AccountStore.BLOOD_ID), local.clashfarmer.core.Length.Attacks(4), walls = false)
+
     @Test
-    fun `a start set for later keeps the PC awake until it is cancelled`() {
+    fun `a start set for later keeps the PC and its screen awake until it is cancelled`() {
         AccountStore(filesDir).ensureMigrated()
-        val plan = local.clashfarmer.core.RunPlan(listOf(AccountStore.BLOOD_ID), local.clashfarmer.core.Length.Attacks(4), walls = false)
-        service.scheduleStart(plan, System.currentTimeMillis() + 3_600_000L)
-        waitFor { host.systemAwake.toList() == listOf(true) }
+        service.scheduleStart(laterPlan, System.currentTimeMillis() + 3_600_000L)
+        waitFor { host.awake.toList() == listOf(true) }
         service.cancelPendingStart()
-        waitFor { host.systemAwake.toList() == listOf(true, false) }
+        waitFor { host.awake.toList() == listOf(true, false) }
+    }
+
+    @Test
+    fun `a start set for later lets the PC go when the app shuts down`() {
+        AccountStore(filesDir).ensureMigrated()
+        service.scheduleStart(laterPlan, System.currentTimeMillis() + 3_600_000L)
+        waitFor { host.awake.toList() == listOf(true) }
+        service.onDestroy()
+        waitFor { host.awake.lastOrNull() == false }
+    }
+
+    @Test
+    fun `a start set for later reads the lock and the screen when it fires, then lets the PC go`() {
+        AccountStore(filesDir).ensureMigrated()
+        host.session = SessionState(locked = true, displayOn = true)
+        service.scheduleStart(laterPlan, System.currentTimeMillis() + 200L)
+        waitFor { host.sessionAsked == 1 && host.awake.lastOrNull() == false }
+        assertEquals(true, host.awake.first())
+        assertFalse(service.isBusy)
+        assertEquals(0, host.launches)
+    }
+
+    @Test
+    fun `a start is refused when the PC is locked or its screen is off, and not when that can't be read`() = runBlocking {
+        host.session = SessionState(locked = true, displayOn = true)
+        assertEquals(FarmerService.PC_LOCKED_AT_START, service.pcProblemAtStart())
+        host.session = SessionState(locked = false, displayOn = false)
+        assertEquals(FarmerService.PC_LOCKED_AT_START, service.pcProblemAtStart())
+        host.session = SessionState(locked = false, displayOn = true)
+        assertNull(service.pcProblemAtStart())
+        host.session = SessionState(locked = null, displayOn = null)
+        assertNull(service.pcProblemAtStart())
+        host.session = null
+        assertNull(service.pcProblemAtStart())
     }
 
     private fun captures() = java.io.File(filesDir, "captures").listFiles()?.map { it.name }?.sorted() ?: emptyList()

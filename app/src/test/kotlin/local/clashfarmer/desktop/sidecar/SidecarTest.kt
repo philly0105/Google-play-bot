@@ -215,40 +215,11 @@ class SidecarTest {
         assertEquals("pcInfo", request.op)
         fake.ok(request) { put("osBuild", 19045).put("gpgInstalled", true).put("clashInstalled", false) }
         assertEquals(PcInfo(osBuild = 19045, gpgInstalled = true, clashInstalled = false), info.await())
-    }
 
-    @Test
-    fun `a restarted sidecar is asked to keep the system awake again, and not once that is let go`() = runBlocking {
-        val first = FakeSidecar()
-        val second = FakeSidecar()
-        val third = FakeSidecar()
-        val fakes = ArrayDeque(listOf(first, second, third))
-        val sidecar = Sidecar { fakes.removeFirst().connection }
-        val hold = async(Dispatchers.Default) { sidecar.keepSystemAwake(true) }
-        val request = first.next()
-        assertEquals("keepSystemAwake", request.op)
-        assertTrue(request.json.getBoolean("on"))
-        first.ok(request)
-        hold.await()
-        first.die()
-        while (first.connection.isOpen) Thread.sleep(5)
-
-        val release = async(Dispatchers.Default) { sidecar.keepSystemAwake(false) }
-        val again = second.next()
-        assertEquals("keepSystemAwake", again.op)
-        assertTrue(again.json.getBoolean("on"))
-        second.ok(again)
-        val off = second.next()
-        assertFalse(off.json.getBoolean("on"))
-        second.ok(off)
-        release.await()
-        second.die()
-        while (second.connection.isOpen) Thread.sleep(5)
-
-        val power = async(Dispatchers.Default) { sidecar.power() }
-        val next = third.next()
-        assertEquals("power", next.op)
-        third.ok(next) { put("ac", true).put("batteryPercent", -1).put("saver", false) }
-        assertTrue(power.await().ac)
+        // A shortcut scan that could not finish leaves Clash unknown.
+        val unknown = async(Dispatchers.Default) { sidecar.pcInfo() }
+        val again = fake.next()
+        fake.ok(again) { put("osBuild", 22631).put("gpgInstalled", true).put("clashInstalled", JSONObject.NULL) }
+        assertEquals(PcInfo(osBuild = 22631, gpgInstalled = true, clashInstalled = null), unknown.await())
     }
 }
