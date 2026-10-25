@@ -105,6 +105,9 @@ supervised attacks), `20261025-064500-unattended1610` (the run's failure snapsho
 - An unattended run at 16:10.
 - A defeat, walls, ending a battle early, the in-app Calibrate flow, the remote page from another
   device and the SendInput fallback, as on 24 October.
+- A tray with another troop of x5 or more right of the main troop has not been seen live. Reading
+  it as the plain tray rather than an event tray is tested offline only, on band reads off
+  Blood's two scout frames rearranged.
 
 ## 2026-10-24
 

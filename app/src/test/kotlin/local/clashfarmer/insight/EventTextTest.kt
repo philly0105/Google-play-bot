@@ -519,9 +519,9 @@ class EventTextTest {
     fun aTroopReadAsTheEventCardReadsPlainly() {
         // The stop line keeps the first sentence, which says the tray was read as an event tray.
         val mismatch = "Blood's army no longer matches its tray setup: the Champion's card shows a troop count, with the " +
-            "tray read as starting with an event card. If there is no event card, the bot is reading another troop " +
-            "with a count of x5 or more right of the main troop as one, and recalibrating will not change that. " +
-            "Check the tray in Setup."
+            "tray read as starting with an event card. If there is no event card, the bot read another troop with " +
+            "a count of x5 or more right of the main troop as one, and the hero cards are not where they were " +
+            "calibrated either. Check the tray in Setup, then recalibrate it."
         assertEquals("the army no longer matches its tray setup: the Champion's card shows a troop count, with the tray " +
             "read as starting with an event card", EventText.stopLine(mismatch))
 

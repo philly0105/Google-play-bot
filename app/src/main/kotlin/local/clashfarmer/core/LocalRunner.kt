@@ -1248,10 +1248,12 @@ class LocalRunner(
      * read as an event tray, the slots one card right are judged too: one more band unless the
      * profile's card areas are uneven. No frame is taken when the profile cannot place the badges.
      *
-     * Should one show a count on an event layout, the slots where they were calibrated are judged
-     * too, and [TrayCheck.troopInSlot2] may find the plain tray with a troop in slot 2, which is
-     * then deployed plain. Until the next hero check, the same two counts read as an event layout
-     * are deployed plain as well.
+     * On an event layout the slots where they were calibrated are judged too, and when no hero
+     * slot either way shows a count, the spell after the heroes is read where it was calibrated:
+     * one or two more bands on an even tray. [TrayCheck.troopInSlot2] may find the plain tray with
+     * a troop in slot 2, which is then deployed plain. Until the next hero check, the same two
+     * counts read as an event layout are deployed plain as well, and an event layout read at other
+     * counts is judged again ([TrayCheck.troopInSlot2CheckDue]).
      */
     private suspend fun readTray(runToken: Long, timer: StepTimer): TrayRead {
         val bands = AttackPlanner.trayBadgeRegions(profile)
@@ -1265,7 +1267,8 @@ class LocalRunner(
             val asRead = AttackPlanner.forTray(profile, read, eventMode = withEventTroops)
             var shifted: TrayCheck.Report? = null
             var troop = false
-            val heroes = if (cap == null || !heroCheckDue(counts.first)) {
+            val heroes = if (cap == null || !(heroCheckDue(counts.first) ||
+                    TrayCheck.troopInSlot2CheckDue(read, counts, troopInSlot2Counts))) {
                 troop = read == AttackPlanner.TrayLayout.EVENT && counts == troopInSlot2Counts
                 null
             } else {
@@ -1280,10 +1283,12 @@ class LocalRunner(
                             ?.let { judgeHeroes(it, read, cap.bitmap, bandReads) }
                     }
                     // A troop of x5 or more right of the main troop reads as an event card in front.
-                    val plain = if (read == AttackPlanner.TrayLayout.EVENT && TrayCheck.wrongHero(report) != null) {
+                    val plain = if (read == AttackPlanner.TrayLayout.EVENT) {
                         judgeHeroes(profile, AttackPlanner.TrayLayout.PLAIN, cap.bitmap, bandReads)
                     } else null
-                    troop = plain != null && TrayCheck.troopInSlot2(report, plain)
+                    troop = plain != null && TrayCheck.troopInSlot2(profile, report, plain) { band ->
+                        bandReads.getOrPut(band) { screenReader.readTrayBadge(cap.bitmap, band) }
+                    }
                     if (troop) {
                         shifted = report
                         plain

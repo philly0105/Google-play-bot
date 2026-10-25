@@ -498,121 +498,182 @@ class TrayCheckTest {
     }
 
     /**
-     * A tray with a second troop type right of the main troop, calibrated on Blood's card width
-     * and group gaps: the troop at 366-432 is not calibrated, so the King and every card after it
-     * sit one card further right than on Blood's tray. Modelled; no such tray was captured.
+     * A tray with a second troop type right of the main troop, on Blood's live card areas of
+     * 1740x978: the second troop's card is not calibrated, so the King and every card after it
+     * sit one card (110 px) further right than on Blood's tray, the spells 12 px further on, as
+     * Blood's are. Modelled; no such tray was captured.
      */
     private fun troopInSlot2Profile(): PhoneProfile = PhoneProfile(
-        resolutionWidth = 1600,
-        resolutionHeight = 720,
-        viewport = Viewport(0, 0, 1600, 720),
+        resolutionWidth = 1740,
+        resolutionHeight = 978,
+        viewport = Viewport(0, 0, 1740, 978),
         troopAnchors = mapOf(
-            "valkyries" to Point(302, 650),
-            "king" to Point(506, 650),
-            "queen" to Point(603, 650),
-            "warden" to Point(700, 650),
-            "champion" to Point(797, 650),
-            "rages" to Point(905, 650),
-            "jumps" to Point(1002, 650)
+            "valkyries" to Point(307, 903),
+            "king" to Point(539, 903),
+            "queen" to Point(649, 903),
+            "warden" to Point(759, 903),
+            "champion" to Point(869, 903),
+            "rages" to Point(991, 903),
+            "jumps" to Point(1101, 903)
         ),
         troopRois = mapOf(
-            "valkyries" to Region(269, 600, 335, 702),
-            "king" to Region(473, 600, 540, 702),
-            "queen" to Region(570, 600, 637, 702),
-            "warden" to Region(667, 600, 733, 702),
-            "champion" to Region(764, 600, 830, 702),
-            "rages" to Region(872, 600, 938, 702),
-            "jumps" to Region(969, 600, 1035, 702)
+            "valkyries" to Region(270, 846, 345, 962),
+            "king" to Region(502, 846, 577, 962),
+            "queen" to Region(612, 846, 687, 962),
+            "warden" to Region(722, 846, 797, 962),
+            "champion" to Region(832, 846, 907, 962),
+            "rages" to Region(954, 846, 1029, 962),
+            "jumps" to Region(1064, 846, 1139, 962)
         )
     )
 
     /**
-     * [troopInSlot2Profile]'s own tray, no event card: Valkyries x44 as Blood's read, the second
-     * troop's x20 in slot 2, each hero card's top read as Sweat's King's was, and the rages' x11
-     * and the jump's x1. One card right of the Champion the band lies over the rages card, which
-     * it stops short of, so it reads x1 as Blood's x11 did through a band cut at the card edge.
+     * [troopInSlot2Profile]'s own tray, no event card. Every band but slot 2's holds what the
+     * sidecar read off Blood's scout (audit-evidence/spike/geo-scout.png) through the same band on
+     * the same card: the Valkyries' x44, each hero card's top, the rages' x5 and the jump's x1.
+     * Slot 2's x20 is modelled. One card right of the Champion the band stops 4 px into the rages'
+     * 5, and on that scout it read "x!" on every cut, so it shows no count.
      */
     private val troopInSlot2Plain = reads(
-        269 to listOf("ttX", "X44", "X44", "X44"),
-        366 to listOf("x20", "x20", "x20"),
-        473 to listOf("(-"), 570 to listOf("(-"), 667 to listOf("(-"), 764 to listOf("(-"),
-        861 to listOf("x1", "x1", "x1"),
-        872 to listOf("x11", "x11", "x11", "x11"),
-        969 to listOf("x1", "x1", "x1", "x1")
+        270 to listOf("x44", "x44", "x44", "x44"),
+        380 to listOf("x20", "x20", "x20", "x20"),
+        502 to listOf("\u00e0", "-1"), 612 to listOf(".1"), 722 to listOf("x", "m\u2026.."), 832 to listOf("n"),
+        942 to listOf("x!", "x!", "X!", "X!"),
+        954 to listOf("XS", "XS", "X5", "XS"),
+        1064 to listOf("XI", "xI", "XI", "x1")
     )
 
     /**
-     * The same account with the event card in front: every card one card right, so the x20
-     * troop's badge lies in the calibrated King's band and the heroes where the shift puts them.
+     * The same account with the event card in front: every card one card right, the event card's
+     * pale x50 modelled as before. The calibrated King's band lies on the x20 troop, as it lay on
+     * the Valkyries' x44 when the sidecar read Blood's scout through it 24 px into that card; the
+     * calibrated rages' band lies on the Champion's card and read "n".
      */
     private val troopInSlot2Event = reads(
-        269 to listOf("X50"),
-        366 to listOf("ttX", "X44", "X44", "X44"),
-        473 to listOf("x20", "x20", "x20"),
-        570 to listOf("(-"), 667 to listOf("(-"), 764 to listOf("(-"), 861 to listOf("(-"),
-        969 to listOf("x11", "x11", "x11", "x11"),
-        1066 to listOf("x1", "x1", "x1", "x1")
+        270 to listOf("X50"),
+        380 to listOf("x44", "x44", "x44", "x44"),
+        502 to listOf("x20", "x20", "x20", "x20"),
+        612 to listOf("\u00e0", "-1"), 722 to listOf(".1"), 832 to listOf("x", "m\u2026.."), 942 to listOf("n"),
+        954 to listOf("n"),
+        1064 to listOf("XS", "XS", "X5", "XS"),
+        1174 to listOf("XI", "xI", "XI", "x1")
     )
 
-    /** The hero slots where they were calibrated, as an attack judges them when an event layout shows a count. */
+    /** [troopInSlot2Event] with a card that shows no count left of the King: a siege card reading "L", as Blood's did. */
+    private val troopInSlot2EventSiege: (Region) -> List<String> =
+        { band -> if (band.left == 502) listOf("L", "L") else troopInSlot2Event(band) }
+
+    /** The hero slots where they were calibrated, as an attack judges them on an event layout. */
     private fun calibratedHeroes(profile: PhoneProfile, read: (Region) -> List<String>): TrayCheck.Report =
         TrayCheck.heroSlots(profile, AttackPlanner.TrayLayout.PLAIN, read) { 120.0 }
 
     @Test
-    fun aTroopInSlotTwoIsThePlainTrayWhenOnlyItsHeroesOneCardRightShowACount() {
-        // Slot 2's x20 badges the tray as the event card would, so an attack judges the heroes one
-        // card right: the Champion's slot lies on the rages and the run would stop on it.
+    fun aTroopInSlotTwoIsThePlainTrayWhenItsHeroesAreCleanAndItsSpellShowsItsCount() {
+        // Slot 2's x20 badges the tray as the event card would, and one card right the heroes show
+        // no count: the band past the Champion cuts the rages' 5.
         val shifted = attackHeroes(troopInSlot2Profile(), troopInSlot2Plain)
         assertEquals(AttackPlanner.TrayLayout.EVENT, shifted.layout)
-        assertEquals("champion", TrayCheck.wrongHero(shifted)!!.name)
-        // Where they were calibrated the heroes show no count, so the tray is the plain one.
+        assertNull(TrayCheck.wrongHero(shifted))
+        // Where they were calibrated the heroes show no count and the rages show their x5.
         val calibrated = calibratedHeroes(troopInSlot2Profile(), troopInSlot2Plain)
         assertNull(TrayCheck.wrongHero(calibrated))
-        assertTrue(TrayCheck.troopInSlot2(shifted, calibrated))
+        assertEquals(Region(954, 846, 1029, 962), TrayCheck.spellAfterHeroes(troopInSlot2Profile()))
+        assertTrue(TrayCheck.troopInSlot2(troopInSlot2Profile(), shifted, calibrated, troopInSlot2Plain))
         // Deployed plain, the attack does not stop: the calibrated slots go first, one card right second.
         assertNull(TrayCheck.wrongHero(calibrated, shifted))
+
+        // Should the band past the Champion read the next card's count, that is enough on its own.
+        val pastChampion: (Region) -> List<String> =
+            { band -> if (band.left == 942) listOf("x5", "x5") else troopInSlot2Plain(band) }
+        val counted = attackHeroes(troopInSlot2Profile(), pastChampion)
+        assertEquals("champion", TrayCheck.wrongHero(counted)!!.name)
+        assertTrue(TrayCheck.troopInSlot2(troopInSlot2Profile(), counted, calibrated) { emptyList() })
     }
 
     @Test
     fun aRealEventTrayIsNeverReadAsATroopInSlotTwo() {
-        // The heroes are where the shift puts them, so nothing questions the event layout.
+        // The King's calibrated slot is on the x20 troop, and the rages' on the Champion.
         val event = attackHeroes(troopInSlot2Profile(), troopInSlot2Event)
         assertEquals(AttackPlanner.TrayLayout.EVENT, event.layout)
         assertNull(TrayCheck.wrongHero(event))
-        assertFalse(TrayCheck.troopInSlot2(event, calibratedHeroes(troopInSlot2Profile(), troopInSlot2Event)))
+        val calibrated = calibratedHeroes(troopInSlot2Profile(), troopInSlot2Event)
+        assertEquals("king", TrayCheck.wrongHero(calibrated)!!.name)
+        assertFalse(TrayCheck.troopInSlot2(troopInSlot2Profile(), event, calibrated, troopInSlot2Event))
+
+        // With a siege card left of the King the calibrated hero slots are clean, but the rages'
+        // slot is still on the Champion's card, which has no badge.
+        val sieged = calibratedHeroes(troopInSlot2Profile(), troopInSlot2EventSiege)
+        assertNull(TrayCheck.wrongHero(sieged))
+        assertFalse(TrayCheck.troopInSlot2(troopInSlot2Profile(),
+            attackHeroes(troopInSlot2Profile(), troopInSlot2EventSiege), sieged, troopInSlot2EventSiege))
 
         // Should a hero slot one card right show a count (modelled: the Champion away, the rages
-        // in her place), the King's calibrated slot is on the x20 troop, so the tray stays an event
-        // tray and the attack is refused as before.
-        val noChampion = reads(
-            269 to listOf("X50"), 366 to listOf("ttX", "X44", "X44", "X44"), 473 to listOf("x20", "x20", "x20"),
-            570 to listOf("(-"), 667 to listOf("(-"), 764 to listOf("(-"), 861 to listOf("x11", "x11", "x11")
-        )
+        // in her place), the King's calibrated slot is still on the x20 troop, so the tray stays
+        // an event tray and the attack is refused as before.
+        val noChampion: (Region) -> List<String> =
+            { band -> if (band.left == 942) listOf("x5", "x5") else troopInSlot2Event(band) }
         val shifted = attackHeroes(troopInSlot2Profile(), noChampion)
         assertEquals("champion", TrayCheck.wrongHero(shifted)!!.name)
-        val calibrated = calibratedHeroes(troopInSlot2Profile(), noChampion)
-        assertEquals("king", TrayCheck.wrongHero(calibrated)!!.name)
-        assertFalse(TrayCheck.troopInSlot2(shifted, calibrated))
+        assertFalse(TrayCheck.troopInSlot2(troopInSlot2Profile(), shifted,
+            calibratedHeroes(troopInSlot2Profile(), noChampion), noChampion))
 
         // The same on a tray whose King follows the main troop: his calibrated slot is on the
         // Valkyries, as on Blood's event scout of 7 October.
         val bloodNoChampion = reads(269 to listOf("X50"), 366 to listOf("ttX", "X44", "X44", "X44"),
-            376 to listOf("x44", "x44"), 764 to listOf("x11", "x11", "x11"))
+            376 to listOf("x44", "x44"), 764 to listOf("x11", "x11", "x11"), 775 to listOf("x11", "x11", "x11"))
         val bloodShifted = attackHeroes(bloodProfile(), bloodNoChampion)
         assertEquals(AttackPlanner.TrayLayout.EVENT, bloodShifted.layout)
         assertEquals("champion", TrayCheck.wrongHero(bloodShifted)!!.name)
-        assertFalse(TrayCheck.troopInSlot2(bloodShifted, calibratedHeroes(bloodProfile(), bloodNoChampion)))
+        assertFalse(TrayCheck.troopInSlot2(bloodProfile(), bloodShifted,
+            calibratedHeroes(bloodProfile(), bloodNoChampion), bloodNoChampion))
         assertEquals(AttackPlanner.TrayLayout.EVENT, TrayCheck.check(bloodProfile(), bloodNoChampion) { 120.0 }.layout)
     }
 
     @Test
+    fun onlyASpellRightNextToTheLastHeroIsAskedForItsCount() {
+        assertEquals(Region(775, 600, 842, 702), TrayCheck.spellAfterHeroes(bloodProfile()))
+        // A spell the profile does not know between the Champion and the rages: on an event tray
+        // the rages' slot would lie on that spell's count, not on the Champion.
+        val spellBetween = troopInSlot2Profile().let { p ->
+            p.copy(troopAnchors = p.troopAnchors + ("rages" to Point(1101, 903)) - "jumps",
+                troopRois = p.troopRois + ("rages" to Region(1064, 846, 1139, 962)) - "jumps")
+        }
+        assertNull(TrayCheck.spellAfterHeroes(spellBetween))
+        val event: (Region) -> List<String> =
+            { band -> if (band.left == 1064) listOf("x2", "x2", "x2") else troopInSlot2EventSiege(band) }
+        val shifted = attackHeroes(spellBetween, event)
+        val calibrated = calibratedHeroes(spellBetween, event)
+        assertNull(TrayCheck.wrongHero(shifted))
+        assertNull(TrayCheck.wrongHero(calibrated))
+        assertFalse(TrayCheck.troopInSlot2(spellBetween, shifted, calibrated, event))
+        assertEquals(AttackPlanner.TrayLayout.EVENT, TrayCheck.check(spellBetween, event) { 120.0 }.layout)
+        // No hero, or no card after the last one: nothing to ask.
+        assertNull(TrayCheck.spellAfterHeroes(bloodProfile().let { p -> p.copy(troopRois = p.troopRois.filterKeys { !TrayCheck.isHeroSlot(it) }) }))
+        assertNull(TrayCheck.spellAfterHeroes(bloodProfile().let { p -> p.copy(troopRois = p.troopRois - "rages" - "jumps") }))
+    }
+
+    @Test
+    fun anEventLayoutReadAtOtherCountsIsJudgedAgainAfterATroopInSlotTwo() {
+        val event = AttackPlanner.TrayLayout.EVENT
+        // Nothing remembered: the hero check runs only when it is due.
+        assertFalse(TrayCheck.troopInSlot2CheckDue(event, 40 to 20, null))
+        // The counts the last hero check read plain: deployed plain without a check.
+        assertFalse(TrayCheck.troopInSlot2CheckDue(event, 40 to 20, 40 to 20))
+        // Slot 2 misread (the 0/8 confusion, or tied cuts that leave no count) is judged again.
+        assertTrue(TrayCheck.troopInSlot2CheckDue(event, 40 to 28, 40 to 20))
+        assertTrue(TrayCheck.troopInSlot2CheckDue(event, 40 to null, 40 to 20))
+        // A tray not read as an event tray deploys plain anyway.
+        assertFalse(TrayCheck.troopInSlot2CheckDue(AttackPlanner.TrayLayout.PLAIN, 40 to null, 40 to 20))
+    }
+
+    @Test
     fun aTrayStopOnAnEventLayoutSaysATroopMayBeReadAsTheEventCard() {
-        val champion = TrayCheck.slot(troopInSlot2Profile(), "champion", Region(861, 600, 927, 702), listOf("x1"), 120.0)
+        val champion = TrayCheck.slot(troopInSlot2Profile(), "champion", Region(942, 846, 1017, 962), listOf("x5"), 120.0)
         val reason = TrayCheck.trayMismatch("Blood", champion, eventCard = true)
         assertEquals("Blood's army no longer matches its tray setup: the Champion's card shows a troop count, with the " +
-            "tray read as starting with an event card. If there is no event card, the bot is reading another troop " +
-            "with a count of x5 or more right of the main troop as one, and recalibrating will not change that. " +
-            "Check the tray in Setup.", reason)
+            "tray read as starting with an event card. If there is no event card, the bot read another troop with " +
+            "a count of x5 or more right of the main troop as one, and the hero cards are not where they were " +
+            "calibrated either. Check the tray in Setup, then recalibrate it.", reason)
         assertTrue(reason.contains(TrayCheck.TRAY_MISMATCH))
         assertFalse(reason, RecoveryPolicy.isRecoverable(reason))
         assertEquals(RunNotice.Kind.NEEDS_YOU, RunNotice.stopped("Blood", reason).kind)
@@ -628,8 +689,9 @@ class TrayCheckTest {
 
         assertEquals(AttackPlanner.TrayLayout.PLAIN, report.layout)
         assertFalse(report.slots.any { it.name == "event" })
-        assertEquals(Region(269, 600, 335, 702), report.slot("valkyries").roi)
-        assertEquals(Region(473, 600, 540, 702), report.slot("king").roi)
+        assertEquals(Region(270, 846, 345, 962), report.slot("valkyries").roi)
+        assertEquals(Region(502, 846, 577, 962), report.slot("king").roi)
+        assertEquals(5, report.slot("rages").badge)
         assertEquals(TrayCheck.Level.OK, report.level)
         assertEquals("All 7 slots look right", report.headline)
         assertEquals("The card right of the main troop shows a troop count, as an event card in front would, but the " +
@@ -640,14 +702,17 @@ class TrayCheckTest {
 
     @Test
     fun setupsCheckStillMovesARealEventTrayOneCardRight() {
-        val report = TrayCheck.check(troopInSlot2Profile(), troopInSlot2Event) { 120.0 }
+        for (scout in listOf(troopInSlot2Event, troopInSlot2EventSiege)) {
+            val report = TrayCheck.check(troopInSlot2Profile(), scout) { 120.0 }
 
-        assertEquals(AttackPlanner.TrayLayout.EVENT, report.layout)
-        assertEquals(50, report.slot("event").badge)
-        assertEquals(Region(366, 600, 432, 702), report.slot("valkyries").roi)
-        assertEquals(Region(570, 600, 637, 702), report.slot("king").roi)
-        assertEquals(TrayCheck.Level.OK, report.level)
-        assertTrue(report.layoutLine.contains("one card to the right"))
+            assertEquals(AttackPlanner.TrayLayout.EVENT, report.layout)
+            assertEquals(50, report.slot("event").badge)
+            assertEquals(Region(380, 846, 455, 962), report.slot("valkyries").roi)
+            assertEquals(Region(612, 846, 687, 962), report.slot("king").roi)
+            assertEquals(Region(1064, 846, 1139, 962), report.slot("rages").roi)
+            assertEquals(TrayCheck.Level.OK, report.level)
+            assertTrue(report.layoutLine.contains("one card to the right"))
+        }
     }
 
     @Test

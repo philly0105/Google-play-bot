@@ -156,8 +156,9 @@ object TrayCheck {
         val shiftedHeroes = shift.getOrNull()?.takeIf { read == AttackPlanner.TrayLayout.EVENT }?.let {
             heroSlots(it, read, { band -> reads.getOrPut(band) { readBadge(band) } }, saturation)
         }
-        val troop = shiftedHeroes != null && wrongHero(shiftedHeroes) != null && troopInSlot2(shiftedHeroes,
-            heroSlots(profile, AttackPlanner.TrayLayout.PLAIN, { band -> reads.getOrPut(band) { readBadge(band) } }, saturation))
+        val troop = shiftedHeroes != null && troopInSlot2(profile, shiftedHeroes,
+            heroSlots(profile, AttackPlanner.TrayLayout.PLAIN, { band -> reads.getOrPut(band) { readBadge(band) } }, saturation)
+        ) { band -> reads.getOrPut(band) { readBadge(band) } }
         val layout = if (troop) AttackPlanner.TrayLayout.PLAIN else read
         val tray = if (troop) profile else shift.getOrDefault(profile)
         val slots = tray.troopRois.entries.sortedBy { it.value.left }.map { (name, roi) ->
@@ -172,18 +173,52 @@ object TrayCheck {
      * Whether a tray read as an event tray is the plain tray with another troop of x5 or more in
      * slot 2, whose first two badges read as the event card's and the main troop's do. [shifted]
      * is its hero slots judged one card right, where the event tray puts them; [plain] the same
-     * slots judged where they were calibrated, off the same frame.
+     * slots judged where they were calibrated, off the same frame. [readBadge] reads the band of
+     * the spell after the heroes, where it was calibrated.
      *
-     * On the plain tray with a troop in slot 2 the heroes are where they were calibrated, so
-     * [plain] shows no count, and one card right the last hero slot lies past the heroes, on a
-     * spell's count when the army brings one there. With the event card in front every card sits
-     * one card right of its calibration: one card right the heroes show no count, and the King's
-     * calibrated slot lies on the card calibrated left of him, which shows a count when it is the
-     * main troop or another troop. Only a tray whose heroes show a count one card right is read
-     * plain, so an event tray whose heroes are where the shift puts them is never questioned.
+     * On the plain tray with a troop in slot 2 every card is where it was calibrated, so [plain]
+     * shows no count and the spell after the heroes shows its own. One card right the heroes show
+     * no count either: the band past the last hero stops a few pixels into the spell's badge, and
+     * on Blood's scout (audit-evidence/spike/geo-scout.png) it read "x!" on every cut. So either a
+     * count one card right or the spell's count where it was calibrated says plain. With the event
+     * card in front every card sits one card right of its calibration: the King's calibrated slot
+     * lies on the card left of him, which shows a count when it is the main troop or another troop,
+     * and the spell's calibrated slot lies on the last hero, which shows none.
+     *
+     * Not told apart: an event tray with a card showing no count (a siege card) left of the King
+     * and a hero away, whose spell then sits where it was calibrated. It is read plain.
      */
-    fun troopInSlot2(shifted: Report, plain: Report): Boolean =
-        wrongHero(shifted) != null && wrongHero(plain) == null
+    inline fun troopInSlot2(
+        profile: PhoneProfile,
+        shifted: Report,
+        plain: Report,
+        readBadge: (Region) -> List<String>
+    ): Boolean = wrongHero(plain) == null && (wrongHero(shifted) != null ||
+        spellAfterHeroes(profile)?.let { AttackPlanner.spellBadgeCount(readBadge(AttackPlanner.badgeBand(it))) } != null)
+
+    /**
+     * The card area of the first card right of the last hero when it is a spell less than one and
+     * a half cards past him, or null. On an event tray that spell's calibrated slot lies on the
+     * last hero; a card between them the profile does not know (another spell) would put it on
+     * that card's count instead.
+     */
+    fun spellAfterHeroes(profile: PhoneProfile): Region? {
+        val king = profile.troopAnchors["king"] ?: return null
+        val queen = profile.troopAnchors["queen"] ?: return null
+        val last = profile.troopRois.filterKeys { isHeroSlot(it) }.values.maxByOrNull { it.left } ?: return null
+        val next = profile.troopRois.entries.filter { it.value.left > last.left }.minByOrNull { it.value.left } ?: return null
+        return next.value.takeIf { isSpellSlot(next.key) && (it.left - last.left) * 2 < (queen.x - king.x) * 3 }
+    }
+
+    /**
+     * Whether an attack whose hero check is not due judges its heroes anyway: the tray reads as an
+     * event tray and its first two badges ([counts]) differ from those of the last hero check that
+     * found a troop in slot 2 ([remembered]). An attack deploys that tray plain only at those
+     * counts, so a slot-2 count misread (an 8 read as 0, or cuts that leave no count) is judged
+     * again rather than deployed one card right.
+     */
+    fun troopInSlot2CheckDue(layout: AttackPlanner.TrayLayout, counts: Pair<Int?, Int?>, remembered: Pair<Int?, Int?>?): Boolean =
+        layout == AttackPlanner.TrayLayout.EVENT && remembered != null && counts != remembered
 
     /**
      * The hero slots of the tray an attack is about to deploy, judged as [check] judges them, off
@@ -227,11 +262,12 @@ object TrayCheck {
     private const val CHECK_TRAY = "Check the tray in Setup, then recalibrate it."
 
     /**
-     * What a stop on an event layout says in place of [CHECK_TRAY]: recalibrating keeps a troop
-     * of x5 or more right of the main troop where it is, so the tray reads as the event tray again.
+     * What a stop on an event layout adds before [CHECK_TRAY]. A troop of x5 or more right of the
+     * main troop is read as the plain tray when the calibrated hero slots show no count (see
+     * [troopInSlot2]), so this stop comes only when they show one too, and recalibrating fixes that.
      */
-    private const val TROOP_AS_EVENT_CARD = "If there is no event card, the bot is reading another troop with a " +
-        "count of x5 or more right of the main troop as one, and recalibrating will not change that. Check the tray in Setup."
+    private const val TROOP_AS_EVENT_CARD = "If there is no event card, the bot read another troop with a count of " +
+        "x5 or more right of the main troop as one, and the hero cards are not where they were calibrated either."
 
     /**
      * Why an attack left the scout screen without deploying: [slot] is a hero slot showing a count.
@@ -240,7 +276,7 @@ object TrayCheck {
      */
     fun trayMismatch(village: String?, slot: Slot, eventCard: Boolean = false): String =
         "${possessive(village)} $TRAY_MISMATCH: the ${label(slot.name)}'s card shows a troop count" +
-            if (eventCard) ", with the tray read as starting with an event card. $TROOP_AS_EVENT_CARD" else ". $CHECK_TRAY"
+            if (eventCard) ", with the tray read as starting with an event card. $TROOP_AS_EVENT_CARD $CHECK_TRAY" else ". $CHECK_TRAY"
 
     /** Why a run stopped after [attacks] attacks in a row whose hero cards showed no landed hero. */
     fun heroesStayed(village: String?, attacks: Int): String =
