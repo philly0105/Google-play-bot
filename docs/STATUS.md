@@ -5,6 +5,61 @@ Blood in Google Play Games on this PC; "offline" means unit tests on frames capt
 window. Evidence is in `audit-evidence/` (gitignored). Its folder names are in local time (UTC-7);
 the times below are UTC.
 
+## 2026-10-25
+
+### Live
+
+Farm 40, the first unattended run on the PC, started from the app at 01:18 and made 28 attacks
+before the user stopped it from the floating panel at 02:33. Every battle ran as the supervised
+ones did, and every result screen read its damage, stars and loot:
+
+| Stars | 0 | 1 | 2 | 3 |
+| --- | --- | --- | --- | --- |
+| Battles | 1 | 14 | 9 | 4 |
+
+The results read 17,324,777 gold, 16,063,540 elixir and 163,858 dark elixir. Gold was already full
+at 31,000,000 when the run started, so none of that gold was kept. Results came 2 to 5 minutes
+apart. In the same run:
+
+- the stall watcher marked two battles as stalled (`stall_would_surrender`), and ended neither,
+  since Blood's settings leave a stalled battle running;
+- a star beside the battle's damage hid the value 18 times (`stall_damage_unreadable`); fixed
+  offline since, `docs/PC-GEOMETRY.md` "Readers that still fail", item 5;
+- the Valkyries' card was tapped a second time 3 times (`card_retry`).
+
+At 09:48 two starts of Farm 40 stopped at once with "Viewport mismatch". Clash's game area was
+1860x1162 by then. Google Play Games keeps the shape Clash started with, so the app could not size
+it back to 1740x978, and Blood's calibration is 1740x978. The app now moves the
+calibration onto the area Clash has (`docs/PC-GEOMETRY.md`, "Moving a calibration"), and asks for
+one supervised attack at a new shape before it runs unattended there.
+
+At 12:29 and 12:33, two supervised attacks ran at 1860x1162 on `fd09aba`. Each confirmed Blood,
+opened Battle, found a match, tapped Attack! on the army screen, deployed, watched the battle and
+pressed Return Home. Clash fits the army screen inside the game area rather than scaling it by the
+height, and the tap that worked is the fitted one; the height's would have missed the button.
+The first attack verified the 16:10 shape: `surfaces.json` in Blood's folder records it, and
+`profile.json` was not changed. The second started as verified.
+
+| Start | Damage | Stars read | Earned read |
+| --- | --- | --- | --- |
+| 12:29 | not read | 1 | 178,064 gold, 318,462 elixir, 1,119 dark |
+| 12:33 | 72% on the screen, not read | 2 | 577,557 gold, 232,449 elixir, 2,039 dark |
+
+Evidence: `audit-evidence/live/20261025-033812-menus` (the army screen),
+`20261025-034044-scout`, `20261025-034323-profile3` (the profile menu and Settings) and
+`20261025-053311-result1610` (the second result screen).
+
+### Offline only
+
+- The result's damage at 16:10. Its box now scales with the frame's height, and read 72% on all
+  four settled frames of the second result. Neither 16:10 attack read its damage before the fix.
+
+### Not done
+
+- An unattended run at 16:10.
+- A defeat, walls, ending a battle early, the in-app Calibrate flow, the remote page from another
+  device and the SendInput fallback, as on 24 October.
+
 ## 2026-10-24
 
 ### Setup
