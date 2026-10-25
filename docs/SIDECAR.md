@@ -154,7 +154,9 @@ Fails with `not_installed` when the `googleplaygames:` URL scheme is not registe
 
 ### `power`
 
-Returns `ac` (plugged in), `batteryPercent` (-1 when unknown) and `saver` (battery saver on).
+Returns `ac` (plugged in), `batteryPercent` (-1 when unknown), `saver` (battery saver on) and
+`hasBattery`, false only when Windows reports no system battery (a desktop PC). An older sidecar
+leaves `hasBattery` out, and the app reads that as a battery.
 
 ### `keepAwake`
 

@@ -375,8 +375,8 @@ internal sealed class Server(Stream input, Stream output)
 
     private static (JsonObject, byte[]) Power()
     {
-        var (ac, percent, saver) = SystemState.Power();
-        return (new JsonObject { ["ac"] = ac, ["batteryPercent"] = percent, ["saver"] = saver }, []);
+        var (ac, percent, saver, hasBattery) = SystemState.Power();
+        return (new JsonObject { ["ac"] = ac, ["batteryPercent"] = percent, ["saver"] = saver, ["hasBattery"] = hasBattery }, []);
     }
 
     private static (JsonObject, byte[]) Activity()

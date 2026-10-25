@@ -191,6 +191,18 @@ class SidecarTest {
     }
 
     @Test
+    fun `power reads a PC with no battery, and an older sidecar's reply as one with a battery`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        val desktop = async(Dispatchers.Default) { sidecar.power() }
+        fake.ok(fake.next()) { put("ac", true).put("batteryPercent", -1).put("saver", false).put("hasBattery", false) }
+        assertEquals(PowerState(ac = true, batteryPercent = -1, saver = false, hasBattery = false), desktop.await())
+        val older = async(Dispatchers.Default) { sidecar.power() }
+        fake.ok(fake.next()) { put("ac", false).put("batteryPercent", 80).put("saver", false) }
+        assertTrue(older.await().hasBattery)
+    }
+
+    @Test
     fun `capture reads the frame's age, and an older sidecar's frame as new`() = runBlocking {
         val fake = FakeSidecar()
         val sidecar = Sidecar { fake.connection }
