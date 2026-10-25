@@ -33,6 +33,22 @@ class CalibrationSizeTest {
     }
 
     @Test
+    fun `a frame at the same size makes a shrunk game area the whole frame again`() {
+        // A stray Apply on a corner in an earlier build left the game area inset but PC-shaped.
+        val inset = calibrated.copy(viewport = Viewport(12, 40, 1740, 978))
+        val fit = refit(inset, 1740, 978)
+        assertEquals(Viewport(0, 0, 1740, 978), fit.profile.viewport)
+        assertFalse(fit.profile.isVerified)
+        // The points and collectors stay where they are: nothing moved.
+        assertEquals(inset.stateAnchors, fit.profile.stateAnchors)
+        assertEquals(inset.collectionTargets, fit.profile.collectionTargets)
+        assertTrue(fit.note!!, fit.note!!.contains("whole screenshot"))
+        // A phone-shaped frame keeps its corners, which can be picked there.
+        val phone = PhoneProfile.createDefault().let { it.copy(viewport = Viewport(10, 10, it.resolutionWidth, it.resolutionHeight)) }
+        assertSame(phone, refit(phone, phone.resolutionWidth, phone.resolutionHeight).profile)
+    }
+
+    @Test
     fun `a 16 by 10 frame moves the points the way a run does, unverified`() {
         val fit = refit(calibrated, 1860, 1162)
         val run = PcProfiles.derive(calibrated, SurfaceSize(1860, 1162), emptySet())
