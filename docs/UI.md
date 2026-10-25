@@ -107,7 +107,7 @@ supervised attack first so the bot can read your account."
 | `supervised`, `walls` | One supervised attack, or walls only, on the selected account |
 | `plan:<json>` | Checks readiness against the files again, starts the plan, keeps it as the last one |
 | `select:<id>` | Selects the account |
-| `switch_only:<id>` | Switches to the account without farming |
+| `switch_only:<id>` | Checks the account without farming (`startSwitchOnly(readAccount = true)`), reading it first if it has not been read |
 | `acknowledge_wall:<id>` | Asks "Acknowledge pending purchase", then clears the marker. Logs `pending_purchase_acknowledged` |
 | `edit:<id>` | Opens the account editor; open during a run too, with Save off |
 | `history` | Opens Stats |
@@ -195,9 +195,12 @@ Setup:
 - Each account's block opens with an Account line (`PcChecklist.account`) saying whether the bot
   has read the account off Clash's Settings (`PcAccount.enrolled`, read with the other files on
   IO). Not read is amber, "Not read", with no fix, and says the first supervised attack reads the
-  village name and tag and other runs wait until then. Read is green and names the village. The
-  block's header shows the tag only once the account is read, so a fresh install never shows a
-  placeholder tag.
+  village name and tag and other runs wait until then. Read is green, names the village and points
+  to the block's Read account again button, shown only once the account is read. That button
+  (`PcAccount.forget`, refused with "Wait for the current run to finish." during a run) drops the
+  identity template, toasts "The next supervised attack will read your account again." and turns
+  the line amber. The block's header shows the tag only once the account is read, so a fresh
+  install never shows a placeholder tag.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
 - Copy link puts the remote link on the AWT clipboard. The key is never shown or logged.

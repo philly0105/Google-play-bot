@@ -53,9 +53,13 @@ account's profile.
 A fresh install starts with one account called "Your village". The first supervised attack opens
 Clash's Settings, reads the village name and tag, and keeps a crop of that strip in
 `accounts\<id>\identity.png` with the frame size it was cut at in `identity.json`. Every later run
-checks Settings against that crop before it starts, at any game size. Until the account is read,
-Setup's Account line is amber and unattended starts are refused with "Run one supervised attack
-first so the bot can read your account."
+checks Settings against that crop before it starts; a crop cut at 1740x978 matches Clash at
+1860x1162 and the other way round (tested on real captures of both; other sizes are untested). A
+read that the check straight after it does not confirm is dropped, so a misread can't lock the
+account. Until the account is read, Setup's Account line is amber and unattended starts, and the
+remote page's account check, are refused with "Run one supervised attack first so the bot can read
+your account." Setup's Read account again drops the crop, so the next supervised attack reads the
+account afresh.
 
 Closing the window leaves the bot running behind the tray icon; Quit is in the icon's menu. App
 data, logs and captures live in `%LOCALAPPDATA%\ClashFarmerPC\files\`, laid out like the phone's

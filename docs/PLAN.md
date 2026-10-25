@@ -101,7 +101,7 @@ test compiles unchanged, and record the move.
 | Notifications | Windows notifications from the tray icon |
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
 | Sweat and Blood, seeded with the owner's names and tags | One account in Blood's id slot (`accounts/PcAccount.kt`). A fresh install seeds it as "Your village" |
-| Identity templates shipped as app assets | `accounts\<id>\identity.png` and `identity.json` in the data folder, cut by the account's first supervised run |
+| Identity templates shipped as app assets | `accounts\<id>\identity.png` and `identity.json` in the data folder, cut by the account's first supervised run and dropped again if the check straight after does not confirm it |
 | Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules |
 
 ### Resolution and screen geometry
