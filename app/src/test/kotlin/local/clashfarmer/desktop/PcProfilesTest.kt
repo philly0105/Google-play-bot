@@ -21,6 +21,7 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * A 1740x978 calibration moved onto the game areas Google Play Games has given: 1860x1162 after a
@@ -315,6 +316,137 @@ class PcProfilesTest {
         assertTrue(plain, plain.startsWith("Clash's game area is 1565x978, not the 1740x978 the run expected."))
         assertFalse(plain.contains("Viewport") || plain.contains("orientation"))
         assertEquals("Stopped by user", PcProfiles.plainStopReason("Stopped by user"))
+    }
+
+    @Test
+    fun aRunSizesOnlyAnAreaOfTheCalibrationsShape() {
+        val size = SurfaceSize(1740, 978)
+        assertEquals(size, PcProfiles.runSize(SurfaceSize(1280, 720), null, size))
+        assertEquals(SurfaceSize(1600, 899), PcProfiles.runSize(SurfaceSize(1280, 720), SurfaceSize(1600, 900), size))
+        assertEquals(wide, PcProfiles.runSize(wide, SurfaceSize(1600, 900), size))
+    }
+
+    @Test
+    fun anUnverifiedCalibrationMovedElsewhereIsToldToCalibrateAgain() {
+        val unverified = calibrated.copy(isVerified = false)
+        fun refusal(saved: PhoneProfile, run: SurfaceSize?, runVerified: Boolean, attacks: Boolean = true, allowed: Boolean) =
+            PcProfiles.startRefusal("Main", saved, run, runVerified, attacks, allowed)
+
+        // At its own size, or before the area is known, the supervised attack earns it, as before.
+        assertEquals(null, refusal(unverified, SurfaceSize(1740, 978), runVerified = false, allowed = true))
+        assertEquals(null, refusal(unverified, null, runVerified = false, allowed = true))
+        val farm = refusal(unverified, SurfaceSize(1740, 978), runVerified = false, allowed = false)!!
+        assertTrue(farm, farm.startsWith("Main has not earned verification on this PC. Run \"Supervised attack\" once"))
+
+        // At 16:10 no attack can earn it, so even the supervised one is refused, with advice that works.
+        for (allowed in listOf(true, false)) {
+            val moved = refusal(unverified, wide, runVerified = false, allowed = allowed)!!
+            assertTrue(moved, moved.contains("calibrated at 1740x978, not on this 1860x1162 game area"))
+            assertTrue(moved, moved.contains("Open Calibrate") && moved.contains("restart the PC and open Clash of Clans on a 16:9 screen"))
+        }
+        // A smaller screen of the same shape: restarting would not help.
+        val smaller = refusal(unverified, SurfaceSize(1600, 899), runVerified = false, allowed = true)!!
+        assertFalse(smaller, smaller.contains("restart"))
+        // A wall-only run needs no verification anywhere.
+        assertEquals(null, refusal(unverified, wide, runVerified = false, attacks = false, allowed = true))
+
+        // A verified calibration at a new shape: the supervised attack earns that shape.
+        assertEquals(null, refusal(calibrated, wide, runVerified = false, allowed = true))
+        val newShape = refusal(calibrated, wide, runVerified = false, allowed = false)!!
+        assertTrue(newShape, newShape.contains("has not had a supervised attack at 16:10 yet. Run \"Supervised attack\" once"))
+        assertEquals(null, refusal(calibrated, wide, runVerified = true, allowed = false))
+    }
+
+    /**
+     * Synthetic: a 1740x978 capture's box scaled about the frame's centre onto [size], by the
+     * height as the HUD scales, or by the width, fitting the screen to the narrower frame
+     * (PcGeometryTest's centred).
+     */
+    private fun centred(box: Region, size: SurfaceSize, byHeight: Boolean): Region {
+        val scale = if (byHeight) size.height / 978.0 else size.width / 1740.0
+        fun x(px: Int) = (size.width / 2.0 + (px - 870) * scale).roundToInt()
+        fun y(py: Int) = (size.height / 2.0 + (py - 489) * scale).roundToInt()
+        return Region(x(box.left), y(box.top), x(box.right), y(box.bottom))
+    }
+
+    /** A 1740x978 box placed on [size] by [PcGeometry], keeping its distance from [anchor]'s edge. */
+    private fun placed(box: RecognizedBox, size: SurfaceSize, anchor: Anchor): RecognizedBox {
+        val viewport = Viewport(0, 0, size.width, size.height)
+        return RecognizedBox(
+            box.text, PcGeometry.x(viewport, box.left, anchor), PcGeometry.y(viewport, box.top),
+            PcGeometry.x(viewport, box.right, anchor), PcGeometry.y(viewport, box.bottom)
+        )
+    }
+
+    /** Whether [p] is more than [margin] px from [box]. */
+    private fun clear(p: Point, box: Region, margin: Int): Boolean =
+        p.x < box.left - margin || p.x > box.right + margin || p.y < box.top - margin || p.y > box.bottom + margin
+
+    /** The share of [box]'s width inside [roi], or 0 when its middle row is outside. */
+    private fun cover(roi: Region, box: RecognizedBox): Double {
+        if ((box.top + box.bottom) / 2 !in roi.top until roi.bottom) return 0.0
+        val overlap = minOf(roi.right, box.right) - maxOf(roi.left, box.left)
+        return overlap.coerceAtLeast(0).toDouble() / (box.right - box.left)
+    }
+
+    @Test
+    fun theMovedArmyTapStaysOnAttackAndAwayFromTheGemButton() {
+        // Hand-made: geo-army has no OCR for the buttons under the army, so their green faces were
+        // measured on audit-evidence/spike/geo-army.png. The left one finishes training for gems;
+        // the right one asks the clan for troops. The army is tapped without reading its label.
+        val attack = Region(1322, 805, 1617, 866)
+        val gems = Region(1322, 728, 1460, 790)
+        val clan = Region(1478, 726, 1618, 790)
+        val word = frame("geo-army").single { it.text == "Atfack!" }
+        assertTrue(attack.contains((word.left + word.right) / 2, (word.top + word.bottom) / 2))
+        val army = calibrated.stateAnchors.getValue("army")
+        assertTrue(attack.contains(army))
+
+        for (size in listOf(wide, resized, SurfaceSize(1920, 1080))) {
+            val moved = PcProfiles.derive(calibrated, size, emptySet()).stateAnchors.getValue("army")
+            assertTrue("$size: $moved is off Attack!", centred(attack, size, byHeight = true).contains(moved))
+            for (byHeight in listOf(true, false)) {
+                val at = "$size by the ${if (byHeight) "height" else "width"}"
+                assertTrue("$at: $moved is near the gem button", clear(moved, centred(gems, size, byHeight), 8))
+                assertTrue("$at: $moved is near the clan button", clear(moved, centred(clan, size, byHeight), 8))
+            }
+        }
+    }
+
+    @Test
+    fun movedScoutBoxesHoldWhatTheyReadAsWellAsAt1740() {
+        // geo-scout's OCR, placed on each size by the anchor each part of the scout screen keeps:
+        // the loot from the left, the fee beside Next from the right, the countdown and the
+        // tray's cards about the centre. At 1740x978 the calibration cuts a few of them short.
+        val scout = frame("geo-scout")
+        val loot = mapOf(
+            Resource.GOLD to scout.single { it.text == "1 193 372" },
+            Resource.ELIXIR to scout.single { it.text == "884 775" },
+            Resource.DARK_ELIXIR to scout.single { it.text == "4 437" }
+        )
+        val fee = scout.single { it.text == "1700" }
+        val countdown = scout.single { it.text == "265" }
+        // The count on the first card, the Valkyries.
+        val count = scout.single { it.text == "x44" }
+
+        for (size in listOf(wide, resized, SurfaceSize(1920, 1080))) {
+            val moved = PcProfiles.derive(calibrated, size, emptySet())
+            fun holds(what: String, before: Region, after: Region, box: RecognizedBox, anchor: Anchor) {
+                val was = cover(before, box)
+                val now = cover(after, placed(box, size, anchor))
+                assertTrue("$size $what: ${"%.2f".format(now)} of the text, was ${"%.2f".format(was)}", was >= 0.85 && now >= was - 0.03)
+            }
+            loot.forEach { (resource, box) ->
+                holds("$resource loot", calibrated.scoutLootRois.getValue(resource), moved.scoutLootRois.getValue(resource), box, Anchor.LEFT)
+            }
+            holds("fee", calibrated.scoutFeeRoi!!, moved.scoutFeeRoi!!, fee, Anchor.RIGHT)
+            holds("countdown", calibrated.scoutCountdownRoi!!, moved.scoutCountdownRoi!!, countdown, Anchor.CENTRE)
+
+            val card = centred(Region(count.left, count.top, count.right, count.bottom), size, byHeight = true)
+            val middle = Point((card.left + card.right) / 2, (card.top + card.bottom) / 2)
+            assertTrue("$size: the count is off its card", moved.troopRois.getValue("valkyries").contains(middle))
+            assertFalse("$size: the count is on the next card", moved.troopRois.getValue("king").contains(middle))
+        }
     }
 
     @Test

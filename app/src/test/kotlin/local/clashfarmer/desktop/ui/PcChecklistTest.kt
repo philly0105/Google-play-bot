@@ -160,10 +160,30 @@ class PcChecklistTest {
     }
 
     @Test
-    fun `a run keeps the game area's shape inside the calibration's size`() {
-        assertEquals(SurfaceSize(1565, 978), PcChecklist.runSize(SurfaceSize(1860, 1162), null, calibrated))
+    fun `a run sizes an area of the calibration's shape and leaves another shape alone`() {
+        // FarmerService.fitSurface resizes only at the calibration's shape.
+        assertEquals(SurfaceSize(1860, 1162), PcChecklist.runSize(SurfaceSize(1860, 1162), null, calibrated))
+        assertEquals(SurfaceSize(1860, 1162), PcChecklist.runSize(SurfaceSize(1860, 1162), SurfaceSize(1600, 900), calibrated))
         assertEquals(SurfaceSize(1740, 978), PcChecklist.runSize(SurfaceSize(1740, 978), null, calibrated))
+        assertEquals(SurfaceSize(1740, 978), PcChecklist.runSize(SurfaceSize(1280, 720), null, calibrated))
         assertEquals(SurfaceSize(1600, 899), PcChecklist.runSize(SurfaceSize(1740, 978), SurfaceSize(1600, 900), calibrated))
+    }
+
+    @Test
+    fun `a small area of another shape is red, as the run refuses it`() {
+        // A 16:10 laptop: a run works at the area's own 1120x700, which is under 720 rows.
+        val line = compared(1120, 700)
+        assertEquals(Tone.BAD, line.tone)
+        assertEquals("Can't run", line.chip)
+        assertTrue(line.detail, line.detail.contains("1120x700, too small for the bot to read"))
+    }
+
+    @Test
+    fun `an unverified calibration on a smaller screen is told to calibrate again`() {
+        val line = compared(1600, 899, room = SurfaceSize(1600, 900), profile = calibrated.copy(isVerified = false))
+        assertEquals(Tone.WARN, line.tone)
+        assertEquals("New size", line.chip)
+        assertTrue(line.detail, line.detail.endsWith("this screen holds 1600x899. Calibrate again on this game area."))
     }
 
     @Test

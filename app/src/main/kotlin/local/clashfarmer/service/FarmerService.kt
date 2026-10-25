@@ -1221,9 +1221,15 @@ class FarmerService(
         var completed = 0
         val attackLimit = if (wallOnly) 0 else (overrideAttacks ?: account.settings.attacks)
         // Checked before the account switch rather than after it, so a refused start costs nothing.
-        if (!saved.isVerified && !local.clashfarmer.core.Policy.mayStartUnverified(supervised, attackLimit, wallOnly)) {
-            throw StopException(local.clashfarmer.desktop.PcProfiles.verificationRequired(account.villageName, null))
-        }
+        // Desktop: at the size the run will reach, so the refusal's advice is one that works there.
+        val unverifiedAllowed = local.clashfarmer.core.Policy.mayStartUnverified(supervised, attackLimit, wallOnly)
+        val attacks = !wallOnly && attackLimit > 0
+        host.window.value.let { status ->
+            val expected = status.surface?.let {
+                local.clashfarmer.desktop.PcProfiles.runSize(it, status.window?.room, SurfaceSize(saved.resolutionWidth, saved.resolutionHeight))
+            }
+            local.clashfarmer.desktop.PcProfiles.startRefusal(account.villageName, saved, expected, saved.isVerified, attacks, unverifiedAllowed)
+        }?.let { throw StopException(it) }
         var resultStatus = "Failed"
         var resultReason: String? = null
         var outcome: local.clashfarmer.core.RunOutcome? = null
@@ -1241,10 +1247,10 @@ class FarmerService(
             val profile = runProfile(saved, account.id)
             if (profile !== saved) {
                 if (wallOnly) profile.validateForWalls() else profile.validateForAttack()
-                if (!profile.isVerified && !local.clashfarmer.core.Policy.mayStartUnverified(supervised, attackLimit, wallOnly)) {
-                    throw StopException(local.clashfarmer.desktop.PcProfiles.verificationRequired(
-                        account.villageName, local.clashfarmer.desktop.PcProfiles.shape(profile.resolutionWidth, profile.resolutionHeight)))
-                }
+                local.clashfarmer.desktop.PcProfiles.startRefusal(
+                    account.villageName, saved, SurfaceSize(profile.resolutionWidth, profile.resolutionHeight),
+                    profile.isVerified, attacks, unverifiedAllowed
+                )?.let { throw StopException(it) }
             }
 
             // Step 1: Verify identity and switch if needed

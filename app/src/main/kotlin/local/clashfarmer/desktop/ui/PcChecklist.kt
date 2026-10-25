@@ -7,7 +7,6 @@ import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.screens.CheckLine
 import local.clashfarmer.ui.screens.SetupChecklist
-import kotlin.math.roundToInt
 
 /**
  * Setup's two lines about this PC, in place of the phone's accessibility and notification lines.
@@ -58,17 +57,11 @@ object PcChecklist {
 
     /**
      * The game area a run on [profile] works at, from a window whose area is [surface] on a monitor
-     * that holds [room]. The run asks for the calibration's size, which the sidecar first shrinks
-     * to what the monitor holds, and Google Play Games keeps the area's own aspect inside that, as
-     * 1740x978 asked of a 1860x1162 area gave 1565x978.
+     * that holds [room] ([PcProfiles.runSize]): the calibration's size, shrunk to what the monitor
+     * holds, when the area has its shape, else the area's own size, which a run leaves alone.
      */
-    fun runSize(surface: SurfaceSize, room: SurfaceSize?, profile: PhoneProfile): SurfaceSize {
-        val box = PcProfiles.fitInside(SurfaceSize(profile.resolutionWidth, profile.resolutionHeight), room)
-        if (PcProfiles.sameAspect(surface.width, surface.height, box.width, box.height)) return box
-        val aspect = PcProfiles.aspect(surface.width, surface.height)
-        return if (aspect <=PcProfiles.aspect(box.width, box.height)) SurfaceSize((box.height * aspect).roundToInt(), box.height)
-        else SurfaceSize(box.width, (box.width / aspect).roundToInt())
-    }
+    fun runSize(surface: SurfaceSize, room: SurfaceSize?, profile: PhoneProfile): SurfaceSize =
+        PcProfiles.runSize(surface, room, SurfaceSize(profile.resolutionWidth, profile.resolutionHeight))
 
     /**
      * [profile] with isVerified as a run would count it on this window's game area: a calibration
@@ -102,6 +95,10 @@ object PcChecklist {
         PcProfiles.surfaceProblem(run)?.let { return line("Found. $it", "Can't run", Tone.BAD) }
         return when {
             PcProfiles.sameAspect(run.width, run.height, profile.resolutionWidth, profile.resolutionHeight) -> when {
+                // A calibration moved before it was verified can't earn verification there.
+                capped && !profile.isVerified -> line("$area. $name was calibrated at $calibrated and has not been " +
+                    "verified; this screen holds ${run.width}x${run.height}. Calibrate again on this game area.",
+                    "New size", Tone.WARN)
                 capped -> line("$area. $name was calibrated at $calibrated; this screen holds ${run.width}x${run.height}, " +
                     "and a run works at that.", "Open", Tone.OK)
                 surface.width == profile.resolutionWidth && surface.height == profile.resolutionHeight ->

@@ -120,14 +120,61 @@ object PcProfiles {
     }
 
     /**
-     * Why a run that needs a verified calibration is refused, the PC's Policy.verificationRequired.
-     * [shape] is the game area's shape when the calibration was moved onto another, else null.
+     * The game area a run on a calibration of [calibrated] works at, from a window whose game area
+     * is [surface] on a monitor that holds [room]. FarmerService.fitSurface asks for the
+     * calibration's size when the area has its shape, and the sidecar caps that to [room]; an area
+     * of another shape is left as it is, since Google Play Games keeps the shape it chose.
      */
-    fun verificationRequired(villageName: String, shape: String?): String {
-        val why = if (shape == null) "$villageName has not earned verification on this PC."
-        else "$villageName was calibrated on a game area of another shape and has not had a supervised attack at $shape yet."
-        return "$why Run \"Supervised attack\" once and let it return to the village; that attack earns it."
+    fun runSize(surface: SurfaceSize, room: SurfaceSize?, calibrated: SurfaceSize): SurfaceSize =
+        if (sameAspect(surface.width, surface.height, calibrated.width, calibrated.height)) fitInside(calibrated, room)
+        else surface
+
+    /**
+     * Why a run is refused for want of verification, in words for the user, or null when it may
+     * start. [saved] is the account's calibration and [run] the game area the run works at, null
+     * while it is not known; [runVerified] is whether the calibration counts as verified there.
+     * [unverifiedAllowed] is Policy.mayStartUnverified for the run, and [attacks] whether it
+     * attacks. A supervised attack earns verification where the calibration was taken, or at a new
+     * shape for a calibration verified already (FarmerService.movedProfileUpdater); a calibration
+     * not yet verified, moved onto another game area, can't earn it, so even that attack is refused.
+     */
+    fun startRefusal(
+        villageName: String,
+        saved: PhoneProfile,
+        run: SurfaceSize?,
+        runVerified: Boolean,
+        attacks: Boolean,
+        unverifiedAllowed: Boolean
+    ): String? {
+        if (runVerified) return null
+        val earnable = !moved(saved, run) || saved.isVerified
+        if (unverifiedAllowed && (earnable || !attacks)) return null
+        return verificationRequired(villageName, saved, run)
     }
+
+    /**
+     * Why a run that needs a verified calibration is refused, the PC's Policy.verificationRequired,
+     * with advice that works on [run], the game area the run works at (null when not known).
+     */
+    fun verificationRequired(villageName: String, saved: PhoneProfile, run: SurfaceSize?): String {
+        val earn = "Run \"Supervised attack\" once and let it return to the village; that attack earns it."
+        if (run == null || !moved(saved, run)) return "$villageName has not earned verification on this PC. $earn"
+        val calibrated = "${saved.resolutionWidth}x${saved.resolutionHeight}"
+        val calibratedShape = shape(saved.resolutionWidth, saved.resolutionHeight)
+        if (!saved.isVerified) {
+            val restart = if (sameAspect(run.width, run.height, saved.resolutionWidth, saved.resolutionHeight)) ""
+            else ", or restart the PC and open Clash of Clans on a $calibratedShape screen"
+            return "$villageName has not earned verification, and it was calibrated at $calibrated, not on this " +
+                "${run.width}x${run.height} game area, where an attack can't earn it. Open Calibrate, capture the " +
+                "game and save the points again$restart. Then run \"Supervised attack\" once."
+        }
+        return "$villageName was calibrated on a game area of another shape and has not had a supervised attack at " +
+            "${shape(run.width, run.height)} yet. $earn"
+    }
+
+    /** Whether a run on [run] works on [saved] moved, not at its own size. */
+    private fun moved(saved: PhoneProfile, run: SurfaceSize?): Boolean =
+        run != null && (run.width != saved.resolutionWidth || run.height != saved.resolutionHeight)
 
     /**
      * [profile] moved onto a game area of [surface]. At the profile's own size it is [profile]
