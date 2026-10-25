@@ -44,15 +44,17 @@ The first attack verified the 16:10 shape: `surfaces.json` in Blood's folder rec
 | --- | --- | --- | --- |
 | 12:29 | not read | 1 | 178,064 gold, 318,462 elixir, 1,119 dark |
 | 12:33 | 72% on the screen, not read | 2 | 577,557 gold, 232,449 elixir, 2,039 dark |
+| 12:50 | 54% | 1 | 819,199 gold, 497,472 elixir, 4,922 dark |
+
+Neither of the first two read the result's damage: at 1860x1162 the phone's damage box cut off the
+lower part of the digits. The box now scales with the frame's height (`28fb402`), and the third
+attack, on that build, read 54% on both result frames. Its stars and loot match the screen. It
+also pressed RELOAD GAME on the idle dialog before it started.
 
 Evidence: `audit-evidence/live/20261025-033812-menus` (the army screen),
-`20261025-034044-scout`, `20261025-034323-profile3` (the profile menu and Settings) and
-`20261025-053311-result1610` (the second result screen).
-
-### Offline only
-
-- The result's damage at 16:10. Its box now scales with the frame's height, and read 72% on all
-  four settled frames of the second result. Neither 16:10 attack read its damage before the fix.
+`20261025-034044-scout`, `20261025-034323-profile3` (the profile menu and Settings),
+`20261025-053311-result1610` (the second result screen) and `20261025-055038-result1610b` (the
+third).
 
 ### Not done
 
