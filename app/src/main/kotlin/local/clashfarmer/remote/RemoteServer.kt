@@ -40,13 +40,16 @@ import java.util.concurrent.Executors
  * per connection. Peers outside Tailscale and loopback are dropped before a byte is read, and
  * every request needs the key besides.
  */
-class RemoteServer(private val port: Int, private val api: RemoteApi) {
+class RemoteServer(private val port: Int, private val api: RemoteApi, private val bindAddress: java.net.InetAddress? = null) {
     @Volatile private var socket: ServerSocket? = null
     private var workers: ExecutorService? = null
 
+    /** Desktop: whether [start] bound its socket and [stop] has not closed it. */
+    val isListening: Boolean get() = socket?.isClosed == false
+
     fun start() {
         val server = try {
-            ServerSocket(port)
+            ServerSocket(port, 50, bindAddress)
         } catch (e: Exception) {
             AppLog.log("remote_server_failed", "port" to port, "error" to e.message)
             return

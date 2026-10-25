@@ -103,6 +103,13 @@ class FarmerService(
         fun preferredSurface(surface: SurfaceSize): SurfaceSize =
             if (sameAspect(surface, PcGeometry.WIDTH, PcGeometry.HEIGHT)) SurfaceSize(PcGeometry.WIDTH, PcGeometry.HEIGHT) else surface
 
+        /** Desktop: how often an idle app in the tray runs the retention pass again. */
+        const val PRUNE_EVERY_MS = 24 * 60 * 60 * 1000L
+
+        /** Desktop: whether the retention pass is due: a day since the last one, and no run busy. */
+        internal fun pruneDue(lastPruneMs: Long, nowMs: Long, busy: Boolean): Boolean =
+            !busy && nowMs - lastPruneMs >= PRUNE_EVERY_MS
+
         private fun sameAspect(surface: SurfaceSize, width: Int, height: Int): Boolean =
             kotlin.math.abs(surface.width.toDouble() / surface.height * height / width - 1) <= SAME_ASPECT_TOLERANCE
 
@@ -110,8 +117,13 @@ class FarmerService(
          * One per process, not per service. After an install the system can connect a fresh
          * service without ever destroying the old one, which kept the port and answered the page
          * with a dead connection: every remote start failed its first screenshot.
+         *
+         * Desktop: the page's listeners on Tailscale's address and loopback (desktop/RemotePage),
+         * where the phone kept one RemoteServer on every interface. Setup reads its status.
          */
-        private var remoteServer: local.clashfarmer.remote.RemoteServer? = null
+        @Volatile
+        var remotePage: local.clashfarmer.desktop.RemotePage? = null
+            private set
     }
 
     /**
@@ -179,18 +191,7 @@ class FarmerService(
 
         AppLog.init(filesDir)
         AppLog.log("service_connected")
-        try {
-            val pruned = local.clashfarmer.log.StorageRetention.prune(filesDir)
-            AppLog.log(
-                "retention_pruned",
-                "capturesDeleted" to pruned.capturesDeleted,
-                "capturesKept" to pruned.capturesKept,
-                "logsDeleted" to pruned.logsDeleted,
-                "bytesFreed" to pruned.bytesFreed
-            )
-        } catch (e: Exception) {
-            AppLog.log("retention_failed", "error" to e.message)
-        }
+        pruneStorage()
         notifier = RunNotifier()
         // Nothing keeps a start alive across a dead service, so one still on disk did not run.
         val dropped = pendingStore.read()
@@ -222,9 +223,9 @@ class FarmerService(
         try {
             val page = assets.open("remote.html").bufferedReader().use { it.readText() }
             val api = local.clashfarmer.remote.RemoteApi(remoteKey, local.clashfarmer.remote.ServiceRemoteBackend(this), page)
-            remoteServer?.stop()
-            remoteServer = local.clashfarmer.remote.RemoteServer(local.clashfarmer.remote.RemoteServer.PORT, api)
-                .also { it.start() }
+            // Desktop: Tailscale's address and loopback only, checked every minute.
+            remotePage?.stop()
+            remotePage = local.clashfarmer.desktop.RemotePage.serving(api).also { it.watch(serviceScope) }
         } catch (e: Exception) {
             AppLog.log("remote_server_failed", "error" to e.message)
         }
@@ -233,12 +234,35 @@ class FarmerService(
         // has no screen-off broadcast, so a sleeping or locked PC is left to the run's captures,
         // which stop it when they fail; the notification's buttons are the tray's calls to
         // pauseFromNotification, resumeFromNotification and stopFromNotification. What starts
-        // here instead is the battery reading behind readDeviceHealth.
+        // here instead is the battery reading behind readDeviceHealth, and the daily retention
+        // pass for an app that lives in the tray for days.
         serviceScope.launch {
             while (true) {
                 refreshDeviceHealth()
+                if (pruneDue(lastPruneMs, System.currentTimeMillis(), isBusy)) pruneStorage()
                 delay(HEALTH_REFRESH_MS)
             }
+        }
+    }
+
+    /** Desktop: when [pruneStorage] last ran; the phone pruned only at connect. */
+    @Volatile
+    private var lastPruneMs = 0L
+
+    /** The phone's retention pass from onServiceConnected; desktop: also once a day while idle. */
+    private fun pruneStorage() {
+        lastPruneMs = System.currentTimeMillis()
+        try {
+            val pruned = local.clashfarmer.log.StorageRetention.prune(filesDir)
+            AppLog.log(
+                "retention_pruned",
+                "capturesDeleted" to pruned.capturesDeleted,
+                "capturesKept" to pruned.capturesKept,
+                "logsDeleted" to pruned.logsDeleted,
+                "bytesFreed" to pruned.bytesFreed
+            )
+        } catch (e: Exception) {
+            AppLog.log("retention_failed", "error" to e.message)
         }
     }
 
@@ -580,7 +604,7 @@ class FarmerService(
 
     /**
      * True once another service has connected in this one's place without this one being
-     * destroyed (see [remoteServer]). Null counts as not replaced: [instance] is null only after
+     * destroyed (see [remotePage]). Null counts as not replaced: [instance] is null only after
      * this service's own onDestroy, or before any service connected.
      */
     private val replaced: Boolean get() = instance.let { it != null && it !== this }
@@ -2000,8 +2024,8 @@ class FarmerService(
         // The ongoing notice shares one id across services; a replaced one leaves the new one's.
         if (!replaced) notifier?.cancelLive()
         if (instance === this) {
-            remoteServer?.stop()
-            remoteServer = null
+            remotePage?.stop()
+            remotePage = null
         }
         latestFrame.clear()
         // The stopped run's hold on keeping the PC awake is let go from its job's end, on

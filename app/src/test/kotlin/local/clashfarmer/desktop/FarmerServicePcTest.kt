@@ -257,4 +257,12 @@ class FarmerServicePcTest {
         service.startSwitchOnly(blood)
         assertTrue(service.isBusy)
     }
+
+    @Test
+    fun `old logs are pruned again once a day while the app stays in the tray, never during a run`() {
+        val day = FarmerService.PRUNE_EVERY_MS
+        assertFalse(FarmerService.pruneDue(lastPruneMs = 1_000, nowMs = 1_000 + day - 1, busy = false))
+        assertTrue(FarmerService.pruneDue(lastPruneMs = 1_000, nowMs = 1_000 + day, busy = false))
+        assertFalse(FarmerService.pruneDue(lastPruneMs = 1_000, nowMs = 1_000 + day, busy = true))
+    }
 }
