@@ -22,6 +22,9 @@ import org.junit.Test
  * gold, 232 449 elixir and 2 039 dark elixir: the OCR of
  * audit-evidence/live/20261025-053311-result1610/1792931695135.png with the defender's name and
  * clan replaced. result-1860-stars.rgb is that frame's stars, 400x140 from (740, 180).
+ *
+ * result-1740-damage.rgb and result-1860-damage.rgb are the damage digits of those two frames,
+ * 180x90 from (780, 120) and 180x110 from (840, 140).
  */
 class PcBattleResultTest {
 
@@ -59,6 +62,8 @@ class PcBattleResultTest {
     private val rows = Crop("result-1740-rows", 660, 400, 270, 220)
     private val stars = Crop("result-1740-stars", 715, 160, 320, 110)
     private val wideStars = Crop("result-1860-stars", 740, 180, 400, 140)
+    private val damage = Crop("result-1740-damage", 780, 120, 180, 90)
+    private val wideDamage = Crop("result-1860-damage", 840, 140, 180, 110)
     private val loot = listOf(Resource.GOLD to 1_346_371L, Resource.ELIXIR to 474_889L, Resource.DARK_ELIXIR to 4_314L)
 
     @Test
@@ -97,15 +102,28 @@ class PcBattleResultTest {
 
     @Test
     fun `the damage region scales with the height`() {
-        // At 1740x978 the phone's lengths, which read every battle; at 1860x1162 the same box
-        // times 1162 / 978. Offline through the sidecar's recogniser, the green masks of the scaled
-        // box read 72% on the four settled 16:10 frames, and of the unscaled one "730" and "720".
-        val region = BattleResultReader.damageRegion(boxes, pc)!!
-        assertEquals(Region(826, 135, 916, 165), region)
-        val wideRegion = BattleResultReader.damageRegion(wideBoxes, wide)!!
-        assertEquals(Region(876, 161, 982, 197), wideRegion)
-        for ((box, digits) in listOf(region to boxes.single { it.text == "70%" }, wideRegion to wideBoxes.single { it.text == "72%" })) {
-            assertTrue("$box", digits.center.x in box.left..box.right && box.top - digits.top in 0..3)
+        assertEquals(Region(810, 140, 932, 180), BattleResultReader.damageRegion(boxes, pc))
+        assertEquals(Region(857, 167, 1001, 215), BattleResultReader.damageRegion(wideBoxes, wide))
+    }
+
+    @Test
+    fun `the damage region holds all of the digits' ink`() {
+        // The phone's lengths cut off the digits' lower part, which turned 59% into "c9%" live at
+        // 1860x1162. The PC's box keeps every green pixel of 70% and 72% inside it with the label
+        // read up to 4 px higher or lower.
+        val ink = BattleResultReader.DAMAGE_INKS.last()
+        for ((viewport, frame, crop) in listOf(Triple(pc, boxes, damage), Triple(wide, wideBoxes, wideDamage))) {
+            val label = frame.single { it.text.startsWith("Total damage") }
+            val pixels = (crop.left until crop.left + crop.width).flatMap { x ->
+                (crop.top until crop.top + crop.height).map { y -> Point(x, y) }
+            }.filter { crop.pixel(it.x, it.y)?.let(ink::matches) == true }
+            assertTrue(pixels.size > 500)
+            for (dy in -4..4) {
+                val moved = frame - label + label.copy(top = label.top + dy, bottom = label.bottom + dy)
+                val region = BattleResultReader.damageRegion(moved, viewport)!!
+                val outside = pixels.filterNot { it.x in region.left until region.right && it.y in region.top until region.bottom }
+                assertTrue("$viewport $dy: ${outside.size} outside $region", outside.isEmpty())
+            }
         }
     }
 

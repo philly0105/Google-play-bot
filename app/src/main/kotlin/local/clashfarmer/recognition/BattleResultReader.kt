@@ -161,17 +161,33 @@ object BattleResultReader {
         return (r * 299 + g * 587 + b * 114) / 1000 > FILL_LUMINANCE && maxOf(r, g, b) - minOf(r, g, b) < FILL_SPREAD
     }
 
+    /** Where the damage digits sit under "Total damage:", at 1600x720. */
+    private const val DAMAGE_HALF_WIDTH = 45
+    private const val DAMAGE_TOP = 13
+    private const val DAMAGE_BOTTOM = 43
+
     /**
-     * Where the damage digits sit under "Total damage:". The phone's lengths read the PC's digits
-     * at 1740x978 on all 30 battles of 25 October, so on the PC they scale from there with the
-     * frame's height ([PcGeometry.length]): unscaled at 1860x1162 they cut off the digits' lower
-     * part, and 72% read as "730" and "720" (audit-evidence/live/20261025-053311-result1610).
+     * The PC's, the phone's times 978 / 720, at 1740x978, scaled with the frame's height. The
+     * digits' green ink runs 23 to 48 px under the label's centre at 1740x978 and 27 to 58 at
+     * 1860x1162, so the phone's lengths cut off their lower part: on 25 October 59% read as "c9%"
+     * at 1860x1162 and lost the damage, and on the saved result frames (audit-evidence/live/
+     * 20261024-165200-result, 20261024-171020-result and the three result1610 folders of
+     * 25 October) the anchor moved 4 px up turned 57% into "c7%" and 72% into "729". These read
+     * every one of those frames at the anchor and 4 px either way.
      */
+    private const val PC_DAMAGE_HALF_WIDTH = 61
+    private const val PC_DAMAGE_TOP = 18
+    private const val PC_DAMAGE_BOTTOM = 58
+
     fun damageRegion(boxes: List<RecognizedBox>, viewport: Viewport): Region? {
         val anchor = find(boxes, viewport, TOTAL_DAMAGE, DAMAGE_BAND) ?: return null
-        val pc = viewport.takeIf(PcGeometry::isPc)
-        fun length(pixels: Int) = pc?.let { PcGeometry.length(it, pixels) } ?: pixels
-        return Region(anchor.x - length(45), anchor.y + length(13), anchor.x + length(45), anchor.y + length(43))
+        if (!PcGeometry.isPc(viewport)) {
+            return Region(anchor.x - DAMAGE_HALF_WIDTH, anchor.y + DAMAGE_TOP,
+                anchor.x + DAMAGE_HALF_WIDTH, anchor.y + DAMAGE_BOTTOM)
+        }
+        fun length(pixels: Int) = PcGeometry.length(viewport, pixels)
+        return Region(anchor.x - length(PC_DAMAGE_HALF_WIDTH), anchor.y + length(PC_DAMAGE_TOP),
+            anchor.x + length(PC_DAMAGE_HALF_WIDTH), anchor.y + length(PC_DAMAGE_BOTTOM))
     }
 
     /**

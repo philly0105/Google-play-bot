@@ -197,9 +197,9 @@ These have PC handling of their own, outside the values above:
 - `BattleResultReader`, `BattleDamage`, `core/RatePrompt.kt`, `core/StarBonusNotice.kt` and
   `LocalRunner.observeSettled`. The result reader's PC row lengths agree with 978/720 within 3 px,
   and its first star is exact. At 1860x1162 they scale by the height, as the screen does, and hold
-  the three rows and both stars of `live-1860-result`. Its damage box now scales the same way: at
-  the phone's lengths it cut off the lower part of the 16:10 digits, and 72% read as "730" and
-  "720".
+  the three rows and both stars of `live-1860-result`. Its damage box has PC lengths too, the
+  phone's times 978/720, scaled the same way: the phone's cut off the digits' lower part at both
+  sizes, and at 1860x1162 72% read as "730" and 59% as "c9%".
 
 `AccountSwitcher` calls `returnHomeTarget` with `Point(800, 624)` as its calibrated anchor. On a PC
 frame that sits at (0.46,0.638), outside `RESULT_BUTTON`, so `returnHomeTarget` drops it and falls
