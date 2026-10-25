@@ -499,7 +499,7 @@ class ScreenReader : AutoCloseable {
     suspend fun readResultLoot(bitmap: Bitmap, roi: Region): Long? {
         val raw = cutReadings(bitmap, roi, SCOUT_CUTS, scale = 3)
         val read = LootPanelReader.lootAmount(raw)
-        val glyphs = BattleResultReader.glyphCount(roi) { x, y ->
+        val glyphs = BattleResultReader.glyphCount(roi, Viewport(0, 0, bitmap.width, bitmap.height)) { x, y ->
             if (x in 0 until bitmap.width && y in 0 until bitmap.height) bitmap.getPixel(x, y) else null
         }
         val loot = read?.takeIf { BattleResultReader.inkAgrees(it, glyphs) }

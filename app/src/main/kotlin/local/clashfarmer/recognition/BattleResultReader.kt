@@ -1,5 +1,6 @@
 package local.clashfarmer.recognition
 
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
 import local.clashfarmer.core.Resource
@@ -46,6 +47,19 @@ object BattleResultReader {
     private val ROW_OFFSETS = listOf(Resource.GOLD to 18, Resource.ELIXIR to 65, Resource.DARK_ELIXIR to 113)
     private const val ROW_HEIGHT = 34
 
+    /**
+     * The PC's rows, in pixels of a 1740x978 frame ([PcGeometry]). On the seven result frames of
+     * 24 October (audit-evidence/live/20261024-165200-result) the digits stand 30 to 57, 96 to 122
+     * and 160 to 186 px below the centre of "You got:", from x 732 to 902, and the icons start
+     * right of 916. Each region keeps 9 or 10 px above and below its digits, clear of the lines
+     * between the rows, and the sides are the phone's times 978 / 720. The phone's lengths put the
+     * elixir and dark rows' regions between the digits, and no row read.
+     */
+    private const val PC_ROW_LEFT = -200
+    private const val PC_ROW_RIGHT = 46
+    private val PC_ROW_OFFSETS = listOf(Resource.GOLD to 21, Resource.ELIXIR to 86, Resource.DARK_ELIXIR to 150)
+    private const val PC_ROW_HEIGHT = 46
+
     /** "You got:" sits at about (803, 297); "Total damage:" at (802, 90). */
     private val YOU_GOT_BAND = listOf(0.35, 0.3, 0.65, 0.55)
     private val DAMAGE_BAND = listOf(0.35, 0.0, 0.65, 0.25)
@@ -55,6 +69,13 @@ object BattleResultReader {
     fun lootRegions(boxes: List<RecognizedBox>, viewport: Viewport): Map<Resource, Region>? {
         val anchor = find(boxes, viewport, YOU_GOT, YOU_GOT_BAND) ?: return null
         val middle = viewport.left + viewport.width / 2
+        if (PcGeometry.isPc(viewport)) {
+            fun length(pixels: Int) = PcGeometry.length(viewport, pixels)
+            return PC_ROW_OFFSETS.associate { (resource, dy) ->
+                resource to Region(middle + length(PC_ROW_LEFT), anchor.y + length(dy),
+                    middle + length(PC_ROW_RIGHT), anchor.y + length(dy + PC_ROW_HEIGHT))
+            }
+        }
         return ROW_OFFSETS.associate { (resource, dy) ->
             resource to Region(middle + ROW_LEFT, anchor.y + dy, middle + ROW_RIGHT, anchor.y + dy + ROW_HEIGHT)
         }
@@ -84,6 +105,15 @@ object BattleResultReader {
     private const val WIDE_GLYPH = 20
 
     /**
+     * The PC's digits are up to 24 px wide, with 17 px between the 1 and the 346 of 1 346 371 on
+     * the frames of 24 October, so the phone's gap would drop that 1 and its widest digit would
+     * count each 4 and 8 as two. These are the phone's lengths times 978 / 720, at 1740x978.
+     */
+    private const val PC_GLYPH_GAP = 22
+    private const val PC_WIDE_GLYPH = 27
+    private const val PC_EDGE = 3
+
+    /**
      * How many digits the "You got" row in [roi] holds, counted from its ink rather than read, or
      * null when it cannot be told: no ink, or ink at either side of the row, which may run past it.
      * The glyphs are the runs of inked columns chained leftwards from the icon. On the 66 rows of 15
@@ -91,7 +121,14 @@ object BattleResultReader {
      * anchor anywhere from 8 px above to 8 px below where it sits. [pixel] gives the ARGB colour at
      * a point, or null off the frame.
      */
-    fun glyphCount(roi: Region, pixel: (Int, Int) -> Int?): Int? {
+    fun glyphCount(roi: Region, pixel: (Int, Int) -> Int?): Int? = glyphCount(roi, null, pixel)
+
+    /** [glyphCount], at the PC's lengths when [viewport] is a PC frame. */
+    fun glyphCount(roi: Region, viewport: Viewport?, pixel: (Int, Int) -> Int?): Int? {
+        val pc = viewport?.takeIf(PcGeometry::isPc)
+        val gap = pc?.let { PcGeometry.length(it, PC_GLYPH_GAP) } ?: GLYPH_GAP
+        val wide = pc?.let { PcGeometry.length(it, PC_WIDE_GLYPH) } ?: WIDE_GLYPH
+        val edge = pc?.let { PcGeometry.length(it, PC_EDGE) } ?: EDGE
         val inked = (roi.left until roi.right).filter { x ->
             (roi.top until roi.bottom).count { y -> pixel(x, y)?.let(::digitFill) == true } >= INK_PER_COLUMN
         }
@@ -102,12 +139,12 @@ object BattleResultReader {
             when {
                 last == null -> glyphs += x..x
                 last.first - x == 1 -> glyphs[glyphs.lastIndex] = x..last.last
-                last.first - x - 1 > GLYPH_GAP -> break
+                last.first - x - 1 > gap -> break
                 else -> glyphs += x..x
             }
         }
-        val clear = glyphs.last().first - roi.left > EDGE && roi.right - 1 - glyphs.first().last > EDGE
-        return (glyphs.size + glyphs.count { it.last - it.first + 1 > WIDE_GLYPH }).takeIf { clear }
+        val clear = glyphs.last().first - roi.left > edge && roi.right - 1 - glyphs.first().last > edge
+        return (glyphs.size + glyphs.count { it.last - it.first + 1 > wide }).takeIf { clear }
     }
 
     /**
@@ -150,6 +187,14 @@ object BattleResultReader {
     private const val STAR_RADIUS = 12
 
     /**
+     * The PC's points, the phone's times 978 / 720, at 1740x978. The phone's fell off the stars'
+     * bodies and read 0 stars on both battles of 24 October. On the seven result frames of the
+     * second, with the anchor moved up to 8 px each way, the two earned stars' discs averaged
+     * luminance 166 to 211 at saturation 0.18 or less and the unearned one 63 to 113.
+     */
+    private val PC_STAR_OFFSETS = listOf(Point(-129, 115), Point(0, 68), Point(136, 95))
+
+    /**
      * Earned stars are silver-white: on the seven result frames, with the anchor moved up to 6 px
      * each way, the sampled discs averaged luminance 167 to 225 at saturation 0.21 or less.
      * Unearned stars are a dark olive silhouette at 52 to 109. The gold ribbon is bright too but
@@ -160,7 +205,12 @@ object BattleResultReader {
 
     fun starCentres(boxes: List<RecognizedBox>, viewport: Viewport): List<Point>? {
         val anchor = find(boxes, viewport, TOTAL_DAMAGE, DAMAGE_BAND) ?: return null
-        return STAR_OFFSETS.map { Point(anchor.x + it.x, anchor.y + it.y) }
+        val offsets = if (PcGeometry.isPc(viewport)) {
+            PC_STAR_OFFSETS.map { Point(PcGeometry.length(viewport, it.x), PcGeometry.length(viewport, it.y)) }
+        } else {
+            STAR_OFFSETS
+        }
+        return offsets.map { Point(anchor.x + it.x, anchor.y + it.y) }
     }
 
     /**
