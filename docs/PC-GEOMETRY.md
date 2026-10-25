@@ -1,7 +1,7 @@
 # PC screen geometry
 
 The phone bot finds and taps Clash's screens at fractions or pixels of 1600x720. This file lists
-where those positions fall on the PC's frames, the PC value this branch adds where the phone's
+where those positions fall on the PC's frames, the PC value the code adds where the phone's
 misses, and what still needs a live capture. Every PC value sits behind `PcGeometry.isPc`, so
 nothing changes at 1600x720 and the copied phone tests are untouched.
 
@@ -10,8 +10,8 @@ Code paths are relative to `app/src/main/kotlin/local/clashfarmer/`. Evidence is
 stands for `audit-evidence/spike/geo-x.json` and its `.png`, and `live-x` for the fixture
 `app/src/test/resources/pc-frames/live-x.json`, whose source is listed under Tests.
 
-All positions are frame pixels. After a relaunch, posted taps have landed 35-75 px above their aim.
-That is the input transport's problem and doesn't change these values. The calibration profile's
+All positions are frame pixels. After a relaunch, posted taps have landed above their aim
+(`docs/gpg-spike.md`). That is the input transport's problem and doesn't change these values. The calibration profile's
 positions, such as deploy points, troop cards and the profile's ROIs, are out of scope.
 
 ## Which frames are the PC
@@ -78,7 +78,7 @@ by the height, which is what CENTRE does, or by the width, W/1740, which is 1.06
 0.899 at 1565x978. PcGeometryTest checks the army and result screens both ways. The height is
 likelier, since the HUD follows it.
 
-## Values this branch adds
+## PC values
 
 The phone's value still applies at 1600x720 in every row.
 
@@ -134,7 +134,7 @@ The phone's value still applies at 1600x720 in every row.
 | `core/AndroidWallDevice.kt`, `core/WallRunner.kt`, `core/WallPanel.kt` | the wall flow's regions and drifts | Blood's walls are maxed, so the bulk panel, its confirm and a Wall card's price have never shown on the PC. | not captured |
 
 `accounts/AccountIdentityParser.kt` reads text only, apart from `parsePickerRows`, which the PC
-never reaches because calib-scale refuses account switches on the PC.
+never reaches because the PC refuses account switches.
 
 ## Spelling fixes
 
@@ -146,16 +146,16 @@ these as well:
 - `BATTLE_READS` and the HOME rules in `STATE_RULES` take "baftle", from `geo-after-deselect`, and
   "batfle", from six frames at 1860x1162.
 
-## Handled outside this branch
+## Handled elsewhere
 
-These belong to calib-scale or the main session, and this branch doesn't touch them:
+These have PC handling of their own, outside the values above:
 
 - `accounts/AccountSwitcher.kt`, `PhoneProfile.withTroopCard` and
   `desktop/ui/calibration/CalibrationTargets.kt`.
 - The tray badge read, `ScreenReader.readTrayBadge` and `AttackPlanner`'s badge band.
 - `BattleResultReader`, `BattleDamage`, `core/RatePrompt.kt`, `core/StarBonusNotice.kt` and
-  `LocalRunner.observeSettled`. calib-scale's result row lengths agree with 978/720 within 3 px, and
-  its first star is exact. By the width at 16:10 they would come out about 11% too large.
+  `LocalRunner.observeSettled`. The result reader's PC row lengths agree with 978/720 within 3 px,
+  and its first star is exact. By the width at 16:10 they would come out about 11% too large.
 
 `AccountSwitcher` calls `returnHomeTarget` with `Point(800, 624)` as its calibrated anchor. On a PC
 frame that sits at (0.46,0.638), outside `RESULT_BUTTON`, so `returnHomeTarget` drops it and falls
@@ -201,7 +201,7 @@ model. The Wall rows are `geo-list-end` with two countdowns removed and two name
 | --- | --- |
 | the army screen and recipes at 16:10 | the height or the width, and the army values marked estimated |
 | the upgrade list at 16:10, and how far a swipe scrolls it | the panel, `CARD_LINE_GAP`, the coin column, both list swipes |
-| a result at 16:10, and a defeat | `RESULT_*` and calib-scale's result lengths |
+| a result at 16:10, and a defeat | `RESULT_*` and the result reader's PC lengths |
 | a selected building at 16:10 | `PC_BUTTON_PITCH` |
 | a Clash popup with an X, and "All builders are busy!" | `CLOSE_CORNER` in `PopupGuard` and `Builders`, and `Builders`' other regions |
 | the takeover and connection-lost dialogs | `RELOAD_BUTTON` for Clash's own Reload |

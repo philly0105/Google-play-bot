@@ -73,3 +73,7 @@ SendInput path, so the cursor never moves.
 - The last frames of a battle sometimes give one unreadable loot or damage read
   (`battle_loot_unreadable`, `stall_damage_unreadable`). The reads before and after are fine.
 - Building the distributable fails while the app is running. Quit it from the tray first.
+- Some readers still fail on PC captures (`docs/PC-GEOMETRY.md`, "Readers that still fail"). The
+  builder counter reads on 2 of 39 village captures, so the builder count a storage read records
+  is often missing, and the wall phase cannot always tell whether a builder is free. The upgrade
+  list can take a misread countdown for a price on a row in progress, never on a Wall row.

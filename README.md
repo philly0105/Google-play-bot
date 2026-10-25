@@ -64,5 +64,6 @@ through the firewall for port 8765.
   (RapidOcrNet) and window input. Its protocol is in `docs/SIDECAR.md`.
 - `docs/PLAN.md` has the architecture and the phone-to-PC mapping. `docs/DIVERGENCES.md` lists
   every edit to a file that was copied from the phone verbatim, and why. `docs/gpg-spike.md` has
-  what was measured about GPG on this PC. `docs/TESTS.md` and `docs/UI.md` cover the tests and the
-  Compose UI.
+  what was measured about GPG on this PC, and `docs/PC-GEOMETRY.md` where the phone's screen
+  positions fall on its frames. `docs/TESTS.md` and `docs/UI.md` cover the tests and the Compose
+  UI.
