@@ -140,7 +140,9 @@ One app runs per files directory (`SingleInstance.kt`, the first thing `main` do
 OS lock on `app.lock`, which Windows drops when the process ends, crash or not, and listens on a
 loopback port written to `app.port`. A second start sends "open" there and ends; the first opens
 its window as the tray's Open does. If the first never answers, the second says "Clash Farmer is
-already running. Open it from its icon in the notification area." Opening the window, from the
+already running. Open it from its icon in the notification area." A loopback port that can't be
+opened, as when security software blocks it, gets its own start message rather than the one for a
+files directory that can't be written. Opening the window, from the
 tray or a second start, sets it always-on-top for a moment, since Windows otherwise leaves a
 window the person didn't click behind the active one.
 
@@ -148,7 +150,9 @@ A failure nobody caught (`CrashReport.kt`) goes to `logs/desktop.log` with its s
 dialog with OK and Open logs folder; the text names the log once it exists. One on the main
 thread, which starts the app and runs its windows, ends the app. One elsewhere leaves it running
 and shows at most once every 10 minutes. A failure inside the main window closes that window, as
-Compose's own handler does, and the tray opens a fresh one. At start, a files directory that
+Compose's own handler does, and the tray opens a fresh one; its dialog shows every time, so a
+window that fails as it opens never just vanishes. CrashReport and DesktopServices share one
+`DesktopLog` for the file, so they can't both rotate it at once. At start, a files directory that
 can't be written or a missing sidecar exe gets its own message saying what to do.
 
 `StatusPanel.kt` draws `FarmerOverlay.panel` as a window over the others in the bottom right
@@ -209,7 +213,9 @@ Setup:
   do: unzip again into a new folder, then install the Visual C++ Redistributable (x64).
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
 - Remote page replaces the phone's remote line and is never counted: "Off (Tailscale not
-  connected)" in grey, amber when port 8765 is taken, or "On" with the Tailscale address.
+  connected)" in grey; amber when port 8765 is taken, or when Windows won't bind the Tailscale
+  address yet (as after sleep), each with its own text and retry time; or "On" with the Tailscale
+  IPv4 address.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
 - Copy link shows only while the remote page is on, and puts the link on the AWT clipboard. The
@@ -301,8 +307,8 @@ of main at b514d40):
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `desktop/ui/PcChecklistTest.kt` | The Game window, Text reader, Tray icon and Remote page lines, including a 1860x1162 surface, a window closed by hand and a reader that failed to load, and how they count toward ready, the tab dot and the primary fix | 15 |
-| `desktop/SingleInstanceTest.kt` | The lock per files directory, its release, and a later start raising the first | 7 |
-| `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text and its 10-minute limit | 4 |
+| `desktop/SingleInstanceTest.kt` | The lock per files directory, its release, a later start raising the first, the same from a second JVM, and the start messages | 10 |
+| `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |

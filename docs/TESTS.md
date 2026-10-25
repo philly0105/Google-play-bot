@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1787 tests, the phone's 1635
-and the PC's 152, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1799 tests, the phone's 1635
+and the PC's 164, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -39,7 +39,7 @@ edit is also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-152 `@Test` methods in 22 files under `desktop/`. Their fixtures are in
+164 `@Test` methods in 22 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, and a few PNG crops.
 
@@ -53,11 +53,11 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `PcRatePromptTest` | LATER on Play's rating dialog | 3 |
 | `PcStarBonusNoticeTest` | Okay on Clash's Star Bonus notice | 4 |
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
-| `DesktopLogTest` | The desktop log file | 1 |
+| `DesktopLogTest` | The desktop log file, and one log per file for every writer | 2 |
 | `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 5 |
-| `SingleInstanceTest` | One app per files directory: the lock in one JVM for the same and separate directories, its release, and a later start raising the first | 7 |
-| `RemotePageTest` | Where the remote page listens, with a fake Tailscale address: off without it, on its address and loopback, following it as it comes, goes and changes, the retry after a taken port, and detection by adapter name; plus the real server on loopback | 12 |
-| `CrashHandlerTest` | Uncaught failures: which end the app, the dialog's text, and its 10-minute limit | 4 |
+| `SingleInstanceTest` | One app per files directory: the lock in one JVM for the same and separate directories, its release, and a later start raising the first; the same against a second JVM holding the lock; a port file that can't be written; and the start messages | 10 |
+| `RemotePageTest` | Where the remote page listens, with a fake Tailscale address: off without it, on its IPv4, tailnet IPv6 and loopback addresses, following it as it comes, goes and changes, the 10-minute retry after a taken port against the next-check retry after any other failed bind, reopening a listener that stopped, and detection by adapter name; plus the real server on loopback, free and taken, and Java's own bind failures | 19 |
+| `CrashHandlerTest` | Uncaught failures: which end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `BuildInfoTest` | The version and About text, and the stamped version matching `gradle.properties` | 3 |
 | `platform/ClashWindowWatcherTest` | The Clash window lookup | 4 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar | 9 |
