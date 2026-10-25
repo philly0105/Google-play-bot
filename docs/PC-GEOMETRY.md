@@ -186,6 +186,10 @@ these as well:
 - `QUIT_TITLE` takes "Exi+" for "Exit", from "CONfiRM Exi+" on the same frame.
 - `BATTLE_READS` and the HOME rules in `STATE_RULES` take "baftle", from `geo-after-deselect`, and
   "batfle", from six frames at 1860x1162.
+- A RESULT rule in `STATE_RULES` takes " home " with "troops expended", for Return Home read as
+  "RefurN HoMe" at 1860x1162. In the first unattended run at 16:10, on 25 October, that made four of
+  the first eight results unknown: two waited out the transition until the run restarted, and two
+  lost their loot when the second result frame read as nothing.
 
 ## Handled elsewhere
 

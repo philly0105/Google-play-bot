@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 2022 tests, 1637 copied
-from the phone and the PC's 385 (364 under `desktop/` and `accounts/PcAccountTest.kt`'s 21), and
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 2023 tests, 1637 copied
+from the phone and the PC's 386 (365 under `desktop/` and `accounts/PcAccountTest.kt`'s 21), and
 none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
@@ -52,7 +52,7 @@ since the app no longer ships the owner's (`docs/DIVERGENCES.md`).
 
 ## PC tests
 
-364 `@Test` methods in 40 files under `desktop/`, and 21 in `accounts/PcAccountTest.kt`. Their
+365 `@Test` methods in 40 files under `desktop/`, and 21 in `accounts/PcAccountTest.kt`. Their
 fixtures are in `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from
 Blood's game window at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter,
 and a few PNG crops. `identity/pc/blood.png` is
@@ -63,7 +63,7 @@ same strip on the Settings tab and the village at 1860x1162
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames, among them the army screen captured at 1860x1162 with its My Army tab read as two boxes | 21 |
+| `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames, among them the army screen captured at 1860x1162 with its My Army tab read as two boxes, and the 16:10 result with Return Home read "RefurN HoMe" | 22 |
 | `PcProfilesTest` | `PcProfiles.derive` against Blood's 1740x978 calibration: the same profile at its own size, 1860x1162 and 1565x978 values (Battle inside its button and the storage boxes over their balances on a 16:10 capture), 1920x1080, a round trip, the attack check at four sizes, verification per aspect, refusals, `fitInside`, `plainStopReason` and `SurfaceVerification`; `runSize`, and `startRefusal` sending a calibration not yet verified, moved onto another area, to Calibrate; the army tap on Attack! and clear of the gem and clan buttons, on the 1860x1162 capture and on geo-army's buttons fitted inside each size, and a 16:10 calibration's army tap moved back onto 16:9; the drop points fitted to the battle map at 16:10; on boxes from geo-scout moved by the height, the loot, fee, countdown and first card boxes holding their text as well as at 1740x978 | 23 |
 | `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, capping it to the monitor, moving the calibration onto the size reached (the same profile at 1740x978, unverified at 16:10 until a supervised attack writes surfaces.json and never profile.json), refusing every account but the PC's, refusing unattended starts and the remote page's account check before the account is read, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, `LatestFrame.heightFor`, the daily pruning, and a PC with no battery told apart without changing the guard's reading | 34 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
