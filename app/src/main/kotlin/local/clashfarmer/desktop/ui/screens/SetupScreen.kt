@@ -25,6 +25,7 @@ import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.BuilderReading
 import local.clashfarmer.core.BuilderStore
 import local.clashfarmer.core.DeviceHealth
+import local.clashfarmer.desktop.SurfaceVerification
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
 import local.clashfarmer.desktop.ui.PcChecklist
@@ -82,6 +83,8 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     /** Builder readings and profile save times: files, loaded on IO and kept 30 s. */
     private var builders: Map<String, BuilderReading?> by mutableStateOf(emptyMap())
     private var savedAt: Map<String, Long> by mutableStateOf(emptyMap())
+    /** The shapes supervised attacks verified each account at besides its own (surfaces.json). */
+    private var verifiedAspects: Map<String, Set<Double>> by mutableStateOf(emptyMap())
     private var filesAtMs = 0L
     private var filesFor: List<String>? = null
     private var loading = false
@@ -253,15 +256,23 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     /** The rows above the accounts: the game window and tray, the battery and the remote control. */
     private fun checklist(state: DashboardState): Checklist {
         val m = machine
+        // A run moves each calibration onto the game area shown now, and counts it verified there
+        // only at a shape a supervised attack has worked at; the rows say what a run would find.
+        val profiles = state.profiles.mapValues { (id, profile) ->
+            profile?.let { PcChecklist.verifiedHere(it, windowStatus, verifiedAspects[id].orEmpty()) }
+        }
+        val picked = state.selected?.let { account ->
+            state.profiles[account.id]?.let { PcChecklist.Calibration(account.displayName, it, verifiedAspects[account.id].orEmpty()) }
+        }
         val machineLines = listOf(
-            PcChecklist.gameWindow(windowStatus),
+            PcChecklist.gameWindow(windowStatus, picked),
             m?.let { PcChecklist.trayIcon(it.tray) } ?: notRead(PcChecklist.TRAY_ICON, "Tray icon"),
             m?.let { SetupChecklist.battery(it.battery) } ?: notRead("battery", "Battery and heat"),
             m?.let { SetupChecklist.remote(it.serviceOn, it.address) } ?: notRead("remote", "Remote control")
         )
-        val findings = health(state)
+        val findings = health(state.accounts, profiles)
         val accounts = state.accounts.map { account ->
-            account to SetupChecklist.account(account, state.profiles[account.id], findings[account.id].orEmpty(),
+            account to SetupChecklist.account(account, profiles[account.id], findings[account.id].orEmpty(),
                 state.profileError.takeIf { account.id == state.selectedId }, builders[account.id], nowMs)
         }
         return Checklist(machineLines, accounts)
@@ -278,11 +289,11 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         if (account == null) "Check the battle tray (open a scout screen first)"
         else "Check $account's battle tray (open $account's scout screen first)"
 
-    private fun health(state: DashboardState): Map<String, List<Finding>> {
-        val inputs = Triple(state.accounts, state.profiles, savedAt)
+    private fun health(accounts: List<AccountRecord>, profiles: Map<String, PhoneProfile?>): Map<String, List<Finding>> {
+        val inputs = Triple(accounts, profiles, savedAt)
         if (inputs != healthKey) {
             healthKey = inputs
-            health = runCatching { CalibrationHealth.check(state.accounts, state.profiles, savedAt) }.getOrDefault(emptyMap())
+            health = runCatching { CalibrationHealth.check(accounts, profiles, savedAt) }.getOrDefault(emptyMap())
         }
         return health
     }
@@ -339,7 +350,10 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                     val saved = ids.mapNotNull { id ->
                         runCatching { accountStore.profileFile(id).takeIf { it.exists() }?.lastModified() }.getOrNull()?.let { id to it }
                     }.toMap()
-                    readings to saved
+                    val aspects = ids.associateWith { id ->
+                        runCatching { SurfaceVerification.aspects(accountStore.profileFile(id)) }.getOrDefault(emptySet())
+                    }
+                    Triple(readings, saved, aspects)
                 }
             }.getOrNull()
             // runCatching also catches cancellation; a closed window's state must not be touched.
@@ -350,6 +364,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             if (loaded != null) {
                 builders = loaded.first
                 savedAt = loaded.second
+                verifiedAspects = loaded.third
             }
         }
     }
