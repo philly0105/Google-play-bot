@@ -43,6 +43,8 @@ While it plays
   the run, and Clash Farmer tells you why.
 - You can use the PC meanwhile: Clash can sit behind other windows or be minimized, and the
   mouse and keyboard stay yours. Don't play Clash full screen.
+- If Setup says the game is too small, make Clash's window larger or maximize it. A maximized
+  window is fine; only full screen is not.
 - Don't close Clash's window while Google Play Games is still open. If you do, restart the PC
   before the next run: until then the game ignores the bot's taps.
 - It never spends gems and never signs you in or out.

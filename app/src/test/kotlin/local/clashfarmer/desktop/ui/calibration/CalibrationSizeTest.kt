@@ -99,6 +99,12 @@ class CalibrationSizeTest {
         assertTrue(fit.note!!, fit.note!!.contains("too small"))
         assertEquals(fit.note, saveProblem(fit.profile))
         assertNull(saveProblem(calibrated))
+        // The capture sized that 16:9 frame as far as the monitor let it. It leaves a 16:10 frame as
+        // the window has it, even under a 16:10 calibration, so there a larger window is the fix.
+        assertTrue(fit.note!!, fit.note!!.endsWith("Move the Clash window to a larger screen, then start again."))
+        val small = refit(refit(calibrated, 1860, 1162).profile, 1120, 700)
+        assertTrue(small.note!!, small.note!!.contains("Make the Clash window larger or maximize it"))
+        assertEquals(small.note, saveProblem(small.profile))
     }
 
     @Test

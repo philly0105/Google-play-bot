@@ -56,17 +56,32 @@ object PcProfiles {
     /**
      * Why the bot can't work on a game area of [surface], in words for the user, or null when it
      * can. A shape outside the PC's ([PcGeometry.isPc]) was never measured, and an area under
-     * [MIN_HEIGHT] rows is too small to read.
+     * [MIN_HEIGHT] rows is too small to read. [resized] is whether the bot sized the area itself,
+     * which it does only at the shape of the size it asks for ([runSize], [captureResizes]): an
+     * area still too small then is all its monitor holds. One it left alone is the window's own
+     * size, which the user can make larger.
      */
-    fun surfaceProblem(surface: SurfaceSize): String? = when {
+    fun surfaceProblem(surface: SurfaceSize, resized: Boolean): String? = when {
         !PcGeometry.isPc(Viewport(0, 0, surface.width, surface.height)) ->
             "Clash's game area is ${surface.width}x${surface.height}, a shape the bot can't work with. " +
                 "Restart the PC, open Clash of Clans on a 16:9 or 16:10 screen, then start again."
-        surface.height < MIN_HEIGHT ->
+        surface.height < MIN_HEIGHT && resized ->
             "Clash's game area is ${surface.width}x${surface.height}, too small for the bot to read. " +
                 "Move the Clash window to a larger screen, then start again."
+        surface.height < MIN_HEIGHT ->
+            "Clash's game area is ${surface.width}x${surface.height}, too small for the bot to read. " +
+                "Make the Clash window larger or maximize it so the game area is at least $MIN_HEIGHT pixels tall, " +
+                "then try again. If it is maximized already, move it to a larger screen."
         else -> null
     }
+
+    /**
+     * Whether the capture for Calibrate, Inspect or the tray check sizes a game area of [surface]
+     * itself: only a 16:9 one, to 1740x978 or the most its monitor holds
+     * (FarmerService.preferredSurface). Another shape is captured at the window's own size.
+     */
+    fun captureResizes(surface: SurfaceSize): Boolean =
+        sameAspect(surface.width, surface.height, PcGeometry.WIDTH, PcGeometry.HEIGHT)
 
     /**
      * [want], or the largest size of its aspect inside [room] when it doesn't fit there. The
@@ -190,7 +205,9 @@ object PcProfiles {
         val toW = surface.width
         val toH = surface.height
         if (toW == profile.resolutionWidth && toH == profile.resolutionHeight) return profile
-        surfaceProblem(surface)?.let { throw StopException(it) }
+        // A run sizes only an area of the calibration's shape ([runSize]).
+        val resized = sameAspect(toW, toH, profile.resolutionWidth, profile.resolutionHeight)
+        surfaceProblem(surface, resized)?.let { throw StopException(it) }
         val fromW = profile.resolutionWidth
         val fromH = profile.resolutionHeight
         if (!PcGeometry.isPc(Viewport(0, 0, fromW, fromH))) {

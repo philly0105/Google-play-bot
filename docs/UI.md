@@ -300,7 +300,12 @@ Setup:
   "New size", saying to calibrate again. Another shape is green once a supervised attack has
   worked there (surfaces.json), else amber, "New shape", saying to run one supervised attack, or
   to calibrate again when the calibration itself is not verified. A shape narrower than 1.3:1 or
-  2:1 and wider (`PcGeometry.isPc`), or a game under 720 rows, is red, "Can't run".
+  2:1 and wider (`PcGeometry.isPc`), or a game under 720 rows, is red, "Can't run". A game too
+  small at the calibration's shape is what the monitor holds, so the line says to move the window
+  to a larger screen; at another shape a run leaves the window's own size, so it says to make the
+  window larger or maximize it (`PcProfiles.surfaceProblem`). Calibrate, its Save and the tray
+  check choose between the two by their capture's rule, which sizes only a 16:9 game
+  (`PcProfiles.captureResizes`).
 - The account lines count verification as a run would on the game area shown
   (`PcChecklist.verifiedHere`), so at an unverified shape they ask for a supervised attack.
 - With no window, the line also reads the sidecar's `pcInfo` (every 30 s): no Google Play Games

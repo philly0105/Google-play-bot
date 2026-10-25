@@ -49,7 +49,9 @@ internal fun refit(profile: PhoneProfile, width: Int, height: Int): Refit {
             viewport = Viewport(0, 0, width, height),
             isVerified = false
         )
-        Refit(relabelled, PcProfiles.surfaceProblem(SurfaceSize(width, height)) ?: e.message.takeUnless { empty })
+        // The frame is as the capture sized it, which is not always as a run would.
+        val frame = SurfaceSize(width, height)
+        Refit(relabelled, PcProfiles.surfaceProblem(frame, PcProfiles.captureResizes(frame)) ?: e.message.takeUnless { empty })
     }
 }
 
@@ -79,6 +81,11 @@ internal fun referenceMismatch(width: Int, height: Int, profile: PhoneProfile): 
         "To mark them at this size, press Retake camera reference."
 }
 
-/** Why Save refuses a profile of this size, in words for the user, or null when it may be saved. */
-internal fun saveProblem(edited: PhoneProfile): String? =
-    PcProfiles.surfaceProblem(SurfaceSize(edited.resolutionWidth, edited.resolutionHeight))
+/**
+ * Why Save refuses a profile of this size, in words for the user, or null when it may be saved.
+ * The size is a captured frame's, so the advice follows the capture's sizing.
+ */
+internal fun saveProblem(edited: PhoneProfile): String? {
+    val size = SurfaceSize(edited.resolutionWidth, edited.resolutionHeight)
+    return PcProfiles.surfaceProblem(size, PcProfiles.captureResizes(size))
+}

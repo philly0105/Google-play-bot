@@ -352,6 +352,8 @@ class FarmerServicePcTest {
         host.window.value = openWindow(1120, 700)
         val stop = assertThrows(StopException::class.java) { service.runProfile(saved, AccountStore.BLOOD_ID) }
         assertTrue(stop.message!!, stop.message!!.contains("too small"))
+        // A 16:10 area under a 16:9 calibration is never resized, so the window has to be made larger.
+        assertTrue(stop.message!!, stop.message!!.contains("Make the Clash window larger or maximize it"))
     }
 
     @Test

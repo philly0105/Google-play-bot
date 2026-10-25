@@ -39,5 +39,11 @@ class TrayCheckSheetTest {
         val (here, problem) = TrayCheckSheet.profileAt(calibrated, 1245, 700)
         assertSame(calibrated, here)
         assertTrue(problem!!, problem.contains("too small"))
+        // The check's capture sizes only a 16:9 area, so it leaves a small 16:10 one as the window has
+        // it, even under a 16:10 calibration: there a larger window is the fix.
+        assertTrue(problem, problem.endsWith("Move the Clash window to a larger screen, then start again."))
+        val tenBySixteen = PcProfiles.derive(calibrated, SurfaceSize(1860, 1162), emptySet())
+        val wide = TrayCheckSheet.profileAt(tenBySixteen, 1120, 700).second!!
+        assertTrue(wide, wide.contains("Make the Clash window larger or maximize it"))
     }
 }
