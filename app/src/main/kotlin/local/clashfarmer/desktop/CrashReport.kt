@@ -30,12 +30,16 @@ internal class CrashHandler(
         if (fatal) exit(1)
     }
 
-    /** Logs [error] and shows it; [where] says what failed, for the log only. */
-    fun report(error: Throwable, fatal: Boolean, where: String) {
+    /**
+     * Logs [error] and shows it; [where] says what failed, for the log only. [always] skips the
+     * once-every-ten-minutes limit, for a failure the person just caused by their own click, such
+     * as a window that closes as soon as it opens: without a dialog it would seem to do nothing.
+     */
+    fun report(error: Throwable, fatal: Boolean, where: String, always: Boolean = false) {
         runCatching { log("$where: ${error.stackTraceToString().trimEnd()}") }
         val due = synchronized(this) {
             val last = lastShownMs
-            (fatal || last == null || nowMs() - last >= DIALOG_EVERY_MS).also { if (it) lastShownMs = nowMs() }
+            (fatal || always || last == null || nowMs() - last >= DIALOG_EVERY_MS).also { if (it) lastShownMs = nowMs() }
         }
         if (due) runCatching { show(fatal, text(error, fatal, logFile.takeIf { it.isFile })) }
     }
@@ -66,14 +70,14 @@ object CrashReport {
 
     /** Sends every uncaught failure to [CrashHandler], logging to [logFile]. */
     fun install(logFile: File) {
-        val log = DesktopLog(logFile)
+        val log = DesktopLog.of(logFile)
         handler = CrashHandler(log::write, logFile, show = { fatal, text -> dialog(fatal, text, logFile.parentFile) },
             exit = { kotlin.system.exitProcess(it) }).also { Thread.setDefaultUncaughtExceptionHandler(it) }
     }
 
-    /** For a failure that was caught but still needs the person to know, like a window's. */
-    fun report(error: Throwable, where: String) {
-        handler?.report(error, fatal = false, where = where)
+    /** For a failure that was caught but still needs the person to know, like a window's; see [CrashHandler.report]. */
+    fun report(error: Throwable, where: String, always: Boolean = false) {
+        handler?.report(error, fatal = false, where = where, always = always)
     }
 
     /** A plain message box, for the start that finds Clash Farmer already running. */

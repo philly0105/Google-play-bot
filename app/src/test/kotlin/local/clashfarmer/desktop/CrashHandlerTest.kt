@@ -47,6 +47,19 @@ class CrashHandlerTest {
     }
 
     @Test
+    fun `a window that fails each time it opens shows each time`() {
+        val f = Fixture()
+        f.handler.report(RuntimeException("one"), fatal = false, where = "Window failed", always = true)
+        f.now = 1_000
+        f.handler.report(RuntimeException("two"), fatal = false, where = "Window failed", always = true)
+        assertEquals(2, f.shown.size)
+        // A background failure right after still waits its ten minutes.
+        f.handler.uncaughtException(Thread({}, "DefaultDispatcher-worker-1"), RuntimeException("three"))
+        assertEquals(2, f.shown.size)
+        assertTrue(f.exits.isEmpty())
+    }
+
+    @Test
     fun `a startup problem shows its own words and the log once there is one`() {
         val log = File(temp.root, "logs/desktop.log")
         val problem = StartupProblem("A file Clash Farmer needs is missing.")

@@ -57,8 +57,7 @@ fun main() {
     val instance = try {
         SingleInstance.acquire(filesDir) { raiseRequests.update { it + 1 } }
     } catch (e: IOException) {
-        throw StartupProblem("Clash Farmer can't save its settings in ${filesDir.path} (${e.message}). " +
-            "Check that the drive has free space and that your Windows account can write there, then start it again.")
+        throw SingleInstance.startupProblem(filesDir, e)
     }
     if (instance == null) {
         if (!SingleInstance.raiseRunning(filesDir)) {
@@ -140,7 +139,8 @@ fun main() {
         val windowFailed = remember {
             WindowExceptionHandlerFactory {
                 WindowExceptionHandler { error ->
-                    CrashReport.report(error, "Window failed")
+                    // Shown every time: the person opened this window, and it closes again at once.
+                    CrashReport.report(error, "Window failed", always = true)
                     if (isTraySupported) windowOpen = false else quit()
                 }
             }

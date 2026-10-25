@@ -38,15 +38,27 @@ class SingleInstance private constructor(
         runCatching { channel.close() }
     }
 
+    /** The loopback port a second start would connect to could not be opened. */
+    class LoopbackBlocked(cause: IOException) : IOException(cause.message, cause)
+
     companion object {
         const val LOCK_FILE = "app.lock"
         const val PORT_FILE = "app.port"
         private const val OPEN = "open"
 
+        /** What the person reads when [acquire] failed with [error] on [dir]. */
+        fun startupProblem(dir: File, error: IOException): StartupProblem = when (error) {
+            is LoopbackBlocked -> StartupProblem("Clash Farmer couldn't open its connection on this PC " +
+                "(${error.message}). Security software may be blocking it: allow ClashFarmerPC.exe there, then start it again.")
+            else -> StartupProblem("Clash Farmer can't save its settings in ${dir.path} (${error.message}). " +
+                "Check that the drive has free space and that your Windows account can write there, then start it again.")
+        }
+
         /**
          * Takes the lock on [dir], or returns null when another app holds it. The holder calls
          * [onRaise] on its own thread each time a later start asks it to show itself. Throws
-         * IOException when [dir] can't be created or written.
+         * IOException when [dir] can't be created or written, and [LoopbackBlocked] when the
+         * loopback port can't be opened.
          */
         fun acquire(dir: File, onRaise: () -> Unit): SingleInstance? {
             if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Can't create ${dir.path}")
@@ -57,6 +69,8 @@ class SingleInstance private constructor(
                 // This JVM already holds it, which only tests do.
                 null
             } catch (e: IOException) {
+                // Another process holding the lock gives null, not this (SingleInstanceTest checks
+                // it with a second JVM), so this is a folder that can't be written.
                 channel.close()
                 throw e
             }
@@ -65,10 +79,16 @@ class SingleInstance private constructor(
                 return null
             }
             val server = try {
-                ServerSocket(0, 4, InetAddress.getLoopbackAddress()).also {
-                    File(dir, PORT_FILE).writeText(it.localPort.toString())
-                }
+                ServerSocket(0, 4, InetAddress.getLoopbackAddress())
             } catch (e: IOException) {
+                lock.release()
+                channel.close()
+                throw LoopbackBlocked(e)
+            }
+            try {
+                File(dir, PORT_FILE).writeText(server.localPort.toString())
+            } catch (e: IOException) {
+                server.close()
                 lock.release()
                 channel.close()
                 throw e

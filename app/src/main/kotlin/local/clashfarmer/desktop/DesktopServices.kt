@@ -28,7 +28,7 @@ class DesktopServices(val filesDir: File, sidecarExe: File) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Plain lines from the sidecar and the game surface, kept beside the phone's event logs. */
-    val log: (String) -> Unit = DesktopLog(File(filesDir, "logs/desktop.log"))::write
+    val log: (String) -> Unit = DesktopLog.of(File(filesDir, "logs/desktop.log"))::write
 
     val sidecar = Sidecar.launching(sidecarExe, log)
     private val watcher = ClashWindowWatcher({ sidecar.find() }).also { it.start(scope) }
@@ -77,5 +77,16 @@ internal class DesktopLog(private val file: File, private val maxBytes: Long = 5
         } catch (e: Exception) {
             fallback.println("ClashFarmer: can't write ${file.path}: ${e.message}")
         }
+    }
+
+    companion object {
+        private val open = java.util.concurrent.ConcurrentHashMap<String, DesktopLog>()
+
+        /**
+         * The one log for [file] in this process. [write] locks only its own instance, so two
+         * instances on one file could both rotate it at once and lose a line, such as a crash's
+         * stack; CrashReport and DesktopServices both write desktop.log through this.
+         */
+        fun of(file: File): DesktopLog = open.computeIfAbsent(file.absoluteFile.normalize().path.lowercase(Locale.ROOT)) { DesktopLog(file) }
     }
 }
