@@ -41,7 +41,7 @@ Phone paths are under `android/app/src/main/java/local/clashfarmer/`; PC paths a
 | `ui/components/Chip.kt` | `components/Chip.kt` | Adds `Dot` |
 | `ui/components/{CheckRow,SectionHeader,Segmented,StatTile,Stepper,TabIcon,ToggleRow}.kt` | `components/`, same names | |
 | Android's `EditText` | `components/TextInput.kt` | |
-| None | `PcChecklist.kt` | Setup's Game window and Tray icon lines |
+| None | `PcChecklist.kt` | Setup's Game window, Text reader, Tray icon and Remote page lines |
 
 Pure logic that lived inside class 4 files is ported, not moved: `CALIBRATION_TARGETS` and
 `applyTarget` (CalibrationActivity's target list and Apply), `FrameFit` (CalibrationView's fit),
@@ -136,6 +136,21 @@ Closing the window leaves the bot running behind the icon, as the phone's servic
 screen, and says so in a notification the first time. Quit stops any run and ends the app. With
 no notification area, closing the window quits.
 
+One app runs per files directory (`SingleInstance.kt`, the first thing `main` does). It holds an
+OS lock on `app.lock`, which Windows drops when the process ends, crash or not, and listens on a
+loopback port written to `app.port`. A second start sends "open" there and ends; the first opens
+its window as the tray's Open does. If the first never answers, the second says "Clash Farmer is
+already running. Open it from its icon in the notification area." Opening the window, from the
+tray or a second start, sets it always-on-top for a moment, since Windows otherwise leaves a
+window the person didn't click behind the active one.
+
+A failure nobody caught (`CrashReport.kt`) goes to `logs/desktop.log` with its stack and shows a
+dialog with OK and Open logs folder; the text names the log once it exists. One on the main
+thread, which starts the app and runs its windows, ends the app. One elsewhere leaves it running
+and shows at most once every 10 minutes. A failure inside the main window closes that window, as
+Compose's own handler does, and the tray opens a fresh one. At start, a files directory that
+can't be written or a missing sidecar exe gets its own message saying what to do.
+
 `StatusPanel.kt` draws `FarmerOverlay.panel` as a window over the others in the bottom right
 corner of the main screen, while a run is busy or a start is set and the tray's Status panel is
 ticked. That item starts unticked at every launch, since the user found the pill in the way. The
@@ -179,7 +194,8 @@ Stats:
 Setup:
 
 - The machine section is "This PC". Its Game window and Tray icon lines replace the phone's
-  accessibility and notification lines; battery, remote and the per-account lines are kept.
+  accessibility and notification lines, Text reader is new, and Remote page replaces the phone's
+  remote line; battery and the per-account lines are kept.
 - Game window reads the window watcher. Before the first lookup it is not read and not counted.
   A failed lookup is red with the reason. No window is amber, "Not open", with the fix "Open
   Clash of Clans", which sends `launch_clash`. A window closed by hand is red, "Closed", with no
@@ -187,10 +203,19 @@ Setup:
   broke input, so the line says to restart the PC. A minimized window is fine. A found window gives
   the game area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI
   assumes 16:9.
+- Text reader is the sidecar's OCR, from `SidecarStatus`, which asks the sidecar's hello every
+  3 s while the models load and every 60 s after. Not read or "Loading" is not counted. A failed
+  load is red, "Failed", with the sidecar's reason (usually a DLL that would not load) and what to
+  do: unzip again into a new folder, then install the Visual C++ Redistributable (x64).
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
+- Remote page replaces the phone's remote line and is never counted: "Off (Tailscale not
+  connected)" in grey, amber when port 8765 is taken, or "On" with the Tailscale address.
 - The battery line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
-- Copy link puts the remote link on the AWT clipboard. The key is never shown or logged.
+- Copy link shows only while the remote page is on, and puts the link on the AWT clipboard. The
+  key is never shown or logged.
+- The foot of the page names the build ("Clash Farmer PC 1.1.0 (commit). Settings and logs are
+  in ...", `BuildInfo.kt`) beside Open logs folder.
 
 Tray check:
 
@@ -267,14 +292,18 @@ of main at b514d40):
 - `insight/EventText.kt:168`-`171` (the notification shade), `:192`, `:444`-`445`, `:530`,
   `:546` ("Phone guard"), `:575`, `:579` ("the phone was locked") and `:600` ("a touch on the
   screen"); `insight/Problems.kt:127`, `:129`, `:165`.
-- `ui/screens/SetupChecklist.kt:95` "Starts with the accessibility service.", on Setup's remote
-  line.
+
+`ui/screens/SetupChecklist.kt:95` "Starts with the accessibility service." is no longer shown:
+`PcChecklist.remote` draws Setup's remote line.
 
 ## Tests
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix | 11 |
+| `desktop/ui/PcChecklistTest.kt` | The Game window, Text reader, Tray icon and Remote page lines, including a 1860x1162 surface, a window closed by hand and a reader that failed to load, and how they count toward ready, the tab dot and the primary fix | 15 |
+| `desktop/SingleInstanceTest.kt` | The lock per files directory, its release, and a later start raising the first | 7 |
+| `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text and its 10-minute limit | 4 |
+| `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |

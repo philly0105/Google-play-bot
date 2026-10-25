@@ -41,6 +41,7 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `recognition/BattleDamage.kt` | `OVERALL` skips one battle-button label between "Overall Damage" and the value: a word of seven to ten letters starting with s, or a word starting with e followed by one starting with b. | The PC's recogniser returns lines in reading order, so the button's "SURReNdeR" or "End Battle" stood between the word and the value on all nine damage readings of the 24 October attack, and none read (`audit-evidence/live/20261024-163029-supervised/events.jsonl`). Without a damage the early end at a damage and the stall watcher's damage go unused. |
 | `recognition/BattleResultReader.kt` | On a PC frame `lootRegions` hangs the rows at `PC_ROW_LEFT`, `PC_ROW_RIGHT`, `PC_ROW_OFFSETS` and `PC_ROW_HEIGHT`, `starCentres` samples `PC_STAR_OFFSETS`, and a new `glyphCount(roi, viewport, pixel)` counts with `PC_GLYPH_GAP`, `PC_WIDE_GLYPH` and `PC_EDGE`, all in pixels of 1740x978 scaled by `PcGeometry.length`. The phone's `glyphCount(roi, pixel)` stays and keeps its lengths. | The phone's lengths are pixels of 1600x720. On both result screens of 24 October they put the elixir and dark rows between the digits, so no row read, and their star points fell off the stars, so both battles recorded 0 stars. The PC's digits are also wider (up to 24 px) and further apart (17 px). With the PC values all seven result frames of the second battle read 1 346 371, 474 889 and 4 314 on every cut with the anchor moved up to 11 px, and 2 stars (`audit-evidence/live/20261024-165200-result`). The damage region is unchanged: it read 70% on every mask of every frame. A defeat's result screen has not been seen on the PC. |
 | `recognition/ScreenReader.kt` | `readResultLoot` passes the frame's size to `BattleResultReader.glyphCount`. | So that a PC frame's rows are counted at the PC's lengths (row above). |
+| `remote/RemoteServer.kt` | The constructor takes a third parameter, `bindAddress: InetAddress? = null`, and `start` opens `ServerSocket(port, 50, bindAddress)` in place of `ServerSocket(port)`; null keeps the phone's all-interfaces listen. A new `isListening` says whether `start` bound the socket and `stop` has not closed it. `RemoteApi.peerAllowed`, the routes and the key are unchanged. | The phone listened on every interface of a phone on Wi-Fi. A PC sits on a home LAN with other people's devices, and the page only needs Tailscale, so `desktop/RemotePage.kt` opens one server on the Tailscale adapter's address and one on 127.0.0.1, and closes them when Tailscale goes. `start` swallows a bind failure, as on the phone, so `isListening` is how `RemotePage` tells a taken port from a working page. |
 
 ## Shims and platform differences
 
@@ -60,7 +61,8 @@ These change no copied file, but the copied code runs on them, so they can chang
   `AccessibilityService.GLOBAL_ACTION_BACK` (fully qualified) in `core/LocalRunner.kt`, and
   `GLOBAL_ACTION_HOME` in `FarmerService`'s takeover wait. `FarmerService` answers them through its
   own `getSystemService` and `performGlobalAction`. With them, `RemoteServer.kt`, which PLAN.md
-  lists as ported (class 3), stays verbatim (class 2).
+  lists as ported (class 3), is verbatim through shims (class 2) apart from the bind address in
+  the table above.
 - The ML Kit shim returns each OCR line as its own `TextBlock` with one `Line`; ML Kit groups
   lines into blocks. `Text.text` joins them with newlines, as ML Kit does.
 - `org.json` is json.org's `org.json:json:20240303`, the same artifact the phone's JVM tests used,
@@ -184,6 +186,14 @@ below.
   - Added `launchClash()`, Setup's Open Clash of Clans: it starts Clash and returns at once, and
     sends nothing while a run is active or a Clash window exists. `captureNormalizedVillage`'s
     `returnToActivityClass` defaults to null, as `captureClashGame`'s does.
+  - Remote page: the companion's private `remoteServer` is now the public, read-only `remotePage`
+    (`desktop/RemotePage.kt`). `onServiceConnected` starts it with the same `RemoteApi` and
+    watches for Tailscale every minute on `serviceScope`; it listens only on the Tailscale address
+    and 127.0.0.1, and Setup reads its status. `onDestroy` stops it, as it stopped the server.
+  - Retention: the phone pruned old logs and captures once, in `onServiceConnected`, since Android
+    restarted the service often enough. The PC app can live in the tray for weeks, so the same
+    prune, moved into `pruneStorage`, also runs from the health loop once a day while no run is
+    busy (`pruneDue`). It logs the phone's `retention_pruned` and `retention_failed`.
 - `service/RunNotifier.kt` and `service/RunNotice.kt`: `RunNotice` and `LiveStatus` moved verbatim
   (phone lines 26-200, with the imports they use) into `RunNotice.kt`. `RunNotifier` takes no
   argument and writes to `RunTray`, which Main's tray icon reads: `post` queues a Windows
@@ -203,5 +213,5 @@ below.
   `hideForCapture` only runs its action, since the capture is of the Clash window alone.
   `OverlayGeometry` is verbatim (phone lines 492-533). `StatusBubble` and `PauseGlyph` are drawn in
   Compose in `StatusPanel.kt`.
-- `remote/RemoteServer.kt` is verbatim through shims (above), not ported or stubbed. It holds
-  `ServiceRemoteBackend`, which calls `FarmerService`.
+- `remote/RemoteServer.kt` is verbatim through shims (above) except for its bind address (table
+  above), not ported or stubbed. It holds `ServiceRemoteBackend`, which calls `FarmerService`.

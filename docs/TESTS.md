@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1754 tests, the phone's 1635
-and the PC's 119, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1787 tests, the phone's 1635
+and the PC's 152, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -39,14 +39,14 @@ edit is also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-119 `@Test` methods in 18 files under `desktop/`. Their fixtures are in
+152 `@Test` methods in 22 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, and a few PNG crops.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
-| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, and refusing every account but Blood | 14 |
+| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, refusing every account but Blood, and the daily pruning | 15 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
 | `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |
 | `PcBattleResultTest` | The result screen's loot rows and stars at the PC's lengths | 3 |
@@ -55,10 +55,14 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
 | `DesktopLogTest` | The desktop log file | 1 |
 | `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 5 |
+| `SingleInstanceTest` | One app per files directory: the lock in one JVM for the same and separate directories, its release, and a later start raising the first | 7 |
+| `RemotePageTest` | Where the remote page listens, with a fake Tailscale address: off without it, on its address and loopback, following it as it comes, goes and changes, the retry after a taken port, and detection by adapter name; plus the real server on loopback | 12 |
+| `CrashHandlerTest` | Uncaught failures: which end the app, the dialog's text, and its 10-minute limit | 4 |
+| `BuildInfoTest` | The version and About text, and the stamped version matching `gradle.properties` | 3 |
 | `platform/ClashWindowWatcherTest` | The Clash window lookup | 4 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar | 9 |
-| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar` | 9 |
-| `ui/` (five files) | The Compose UI; see `docs/UI.md` | 37 |
+| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including hello's text reader error | 11 |
+| `ui/` (five files) | The Compose UI; see `docs/UI.md` | 41 |
 
 ## When they run
 
