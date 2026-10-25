@@ -36,6 +36,7 @@ import local.clashfarmer.core.GoalMatch
 import local.clashfarmer.core.Resource
 import local.clashfarmer.desktop.ui.components.Card
 import local.clashfarmer.desktop.ui.components.Gap
+import local.clashfarmer.desktop.ui.components.MessageDialog
 import local.clashfarmer.desktop.ui.components.PrimaryButton
 import local.clashfarmer.desktop.ui.components.Segmented
 import local.clashfarmer.desktop.ui.components.Sheet
@@ -83,6 +84,16 @@ class AccountEditorModel(private val host: DashboardHost, val account: AccountRe
     var onStall by mutableStateOf(initial.endOnStall)
     var collectBefore by mutableStateOf(initial.collectBeforeFarming)
     var collectAfter by mutableStateOf(initial.collectAfterFarming)
+
+    /** The settings as the sheet opened with them, so Close knows whether anything was changed. */
+    private val opened: SettingsFields = current()
+
+    /** Whether a box or switch differs from what the sheet opened with. */
+    val dirty: Boolean get() = current() != opened
+
+    /** True while Close or Escape asks before dropping changes ([requestClose]). */
+    var closeQuestion by mutableStateOf(false)
+        private set
 
     /** The open sections. Walls switched off on load open theirs, so the reason is in view. */
     private val expanded = mutableStateListOf<SettingsSection>().apply {
@@ -137,6 +148,19 @@ class AccountEditorModel(private val host: DashboardHost, val account: AccountRe
         ),
         texts.toMap()
     )
+
+    /**
+     * Close and Escape: [onClose] at once when nothing was changed, else a question first, since
+     * the sheet holds a dozen boxes a stray key would otherwise throw away.
+     */
+    fun requestClose(onClose: () -> Unit) {
+        if (dirty) closeQuestion = true else onClose()
+    }
+
+    /** The answer Keep editing: the sheet stays open as it was. */
+    fun keepEditing() {
+        closeQuestion = false
+    }
 
     /** Reads every box and writes the settings when all of them read. [onSaved] closes the sheet. */
     fun save(onSaved: () -> Unit) {
@@ -227,7 +251,7 @@ fun AccountEditorSheet(model: AccountEditorModel, busy: Boolean, onClose: () -> 
     val fields = model.current()
     Sheet(
         title = "Edit ${model.account.displayName}",
-        onClose = onClose,
+        onClose = { model.requestClose(onClose) },
         actions = {
             PrimaryButton("Save", enabled = AccountEditor.saveEnabled(runActive, model.saving), compact = true) {
                 model.save(onClose)
@@ -317,6 +341,20 @@ fun AccountEditorSheet(model: AccountEditorModel, busy: Boolean, onClose: () -> 
             Caption("Before the first attack of a run, load this army from Saved Recipes, by the title on its card. " +
                 "Leave blank to keep the current army.")
         }
+    }
+    if (model.closeQuestion) {
+        MessageDialog(
+            title = "Discard your changes?",
+            message = "The settings you changed here have not been saved.",
+            confirm = "Discard",
+            onConfirm = {
+                model.keepEditing()
+                onClose()
+            },
+            onDismiss = model::keepEditing,
+            dismiss = "Keep editing",
+            danger = true
+        )
     }
 }
 

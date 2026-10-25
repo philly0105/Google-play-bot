@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,27 +21,41 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
@@ -57,9 +72,12 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import local.clashfarmer.core.Point
+import local.clashfarmer.core.Region
+import local.clashfarmer.desktop.ui.components.DangerButton
 import local.clashfarmer.desktop.ui.components.MessageDialog
 import local.clashfarmer.desktop.ui.components.PrimaryButton
 import local.clashfarmer.desktop.ui.components.SecondaryButton
+import local.clashfarmer.desktop.ui.components.SectionHeader
 import local.clashfarmer.desktop.ui.components.hoverClick
 import local.clashfarmer.desktop.ui.theme.FarmerColors
 import local.clashfarmer.desktop.ui.theme.FarmerSize
@@ -74,14 +92,63 @@ private val SIDEBAR_WIDTH = 340.dp
 /** The phone's text shadow on the frame's labels, so they read on any part of the game. */
 private val TEXT_SHADOW = Shadow(Color.Black, Offset(2f, 2f), 4f)
 
+/** The loupe's side, and how many frame pixels it shows across: each frame pixel is 4 dp in it. */
+private val LOUPE_SIZE = 128.dp
+private const val LOUPE_SPAN = 32
+
 /**
  * Calibration in place of the tabs: the phone's CalibrationActivity laid out for a desktop
  * window, the frame on the left and the target list, actions and status in a sidebar.
+ *
+ * The keys ([calibrationKey]) are read on the whole screen, after any button that has focus, but
+ * Enter is taken before that button while a point waits for Apply ([takesEnter]): the button
+ * last pressed keeps focus after a pick from the list and the arrow keys, and would otherwise run
+ * again. Escape asks the way Back does.
  */
 @Composable
 fun CalibrationScreen(model: CalibrationModel) {
-    Row(Modifier.fillMaxSize().background(FarmerColors.background)) {
-        FrameView(model, Modifier.weight(1f).fillMaxHeight())
+    val focus = remember { FocusRequester() }
+    // Whether the screen took the last Enter press, so its release does not reach a button either.
+    val enter = remember { booleanArrayOf(false) }
+    LaunchedEffect(model) {
+        // After the first frame, once the screen's nodes are attached.
+        withFrameNanos {}
+        runCatching { focus.requestFocus() }
+    }
+    Row(
+        Modifier
+            .fillMaxSize()
+            .background(FarmerColors.background)
+            .onPreviewKeyEvent { e ->
+                if (!isEnter(e.key)) return@onPreviewKeyEvent false
+                when (e.type) {
+                    // A held key repeats its press; the screen keeps the presses it started.
+                    KeyEventType.KeyDown -> when {
+                        enter[0] -> true
+                        takesEnter(e.key, model.pending) -> {
+                            enter[0] = true
+                            model.applyPoint()
+                            true
+                        }
+                        else -> false
+                    }
+                    KeyEventType.KeyUp -> enter[0].also { enter[0] = false }
+                    else -> false
+                }
+            }
+            .onKeyEvent { e ->
+                val action = calibrationKey(e.key, e.isShiftPressed) ?: return@onKeyEvent false
+                if (e.type == KeyEventType.KeyDown) when (action) {
+                    is CalibrationKey.Nudge -> model.nudge(action.dx, action.dy)
+                    CalibrationKey.Apply -> model.applyPoint()
+                    CalibrationKey.Back -> model.back()
+                }
+                true
+            }
+            .focusRequester(focus)
+            .focusable()
+    ) {
+        FrameView(model, Modifier.weight(1f).fillMaxHeight()) { runCatching { focus.requestFocus() } }
         Box(Modifier.width(1.dp).fillMaxHeight().background(FarmerColors.line))
         Sidebar(model, Modifier.width(SIDEBAR_WIDTH).fillMaxHeight())
     }
@@ -95,28 +162,82 @@ fun CalibrationScreen(model: CalibrationModel) {
             dismiss = "Cancel"
         )
     }
+    model.question?.let { question ->
+        MessageDialog(
+            title = question.title,
+            message = question.message,
+            confirm = question.confirm,
+            onConfirm = model::confirmQuestion,
+            onDismiss = model::cancelQuestion,
+            dismiss = question.dismiss,
+            // Leaving and retaking lose work; the standard positions change nothing until Save.
+            danger = question != CalibrationModel.Question.STANDARD
+        )
+    }
+}
+
+/** What a key does on the calibration screen ([calibrationKey]). */
+internal sealed interface CalibrationKey {
+    /** Moves the point Apply would save by [dx], [dy] frame pixels. */
+    class Nudge(val dx: Int, val dy: Int) : CalibrationKey
+
+    /** Apply. */
+    object Apply : CalibrationKey
+
+    /** Back to dashboard, which asks first when points would be lost. */
+    object Back : CalibrationKey
 }
 
 /**
- * The phone's CalibrationView: the frame as large as fits, centred, with the calibrated viewport
- * in green, the last card area in pink and a crosshair on the last click, each with its numbers.
- * A click on the frame picks the pixel under it. Marks are sized in dp, not the phone's pixels.
+ * The key's action, or null for a key the screen leaves alone. The arrows move the point 1 frame
+ * pixel, 10 with Shift, as a click is rarely exact at the size the frame is shown; Enter applies
+ * and Escape goes back.
+ */
+internal fun calibrationKey(key: Key, shift: Boolean): CalibrationKey? {
+    val step = if (shift) 10 else 1
+    return when (key) {
+        Key.DirectionLeft -> CalibrationKey.Nudge(-step, 0)
+        Key.DirectionRight -> CalibrationKey.Nudge(step, 0)
+        Key.DirectionUp -> CalibrationKey.Nudge(0, -step)
+        Key.DirectionDown -> CalibrationKey.Nudge(0, step)
+        Key.Enter, Key.NumPadEnter -> CalibrationKey.Apply
+        Key.Escape -> CalibrationKey.Back
+        else -> null
+    }
+}
+
+/** Enter on the main keys or the number pad. */
+internal fun isEnter(key: Key): Boolean = key == Key.Enter || key == Key.NumPadEnter
+
+/**
+ * Whether the screen takes [key] before the button that has focus: Enter, while a clicked or
+ * nudged point is [pending]. With nothing to apply, Enter presses the focused button as usual.
+ */
+internal fun takesEnter(key: Key, pending: Boolean): Boolean = pending && isEnter(key)
+
+/**
+ * The phone's CalibrationView: the frame as large as fits, centred, with the game area in green,
+ * the selected target's saved point and box in green, the last card area in pink and a crosshair
+ * on the last click, each with its numbers. A click on the frame picks the pixel under it and
+ * calls [onFocus]. A loupe in a corner shows the pixels under the pointer, or around the last
+ * click, four times their frame size. Marks are sized in dp, not the phone's pixels.
  */
 @Composable
-private fun FrameView(model: CalibrationModel, modifier: Modifier) {
+private fun FrameView(model: CalibrationModel, modifier: Modifier, onFocus: () -> Unit) {
     val image = model.frame
     Box(modifier.padding(12.dp), contentAlignment = Alignment.Center) {
         if (image == null) {
             // Nothing while the saved frame is read, so the empty note does not flash first.
             if (model.loaded) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Label("No game screenshot loaded.", size = FarmerTheme.TITLE, medium = true)
+                    Label("No game screenshot yet.", size = FarmerTheme.TITLE, medium = true)
                     Label("Choose Capture game screen to begin.", Modifier.padding(top = 8.dp), color = FarmerColors.muted)
                 }
             }
         } else {
             val measurer = rememberTextMeasurer()
             val textStyle = remember { farmerStyle(FarmerTheme.SMALL + 1, Color.White, medium = true).copy(shadow = TEXT_SHADOW) }
+            var hover by remember(image) { mutableStateOf<Offset?>(null) }
             Canvas(
                 Modifier
                     .fillMaxSize()
@@ -124,9 +245,21 @@ private fun FrameView(model: CalibrationModel, modifier: Modifier) {
                     .pointerHoverIcon(PointerIcon.Crosshair)
                     .pointerInput(model, image) {
                         detectTapGestures { tap ->
+                            onFocus()
                             FrameFit(size.width.toFloat(), size.height.toFloat(), image.width, image.height)
                                 .toImage(tap.x, tap.y)
                                 ?.let { model.click(it) }
+                        }
+                    }
+                    .pointerInput(image) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                hover = when (event.type) {
+                                    PointerEventType.Exit -> null
+                                    else -> event.changes.firstOrNull()?.position ?: hover
+                                }
+                            }
                         }
                     }
             ) {
@@ -144,31 +277,39 @@ private fun FrameView(model: CalibrationModel, modifier: Modifier) {
                     drawText(layout, topLeft = Offset(x, baseline - layout.firstBaseline))
                 }
 
-                val thin = 1.5.dp.toPx()
-
-                // Draw calibrated viewport
-                val vp = model.profile.viewport
-                drawRect(
-                    FarmerColors.ok,
-                    Offset(fit.x(vp.left), fit.y(vp.top)),
-                    Size((vp.right - vp.left) * fit.scale, (vp.bottom - vp.top) * fit.scale),
-                    style = Stroke(thin)
+                fun box(region: Region, color: Color, width: Float) = drawRect(
+                    color,
+                    Offset(fit.x(region.left), fit.y(region.top)),
+                    Size((region.right - region.left) * fit.scale, (region.bottom - region.top) * fit.scale),
+                    style = Stroke(width)
                 )
-                label("Viewport: ${vp.width}x${vp.height}", fit.x(vp.left) + 5.dp.toPx(), fit.y(vp.top) + 15.dp.toPx())
 
-                // Draw selected region if set
-                model.selectedRegion?.let { reg ->
-                    drawRect(
-                        FarmerColors.elixir,
-                        Offset(fit.x(reg.left), fit.y(reg.top)),
-                        Size((reg.right - reg.left) * fit.scale, (reg.bottom - reg.top) * fit.scale),
-                        style = Stroke(thin)
-                    )
-                    label("ROI: [${reg.left}, ${reg.top}, ${reg.right}, ${reg.bottom}]",
-                        fit.x(reg.left) + 4.dp.toPx(), fit.y(reg.top) - 4.dp.toPx())
+                val thin = 1.5.dp.toPx()
+                val profile = model.profile
+
+                // The game area
+                val vp = profile.viewport
+                box(Region(vp.left, vp.top, vp.right, vp.bottom), FarmerColors.ok, thin)
+                label("Game area ${vp.width}x${vp.height}", fit.x(vp.left) + 5.dp.toPx(), fit.y(vp.top) + 15.dp.toPx())
+
+                // Where the selected target is saved, when the frame is the profile's size, so it
+                // is drawn where a run would click.
+                if (image.width == profile.resolutionWidth && image.height == profile.resolutionHeight) {
+                    savedBox(profile, model.target.name)?.let { box(it, FarmerColors.ok, thin) }
+                    model.targetPoint(model.target.name)?.let { pt ->
+                        val spot = Offset(fit.x(pt.x), fit.y(pt.y))
+                        drawCircle(FarmerColors.ok, radius = 7.dp.toPx(), center = spot, style = Stroke(2.dp.toPx()))
+                        label("Saved", spot.x + 10.dp.toPx(), spot.y + 18.dp.toPx())
+                    }
                 }
 
-                // Draw selected point marker
+                // The card area the last Apply saved
+                model.selectedRegion?.let { reg ->
+                    box(reg, FarmerColors.elixir, thin)
+                    label("Card area", fit.x(reg.left) + 4.dp.toPx(), fit.y(reg.top) - 4.dp.toPx())
+                }
+
+                // The last click
                 model.marker?.let { pt ->
                     val spot = Offset(fit.x(pt.x), fit.y(pt.y))
                     val thick = 2.dp.toPx()
@@ -177,17 +318,54 @@ private fun FrameView(model: CalibrationModel, modifier: Modifier) {
                     drawCircle(FarmerColors.gold, radius = 3.dp.toPx(), center = spot)
                     drawLine(FarmerColors.bad, Offset(spot.x - arm, spot.y), Offset(spot.x + arm, spot.y), thick)
                     drawLine(FarmerColors.bad, Offset(spot.x, spot.y - arm), Offset(spot.x, spot.y + arm), thick)
-                    label("(${pt.x}, ${pt.y})", spot.x + 12.dp.toPx(), spot.y - 12.dp.toPx())
+                    label("${pt.x}, ${pt.y}", spot.x + 12.dp.toPx(), spot.y - 12.dp.toPx())
                 }
+
+                val centre = hover?.let { fit.toImage(it.x, it.y) } ?: model.marker
+                centre?.let { loupe(image, fit, it) }
             }
         }
     }
 }
 
 /**
- * The phone's sidebar: the target list, what to click for the target, the clicked point, the
- * actions, the profile's status and the way back. Every button but Back is off while a capture,
- * a read or a save runs, and a line under them says which.
+ * The loupe: [LOUPE_SPAN] frame pixels around [centre], drawn [LOUPE_SIZE] wide without
+ * smoothing so single pixels show, with a cross on [centre]. It sits in the frame's top-left
+ * corner, or top-right when [centre] is under it.
+ */
+private fun DrawScope.loupe(image: ImageBitmap, fit: FrameFit, centre: Point) {
+    val side = LOUPE_SIZE.toPx()
+    val margin = 8.dp.toPx()
+    val span = minOf(LOUPE_SPAN, image.width, image.height)
+    val srcLeft = (centre.x - span / 2).coerceIn(0, image.width - span)
+    val srcTop = (centre.y - span / 2).coerceIn(0, image.height - span)
+    val onLeft = !(fit.x(centre.x) < fit.left + margin * 2 + side && fit.y(centre.y) < fit.top + margin * 2 + side)
+    val x = if (onLeft) fit.left + margin else fit.left + image.width * fit.scale - margin - side
+    val y = fit.top + margin
+    drawRect(Color.Black, Offset(x - 1, y - 1), Size(side + 2, side + 2))
+    drawImage(
+        image = image,
+        srcOffset = IntOffset(srcLeft, srcTop),
+        srcSize = IntSize(span, span),
+        dstOffset = IntOffset(x.roundToInt(), y.roundToInt()),
+        dstSize = IntSize(side.roundToInt(), side.roundToInt()),
+        filterQuality = FilterQuality.None
+    )
+    val cell = side / span
+    val cx = x + (centre.x - srcLeft + 0.5f) * cell
+    val cy = y + (centre.y - srcTop + 0.5f) * cell
+    val stroke = 1.dp.toPx()
+    drawLine(FarmerColors.bad, Offset(x, cy), Offset(x + side, cy), stroke)
+    drawLine(FarmerColors.bad, Offset(cx, y), Offset(cx, y + side), stroke)
+    drawRect(FarmerColors.line, Offset(x, y), Size(side, side), style = Stroke(stroke))
+}
+
+/**
+ * The phone's sidebar: the account and progress, the target picker, what to click for the
+ * target and where it is, the actions (with Not in my army on an optional card), the profile's
+ * status, the actions that clear saved work,
+ * and the way back. Every button but Back is off while a capture, a read or a save runs, and a
+ * line under them says which.
  */
 @Composable
 private fun Sidebar(model: CalibrationModel, modifier: Modifier) {
@@ -195,25 +373,47 @@ private fun Sidebar(model: CalibrationModel, modifier: Modifier) {
     val idle = !model.working
     Box(modifier) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(FarmerSize.GUTTER)) {
-            Label("Device calibration", Modifier.padding(bottom = 10.dp), size = FarmerTheme.TITLE, color = FarmerColors.gold)
+            Label(model.title, size = FarmerTheme.TITLE, bold = true, maxLines = 1)
+            if (model.loaded) {
+                Label(model.progressText, Modifier.padding(top = 4.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.gold)
+            }
+            Label(
+                "Capture the game on the screen a point is on, click the point, then Apply. The arrow keys move it " +
+                    "1 pixel, or 10 with Shift; Enter applies.",
+                Modifier.padding(top = 6.dp, bottom = 12.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.muted
+            )
+            Label(model.target.group, Modifier.padding(bottom = 4.dp), size = FarmerTheme.LABEL, color = FarmerColors.muted)
             TargetPicker(model)
-            Label(model.target.description, Modifier.padding(top = 8.dp, bottom = 10.dp), size = FarmerTheme.LABEL,
+            Label(model.target.description, Modifier.padding(top = 8.dp, bottom = 6.dp), size = FarmerTheme.LABEL,
                 color = FarmerColors.muted)
-            Label(model.coordText, Modifier.padding(bottom = 12.dp), size = FarmerTheme.SMALL, color = FarmerColors.gold)
+            Label(model.coordText, Modifier.padding(bottom = 12.dp), size = FarmerTheme.SMALL + 1, color = FarmerColors.gold)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SecondaryButton("Capture game screen", Modifier.fillMaxWidth(), enabled = idle) { model.capture() }
-                SecondaryButton("Apply selected point", Modifier.fillMaxWidth(), enabled = idle) { model.applyPoint() }
+                SecondaryButton("Apply point", Modifier.fillMaxWidth(), enabled = idle) { model.applyPoint() }
+                // Only on the jump spell and the heroes, which not every army has.
+                if (model.target.name in OPTIONAL_CARDS) {
+                    SecondaryButton("Not in my army", Modifier.fillMaxWidth(), enabled = idle && model.removable) {
+                        model.removeCard()
+                    }
+                }
+                SecondaryButton("Start from the standard positions", Modifier.fillMaxWidth(), enabled = model.standardEnabled) {
+                    model.startFromStandard()
+                }
                 SecondaryButton("Show camera reference", Modifier.fillMaxWidth(), enabled = idle) { model.showCameraReference() }
-                SecondaryButton("Clear collectors", Modifier.fillMaxWidth(), enabled = idle) { model.clearCollectors() }
-                SecondaryButton("Retake camera reference", Modifier.fillMaxWidth(), enabled = idle) { model.retakeCameraReference() }
                 PrimaryButton("Save calibration", Modifier.fillMaxWidth(), enabled = idle) { model.save() }
             }
             model.task?.let { Label(it, Modifier.padding(top = 12.dp), size = FarmerTheme.SMALL, color = FarmerColors.gold) }
             if (model.loaded) {
-                Label(model.statusText, Modifier.padding(vertical = 12.dp), size = FarmerTheme.LABEL, color = FarmerColors.muted)
-            } else {
-                Spacer(Modifier.height(12.dp))
+                Label(model.statusText, Modifier.padding(top = 12.dp), size = FarmerTheme.LABEL, color = FarmerColors.muted)
             }
+            SectionHeader("Start over", top = 16.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DangerButton("Clear collectors", Modifier.fillMaxWidth(), enabled = idle, compact = true) { model.clearCollectors() }
+                DangerButton("Retake camera reference", Modifier.fillMaxWidth(), enabled = idle, compact = true) {
+                    model.retakeCameraReference()
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             SecondaryButton("Back to dashboard", Modifier.fillMaxWidth()) { model.back() }
         }
         VerticalScrollbar(
@@ -224,8 +424,8 @@ private fun Sidebar(model: CalibrationModel, modifier: Modifier) {
 }
 
 /**
- * The phone's Spinner of targets: the target shown, and the list of all 38 under it on a click.
- * Escape or a click outside closes the list.
+ * The phone's Spinner of targets: the target shown, with a check when it is set, and the grouped
+ * list under it on a click. Escape or a click outside closes the list.
  */
 @Composable
 private fun TargetPicker(model: CalibrationModel) {
@@ -248,6 +448,7 @@ private fun TargetPicker(model: CalibrationModel) {
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Check(model.targetSet(model.target.name) && model.target.name !in VIEWPORT_TARGETS)
             Label(model.target.label, Modifier.weight(1f), size = FarmerTheme.SMALL + 1, medium = true, maxLines = 1)
             Chevron(Modifier.padding(start = 8.dp).size(width = 10.dp, height = 6.dp))
         }
@@ -266,33 +467,91 @@ private fun TargetPicker(model: CalibrationModel) {
     }
 }
 
-/** The 38 targets, the one shown in gold. The list opens scrolled to it. */
+/** A line of the target list ([targetRows]): a game screen's header, or the target at [index] in [CALIBRATION_TARGETS]. */
+internal sealed interface TargetRow {
+    class Header(val group: String) : TargetRow
+    class Item(val index: Int) : TargetRow
+}
+
+/** [CALIBRATION_TARGETS] under a header for each game screen, in the list's order. */
+internal fun targetRows(): List<TargetRow> = buildList {
+    var group: String? = null
+    CALIBRATION_TARGETS.forEachIndexed { index, target ->
+        if (target.group != group) {
+            group = target.group
+            add(TargetRow.Header(target.group))
+        }
+        add(TargetRow.Item(index))
+    }
+}
+
+/**
+ * The 38 targets under their game screens, the one shown in gold. A set target has a check, one
+ * an attack needs and lacks says "Needed", and the game area's corners, which Capture sets on
+ * the PC, can't be picked. The list opens scrolled to the target shown.
+ */
 @Composable
 private fun TargetList(model: CalibrationModel, modifier: Modifier, onPick: (Int) -> Unit) {
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (model.targetIndex - 3).coerceAtLeast(0))
+    val rows = remember { targetRows() }
+    val first = rows.indexOfFirst { it is TargetRow.Item && it.index == model.targetIndex }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (first - 3).coerceAtLeast(0))
     val shape = RoundedCornerShape(12.dp)
+    val profile = model.profile
     Box(
         modifier
-            .heightIn(max = 360.dp)
+            .heightIn(max = 420.dp)
             .clip(shape)
             .background(FarmerColors.navBar)
             .border(1.dp, FarmerColors.line, shape)
     ) {
         LazyColumn(state = listState, modifier = Modifier.padding(vertical = 4.dp)) {
-            itemsIndexed(CALIBRATION_TARGETS) { index, target ->
-                val selected = index == model.targetIndex
-                Label(
-                    target.label,
-                    Modifier
-                        .fillMaxWidth()
-                        .hoverClick { onPick(index) }
-                        .background(if (selected) FarmerColors.withAlpha(FarmerColors.gold, 30) else Color.Transparent)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    size = FarmerTheme.SMALL + 1,
-                    color = if (selected) FarmerColors.gold else FarmerColors.text,
-                    medium = selected,
-                    maxLines = 1
-                )
+            items(rows) { row ->
+                when (row) {
+                    is TargetRow.Header -> Label(
+                        row.group,
+                        Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp),
+                        size = FarmerTheme.LABEL,
+                        color = FarmerColors.muted,
+                        medium = true
+                    )
+                    is TargetRow.Item -> {
+                        val target = CALIBRATION_TARGETS[row.index]
+                        val selected = row.index == model.targetIndex
+                        val enabled = targetEnabled(profile, target.name)
+                        val set = model.targetSet(target.name)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .hoverClick(enabled) { onPick(row.index) }
+                                .background(if (selected) FarmerColors.withAlpha(FarmerColors.gold, 30) else Color.Transparent)
+                                .padding(start = 14.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Check(set && enabled)
+                            Label(
+                                target.label,
+                                Modifier.weight(1f),
+                                size = FarmerTheme.SMALL + 1,
+                                color = when {
+                                    !enabled -> FarmerColors.muted
+                                    selected -> FarmerColors.gold
+                                    else -> FarmerColors.text
+                                },
+                                medium = selected,
+                                maxLines = 1
+                            )
+                            val note = when {
+                                !enabled -> "Set by Capture"
+                                target.required && !set -> "Needed"
+                                else -> null
+                            }
+                            note?.let {
+                                Label(it, Modifier.padding(start = 6.dp), size = FarmerTheme.SMALL,
+                                    color = if (enabled) FarmerColors.gold else FarmerColors.muted, maxLines = 1)
+                            }
+                        }
+                    }
+                }
             }
         }
         Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
@@ -301,6 +560,17 @@ private fun TargetList(model: CalibrationModel, modifier: Modifier, onPick: (Int
                 modifier = Modifier.fillMaxHeight().padding(vertical = 4.dp, horizontal = 2.dp)
             )
         }
+    }
+}
+
+/** A green check for a set target, or the same space left empty so the labels line up. */
+@Composable
+private fun Check(shown: Boolean) {
+    Canvas(Modifier.padding(end = 8.dp).size(12.dp)) {
+        if (!shown) return@Canvas
+        val stroke = 2.dp.toPx()
+        drawLine(FarmerColors.ok, Offset(0f, size.height * 0.55f), Offset(size.width * 0.38f, size.height * 0.9f), stroke)
+        drawLine(FarmerColors.ok, Offset(size.width * 0.38f, size.height * 0.9f), Offset(size.width, size.height * 0.1f), stroke)
     }
 }
 

@@ -18,6 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.Launch
+import local.clashfarmer.core.Point
 import local.clashfarmer.core.PresetStore
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.ui.calibration.CalibrationModel
@@ -32,8 +33,10 @@ import org.jetbrains.skia.EncodedImageFormat
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
+import javax.imageio.ImageIO
 import javax.swing.SwingUtilities
 
 /**
@@ -100,6 +103,15 @@ class DashboardRenderTest {
         lateinit var calibration: CalibrationModel
         onUiThread { calibration = CalibrationModel(host, AccountStore.BLOOD_ID, onBack = {}) }
         render("calibration") { CalibrationScreen(calibration) }
+        onUiThread { calibration.close() }
+
+        // With a saved screenshot, a clicked point and the loupe over it.
+        val frozen = File(store.calibrationDir(AccountStore.BLOOD_ID).apply { mkdirs() }, "frozen.png")
+        ImageIO.write(BufferedImage(1740, 978, BufferedImage.TYPE_INT_RGB), "png", frozen)
+        onUiThread { calibration = CalibrationModel(host, AccountStore.BLOOD_ID, onBack = {}) }
+        Thread.sleep(400)
+        onUiThread { calibration.click(Point(870, 489)) }
+        render("calibration-frame") { CalibrationScreen(calibration) }
         onUiThread { calibration.close() }
     }
 

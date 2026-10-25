@@ -361,18 +361,63 @@ Inspect and captures:
 - Resume: the phone brought Clash to the front and resumed 1.5 s later. The PC never brings the
   window forward; it starts Clash only when the window is gone, as the tray's Resume does, and
   resumes 1.5 s later.
-- The inspect report shows in a monospace alert.
+- The inspect report shows in a monospace alert titled "What the bot sees". It leads with the
+  screen in words ("The game shows the village.", `readableState`) and the saved picture's name,
+  and keeps the raw reading (state name, game area, text read) under "Details" (`inspectReport`).
 
 Account editor:
 
 - A number box drops anything but digits as it is typed or pasted, which is all the phone's
   number keyboard offered. Text already in the box stays, so a stored "2.5" still shows and Save
   can say why it is refused.
+- Close and Escape ask "Discard your changes?" (Discard, Keep editing) when a box or switch
+  differs from what the sheet opened with; an untouched sheet closes at once. The phone's sheet
+  closed without asking.
 
 Calibration:
 
 - It fills the window in place of the tabs while open: the frame on the left, a 340 dp sidebar
-  with the target list, actions and status on the right.
+  with the title ("Calibrate Blood"), "N of 36 points set", the target picker, actions and status
+  on the right.
+- The 38 targets keep the phone's names but are listed by the game screen they are clicked on
+  (game area, village, attack menu and army, scout screen, battle tray, battle map, battle result,
+  wall panel, collectors), with no numbers. The list shows a header per screen, a check on each
+  set target, "Needed" on what an attack still lacks (`CalibrationTarget.required`, the same set
+  `validateForAttack` checks), and on a PC profile the game area's corners as "Set by Capture",
+  which can't be picked: a capture fills the frame, and a stray click there would shrink it.
+- The troop cards are named for what the attack does with them, not the owner's army: "Main troop
+  card (e.g. Valkyries)", dropped all around the base; "Spell cast inside (e.g. Rage)", cast five
+  times; "Jump spell card (optional)"; and the heroes "(if you have it)". The keys in the profile
+  are unchanged. On the jump spell and the heroes a "Not in my army" button removes the card's
+  point and area (`withoutCard`), since the attack uses every hero and jump card that is set and
+  the tray check stops a run on a count badge in a hero's slot.
+- Start from the standard positions loads `profile/pc-start-1740x978.json`, the owner's verified
+  1740x978 calibration shipped with no collectors, wall points or deployment points and not
+  verified, moved onto the game area shown with the run's rule (`StarterProfile.onto`, which calls
+  `PcProfiles.derive`). What belongs to the account's village (grass, wall panel, wall progress,
+  collectors) is kept from the profile being edited, moved onto that game area first when it is
+  another size, which drops its collectors as a capture does. It asks first when there is a saved
+  calibration or unsaved points, then picks the main troop card, since the tray is the one place an
+  army differs, and its toast says to remove any hero or spell the army lacks. Nothing
+  is written until Save, and the result is unverified until a supervised attack. Setup's
+  calibration row for an account with no calibration says to start there
+  (`StarterProfile.setupLine`).
+- The sidebar shows the selected target's saved point ("Set at x 307, y 903") and draws it, and
+  its box, in green on the frame when the frame is the profile's size. Arrow keys move the point
+  Apply would save by 1 frame pixel, 10 with Shift, starting from the saved point; Enter applies.
+  While a point waits for Apply, the screen takes Enter before the button that has focus
+  (`takesEnter`), so a pick from the list and the arrows never press Capture or Save again. An
+  edge end applied on this visit counts as set at once, though Apply put the edge's other end on
+  the same point. A 128 dp loupe in
+  the frame's top-left corner (top-right when the point is under it) shows 32 frame pixels around
+  the pointer, or the last click, without smoothing.
+- Back and Escape ask "Leave without saving?" when points were set or moved since the last save.
+  Retake camera reference asks before it clears the saved collectors. Clear collectors and Retake
+  sit under "Start over".
+- The status lines are plain: the game area's size, what an attack still needs, the collectors
+  and camera reference, and whether a supervised attack has confirmed the calibration. Failed
+  captures and saves give a sentence saying what to do (`saveFailure`), and the error goes to
+  the log.
 - File reads, writes and captures run on IO, with every button but Back off until they end.
 - The default profile, before the saved one is read and for an account without one, is at the
   game surface's live size when the watcher has measured it, capped to what the monitor holds,
@@ -381,7 +426,9 @@ Calibration:
 - A capture of another size moves the points onto it with the run's rule (`refit`, which calls
   `PcProfiles.derive`) and leaves them unverified; the phone kept the points and changed only the
   size. A toast says the points were moved and, when there were any, that the collectors were
-  cleared. A profile that can't be moved, such as the phone's default, is relabelled as before.
+  cleared. A profile that can't be moved, such as the phone's default, is relabelled as before. A
+  capture at the profile's own size makes a PC profile's game area the whole frame again, with a
+  toast, so a game area an earlier build shrank through a corner click is repaired.
 - The camera reference follows: a frame from `captureNormalizedVillage` of another size moves the
   profile instead of failing. Show camera reference never changes a saved reference: one of
   another size than the profile being edited is shown with a note (`referenceMismatch`), and
@@ -406,13 +453,17 @@ Calibration:
 | --- | --- |
 | "Enable Accessibility Service first!", "Accessibility Service is not enabled!", "Turn on the accessibility service in Setup", "Turn on the accessibility service first." | "Clash Farmer is still starting. If this stays, quit it from the tray icon and open it again." |
 | "Test one attack (supervised)" | "Supervised attack (one attack you watch)"; the overlay says "Starting a supervised attack on Blood..." and "Starting walls only on Blood..." |
-| "Inspect Result: VILLAGE_HOME" | "What the bot sees"; the report says "village home" |
+| "Inspect Result: VILLAGE_HOME" | "What the bot sees"; the report says "The game shows the village." and puts the raw fields under "Details" |
 | "Inspect failed: <exception>" | "Inspect could not read the game window. Make sure Clash is open, then try again." |
 | "Please calibrate the profile first.", "Unknown account", "Account not found" | "Blood is not calibrated. Open Setup and calibrate it first.", "That account is gone. Choose one on Home." |
 | "Switching to Clash and capturing..." and "Switching to Clash and capturing game frame..." (overlay status) | "Capturing the game screen..." |
-| "Selected: None (tap image)" | "Selected: None (click the image)" |
+| "Device calibration" | "Calibrate Blood" |
+| "Selected: None (tap image)", "Selected: (x, y)" | "Click the screenshot to place this point.", "New point: x 870, y 489. Press Apply or Enter to set it.", or where the target is set |
+| The status block's "Res: ... \| VP: [...]", "State Anchors: n \| Troop Anchors: n", "Verified: false (earned locally via live attack)" | "Game area 1740x978", "Still needed to attack: ...", "No collectors, no camera reference", "Not confirmed yet: after saving, run one supervised attack." |
 | "Tap a point on the screenshot first" | "Click a point on the screenshot first" |
-| The 38 calibration targets' "Tap ..." | "Click ..."; the viewport corners drop "(excluding status bar)" and "(excluding nav bar)" |
+| The 38 calibration targets' "1. Viewport Top-Left", "Tap ..." | Sentence-case names with no numbers ("Attack! button", "Main troop card (e.g. Valkyries)"); "Click ..."; the viewport corners are "Game area, top-left corner" and drop "(excluding status bar)" and "(excluding nav bar)" |
+| "Apply selected point", "Viewport: WxH", "ROI: [...]" | "Apply point", "Game area WxH", "Card area" |
+| "Saved <target> to (x, y)", "Profile saved (Verified: false)", "Capture failed: <exception>", "Validation error: <exception>", "Reference failed: <exception>" | "Attack! button: set at x 90, y 900. Save when you're done.", "Saved. Run one supervised attack to confirm it.", "Could not capture the game. Make sure Clash is open and not minimised, then try again.", "Could not save: a point is outside the game area. ...", "Could not capture the camera reference. ..." |
 | "... is no longer on this phone" | "... is no longer on this PC" |
 | "Export failed. Check free space on the phone." | "Export failed. Check free space on the disk." |
 | "Saved to Downloads" | "Saved to <folder>", which is "Saved to Downloads" when that folder is kept |
@@ -462,13 +513,15 @@ Phone wording remains in shared files (line numbers as of 3c438fb):
 | `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |
 | `desktop/ui/TrayCheckSheetTest.kt` | `profileAt`: the calibration itself, moved to 16:10, and a game area too small | 3 |
-| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved` | 9 |
+| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, with a shrunk game area, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved` | 10 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
-| `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
+| `desktop/ui/AccountEditorCloseTest.kt` | Close on an untouched sheet, the question after a changed box or switch, Keep editing, and a change put back | 3 |
+| `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets grouped by screen, their plain labels and the army's names, the needed set against `validateForAttack`, `isSet` (with edge ends applied on the visit), `savedPoint`, `savedBox`, `targetEnabled`, `targetRows`, `withoutCard` against `AttackPlanner.buildDeployment`, `calibrationKey`, `takesEnter` and `saveFailure`; `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 25 |
+| `desktop/ui/calibration/StarterProfileTest.kt` | The shipped standard positions, `onto` at the same size, over a profile of another size, at 16:10 and an unworkable size, `sizeFor`, and Setup's row for an account with no calibration (`setupLine`) | 7 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
-| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts` and `shownPresets` with Blood alone; every tab, the account editor and calibration drawn off-screen at 1100x760, and the whole window at 100%, at 150% in 1280x650 dp and with a run going, into `app/build/ui-renders`; `tabForKey`, and the tab keys after the page holding focus is dropped | 5 |
+| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts` and `shownPresets` with Blood alone; every tab, the account editor and calibration (empty, and with a screenshot, a clicked point and the loupe) drawn off-screen at 1100x760, and the whole window at 100%, at 150% in 1280x650 dp and with a run going, into `app/build/ui-renders`; `tabForKey`, and the tab keys after the page holding focus is dropped | 5 |
 | `desktop/ui/StartFixTest.kt` | `StartFix` for each readiness reason, `plainReason`, `shownPresets`, `gameChip` and `headerChip` | 9 |
-| `desktop/ui/ControllerTextTest.kt` | `actionFailure`'s titles and messages, and `readableState` | 3 |
+| `desktop/ui/ControllerTextTest.kt` | `actionFailure`'s titles and messages, `readableState` and `inspectReport` | 4 |
 | `desktop/ui/ActivityLinksTest.kt` | `clearable` and `findingFix` | 2 |
 | `desktop/ui/components/KeyControlsTest.kt` | `stepKey` and `nextOption` | 2 |
 | `desktop/ui/components/FocusRingTest.kt` | A clicked button drawn without its focus ring until a key is pressed (`KeyboardNav`) | 1 |

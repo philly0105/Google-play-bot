@@ -1,9 +1,11 @@
 package local.clashfarmer.desktop.ui.calibration
 
+import androidx.compose.ui.input.key.Key
 import local.clashfarmer.core.AttackPlanner
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
 import local.clashfarmer.core.Resource
+import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.recognition.PhoneProfile
 import org.json.JSONObject
@@ -19,19 +21,212 @@ import org.junit.Test
 class CalibrationTest {
 
     @Test
-    fun `the 38 targets keep the phone's names and numbering`() {
+    fun `the 38 targets keep the phone's names, grouped by game screen`() {
         assertEquals(38, CALIBRATION_TARGETS.size)
         assertEquals(38, CALIBRATION_TARGETS.map { it.name }.toSet().size)
-        CALIBRATION_TARGETS.forEachIndexed { i, target ->
-            assertTrue(target.label, target.label.startsWith("${i + 1}. "))
-        }
         assertEquals(COLLECTOR, CALIBRATION_TARGETS.last().name)
+        assertEquals(listOf("vp_tl", "vp_br"), CALIBRATION_TARGETS.take(2).map { it.name })
+        // Each screen's targets sit together, so the list walks one screen at a time.
+        val groups = CALIBRATION_TARGETS.map { it.group }
+        val runs = listOf(groups.first()) + groups.zipWithNext().filter { (a, b) -> a != b }.map { it.second }
+        assertEquals(groups.distinct(), runs)
+        assertEquals(9, groups.distinct().size)
+        // No number in front any more; the list's headers and checks do that job.
+        CALIBRATION_TARGETS.forEach { assertFalse(it.label, it.label.first().isDigit()) }
     }
 
     @Test
-    fun `no description asks for a tap`() {
-        val tap = Regex("\\btap", RegexOption.IGNORE_CASE)
-        CALIBRATION_TARGETS.forEach { assertFalse(it.description, tap.containsMatchIn(it.description)) }
+    fun `labels and descriptions are plain, with no tap and no developer words`() {
+        val banned = Regex("\\btap|\\bROI\\b|\\banchor|viewport|\\bphone\\b", RegexOption.IGNORE_CASE)
+        CALIBRATION_TARGETS.forEach {
+            assertFalse(it.description, banned.containsMatchIn(it.description))
+            assertFalse(it.label, banned.containsMatchIn(it.label))
+            // Sentence case: only the first word, and game names such as Attack!, start with a capital.
+            assertTrue(it.label, it.label.first().isUpperCase())
+        }
+    }
+
+    @Test
+    fun `the army targets say what the attack does with them`() {
+        fun label(name: String) = CALIBRATION_TARGETS.first { it.name == name }.label
+        assertEquals("Main troop card (e.g. Valkyries)", label("valkyries"))
+        assertEquals("Spell cast inside (e.g. Rage)", label("rages"))
+        assertTrue(label("jumps").contains("optional"))
+        listOf("king", "queen", "warden", "champion").forEach {
+            assertTrue(label(it), label(it).endsWith("(if you have it)"))
+        }
+        assertTrue(CALIBRATION_TARGETS.first { it.name == "rages" }.description.contains("five times"))
+        // Each optional card says how to leave it out, which the standard positions set.
+        OPTIONAL_CARDS.forEach { name ->
+            val description = CALIBRATION_TARGETS.first { it.name == name }.description
+            assertTrue(description, description.contains("press Not in my army"))
+        }
+    }
+
+    @Test
+    fun `Not in my army removes an optional card so the attack skips it`() {
+        val starter = StarterProfile.load()
+        assertEquals(OPTIONAL_CARDS, OPTIONAL_CARDS.filter { isSet(starter, it) }.toSet())
+        val noWarden = withoutCard(starter, "warden")
+        assertFalse(isSet(noWarden, "warden"))
+        assertNull(noWarden.troopRois["warden"])
+        assertFalse(noWarden.isVerified)
+        // Only that card goes.
+        assertEquals(starter.troopAnchors - "warden", noWarden.troopAnchors)
+        assertEquals(starter.troopRois - "warden", noWarden.troopRois)
+        assertEquals(starter.copy(troopAnchors = noWarden.troopAnchors, troopRois = noWarden.troopRois), noWarden)
+
+        // An army of King and Queen, no Warden, no Champion and no jump spell.
+        val army = listOf("warden", "champion", "jumps").fold(starter) { p, name -> withoutCard(p, name) }
+        army.validateForAttack()
+        val groups = AttackPlanner.buildDeployment(army, kotlin.random.Random(1)).map { it.name }
+        assertTrue(groups.toString(), "king" in groups && "queen" in groups)
+        assertTrue(groups.toString(), groups.none { it in setOf("warden", "champion", "jumps") })
+        // King and Queen still measure the tray's card width for the event tray.
+        assertNotNull(AttackPlanner.trayBadgeRegions(army))
+
+        // The cards every attack needs, and a card not set, are left alone.
+        assertSame(starter, withoutCard(starter, "valkyries"))
+        assertSame(starter, withoutCard(starter, "rages"))
+        assertSame(noWarden, withoutCard(noWarden, "warden"))
+    }
+
+    @Test
+    fun `the targets marked needed are exactly what an attack checks for`() {
+        val required = CALIBRATION_TARGETS.filter { it.required }
+        assertEquals(
+            setOf("attack", "find_match", "return_home", "valkyries", "rages") +
+                (1..4).flatMap { listOf("perim_${it}_start", "perim_${it}_end") },
+            required.map { it.name }.toSet()
+        )
+        // All of them set on a PC profile passes the attack check; any one missing fails it.
+        var full = PhoneProfile.createDefault(1740, 978)
+        required.forEachIndexed { i, target -> full = applyTarget(full, target.name, Point(200 + i * 40, 150 + i * 30)) }
+        full.validateForAttack()
+        assertTrue(required.all { isSet(full, it.name) })
+        listOf("attack", "valkyries").forEach { name ->
+            var partial = PhoneProfile.createDefault(1740, 978)
+            required.filter { it.name != name }.forEachIndexed { i, target ->
+                partial = applyTarget(partial, target.name, Point(200 + i * 40, 150 + i * 30))
+            }
+            assertFalse(name, isSet(partial, name))
+            assertTrue(name, runCatching { partial.validateForAttack() }.isFailure)
+        }
+    }
+
+    @Test
+    fun `a target counts as set once it has a value`() {
+        val empty = PhoneProfile.createDefault(1740, 978)
+        assertFalse(isSet(empty, "attack"))
+        assertFalse(isSet(empty, "valkyries"))
+        assertFalse(isSet(empty, "scout_gold"))
+        assertFalse(isSet(empty, COLLECTOR))
+        assertTrue(isSet(empty, "vp_tl"))
+        assertEquals(0, COUNTED_TARGETS.count { isSet(empty, it.name) })
+
+        val attack = applyTarget(empty, "attack", Point(90, 900))
+        assertTrue(isSet(attack, "attack"))
+        assertEquals(Point(90, 900), savedPoint(attack, "attack"))
+
+        val gold = applyTarget(empty, "scout_gold", Point(80, 116))
+        assertTrue(isSet(gold, "scout_gold"))
+        assertNull(savedPoint(gold, "scout_gold"))
+        assertEquals(Region(75, 99, 243, 133), savedBox(gold, "scout_gold"))
+
+        val card = applyTarget(empty, "valkyries", Point(307, 903))
+        assertEquals(Point(307, 903), savedPoint(card, "valkyries"))
+        assertEquals(Region(270, 846, 345, 962), savedBox(card, "valkyries"))
+
+        val button = applyTarget(empty, "gold_cost_btn", Point(500, 300))
+        assertEquals(Point(500, 300), savedPoint(button, "gold_cost_btn"))
+        assertFalse(isSet(button, "elixir_cost_btn"))
+    }
+
+    @Test
+    fun `an edge's end counts only once the edge has two different ends`() {
+        val one = applyTarget(PhoneProfile.createDefault(1740, 978), "perim_2_end", Point(300, 400))
+        // Apply filled edge 1 with zeros and edge 2's start with the same point.
+        assertFalse(isSet(one, "perim_1_start"))
+        assertFalse(isSet(one, "perim_2_end"))
+        assertFalse(isSet(one, "perim_2_start"))
+        val both = applyTarget(one, "perim_2_start", Point(100, 200))
+        assertTrue(isSet(both, "perim_2_start"))
+        assertTrue(isSet(both, "perim_2_end"))
+        assertEquals(Point(100, 200), savedPoint(both, "perim_2_start"))
+        assertEquals(Point(300, 400), savedPoint(both, "perim_2_end"))
+    }
+
+    @Test
+    fun `an edge end applied on this visit counts as set at once, whichever end came first`() {
+        val start = applyTarget(PhoneProfile.createDefault(1740, 978), "perim_1_start", Point(300, 320))
+        val applied = setOf("perim_1_start")
+        // Apply filled the end with the same point, so only the visit knows which end was clicked.
+        assertTrue(isSet(start, "perim_1_start", applied))
+        assertEquals(Point(300, 320), savedPoint(start, "perim_1_start", applied))
+        assertFalse(isSet(start, "perim_1_end", applied))
+        assertNull(savedPoint(start, "perim_1_end", applied))
+
+        val end = applyTarget(PhoneProfile.createDefault(1740, 978), "perim_3_end", Point(900, 700))
+        assertTrue(isSet(end, "perim_3_end", setOf("perim_3_end")))
+        assertFalse(isSet(end, "perim_3_start", setOf("perim_3_end")))
+        // Edges before it were filled with zeros, which are never set.
+        assertFalse(isSet(end, "perim_1_start", setOf("perim_1_start")))
+        assertTrue(isPerimeterEnd("perim_4_end"))
+        assertFalse(isPerimeterEnd("hero_drop"))
+    }
+
+    @Test
+    fun `Enter is taken from a focused button only while a point waits for Apply`() {
+        assertTrue(takesEnter(Key.Enter, pending = true))
+        assertTrue(takesEnter(Key.NumPadEnter, pending = true))
+        assertFalse(takesEnter(Key.Enter, pending = false))
+        assertFalse(takesEnter(Key.DirectionRight, pending = true))
+        assertFalse(takesEnter(Key.Spacebar, pending = true))
+    }
+
+    @Test
+    fun `on a PC profile the game area's corners are set by capture, not picked`() {
+        val pc = PhoneProfile.createDefault(1740, 978)
+        assertFalse(targetEnabled(pc, "vp_tl"))
+        assertFalse(targetEnabled(pc, "vp_br"))
+        assertTrue(targetEnabled(pc, "attack"))
+        val phone = PhoneProfile.createDefault()
+        assertTrue(targetEnabled(phone, "vp_tl"))
+        assertEquals(36, COUNTED_TARGETS.size)
+        assertTrue(COUNTED_TARGETS.none { it.name in VIEWPORT_TARGETS })
+    }
+
+    @Test
+    fun `the list puts one header over each game screen`() {
+        val rows = targetRows()
+        val headers = rows.filterIsInstance<TargetRow.Header>()
+        assertEquals(CALIBRATION_TARGETS.map { it.group }.distinct(), headers.map { it.group })
+        assertEquals(CALIBRATION_TARGETS.indices.toList(), rows.filterIsInstance<TargetRow.Item>().map { it.index })
+        assertTrue(rows.first() is TargetRow.Header)
+    }
+
+    @Test
+    fun `the arrows move the point 1 pixel, 10 with Shift, and Enter applies`() {
+        fun nudge(key: Key, shift: Boolean) = (calibrationKey(key, shift) as CalibrationKey.Nudge).let { it.dx to it.dy }
+        assertEquals(-1 to 0, nudge(Key.DirectionLeft, false))
+        assertEquals(10 to 0, nudge(Key.DirectionRight, true))
+        assertEquals(0 to -10, nudge(Key.DirectionUp, true))
+        assertEquals(0 to 1, nudge(Key.DirectionDown, false))
+        assertSame(CalibrationKey.Apply, calibrationKey(Key.Enter, false))
+        assertSame(CalibrationKey.Apply, calibrationKey(Key.NumPadEnter, false))
+        assertSame(CalibrationKey.Back, calibrationKey(Key.Escape, false))
+        assertNull(calibrationKey(Key.A, false))
+        assertNull(calibrationKey(Key.Tab, false))
+    }
+
+    @Test
+    fun `a failed save says what to do in plain words`() {
+        val outside = saveFailure(StopException("State anchor 'attack' at Point(x=2000, y=10) is outside viewport Viewport(0, 0, 1740, 978)"))
+        assertEquals("Could not save: a point is outside the game area. Capture the game, check the points, then save again.", outside)
+        assertEquals(outside, saveFailure(StopException("Viewport Viewport(0, 0, 9, 9) out of bounds for resolution 1x1")))
+        assertEquals("Could not save: Blood is no longer on this PC.", saveFailure(StopException("Blood is no longer on this PC")))
+        assertEquals("Could not save the calibration. Check that the disk has space, then try again.",
+            saveFailure(java.io.IOException("Access is denied")))
     }
 
     @Test

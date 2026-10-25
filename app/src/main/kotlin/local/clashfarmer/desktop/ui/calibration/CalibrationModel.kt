@@ -19,7 +19,9 @@ import local.clashfarmer.core.CollectionPolicy
 import local.clashfarmer.core.CollectionTarget
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.StopException
 import local.clashfarmer.desktop.SurfaceVerification
+import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.NOT_RUNNING
 import local.clashfarmer.log.AppLog
@@ -70,6 +72,11 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /** The profile as loaded, so a save writes only what was changed here. */
     private var openedProfile: PhoneProfile = profile
     private var tempPoint: Point? by mutableStateOf(null)
+    /**
+     * The perimeter edge ends applied on this visit. Apply fills an edge's other end with the same
+     * point, so the profile alone can't tell a start just applied from one never set ([isSet]).
+     */
+    private var appliedEnds: Set<String> by mutableStateOf(emptySet())
     /** Collection targets are only taken on the camera reference itself, never on another frame. */
     private var frameIsCameraReference = false
 
@@ -97,6 +104,15 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     var loaded by mutableStateOf(false)
         private set
 
+    /**
+     * The question shown as a dialog before an action that loses work, or null. Back asks before
+     * it drops points not saved, Retake camera reference before it clears the saved collectors,
+     * and Start from the standard positions before it replaces points. [confirmQuestion] and
+     * [cancelQuestion] answer it.
+     */
+    var question: Question? by mutableStateOf(null)
+        private set
+
     private var accountName: String? by mutableStateOf(null)
     private var referenceSaved by mutableStateOf(false)
 
@@ -105,22 +121,62 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /** True while [task] runs: the sidebar's buttons, Back aside, are off. */
     val working: Boolean get() = task != null
 
-    /** The phone's coordinate line, which follows the point Apply would save. */
-    val coordText: String
-        get() = tempPoint?.let { "Selected: (${it.x}, ${it.y})" } ?: "Selected: None (click the image)"
+    /** "Calibrate Blood": the sidebar's title. */
+    val title: String get() = "Calibrate ${accountName ?: "this account"}"
 
-    /** The phone's status block. */
+    /** Whether the profile has changes Save has not written, which Back asks before dropping. */
+    val unsaved: Boolean get() = profile != openedProfile
+
+    /** Whether a point is waiting for Apply, so Enter applies it whatever button has focus. */
+    val pending: Boolean get() = tempPoint != null
+
+    /** Whether the profile being edited has a value for the target [name] ([isSet]). */
+    fun targetSet(name: String): Boolean = isSet(profile, name, appliedEnds)
+
+    /** The point saved for the target [name] on the profile being edited ([savedPoint]). */
+    fun targetPoint(name: String): Point? = savedPoint(profile, name, appliedEnds)
+
+    /** Whether "Not in my army" can remove the target shown: an optional card that is set. */
+    val removable: Boolean get() = target.name in OPTIONAL_CARDS && targetSet(target.name)
+
+    /**
+     * The line under the target's description: the point Apply would save, else where the target
+     * is saved, else what to do. Coordinates are frame pixels, as the arrow keys move them.
+     */
+    val coordText: String
+        get() {
+            tempPoint?.let { return "New point: x ${it.x}, y ${it.y}. Press Apply or Enter to set it." }
+            if (!targetEnabled(profile, target.name)) return "Set by Capture: the game area is the whole screenshot."
+            targetPoint(target.name)?.let { return "Set at x ${it.x}, y ${it.y}. Click the screenshot to move it." }
+            if (target.name != COLLECTOR && targetSet(target.name)) return "Set. Click the screenshot to move it."
+            if (target.name in OPTIONAL_CARDS) return "Not set, so the bot won't use this card. Click the screenshot to place it."
+            return "Click the screenshot to place this point."
+        }
+
+    /** "12 of 36 points set": the targets the list checks off, the game area's corners aside. */
+    val progressText: String
+        get() = "${COUNTED_TARGETS.count { targetSet(it.name) }} of ${COUNTED_TARGETS.size} points set"
+
+    /** The status block under the buttons, in plain lines. */
     val statusText: String
         get() {
             val p = profile
-            val vp = p.viewport
-            return "Account: ${accountName ?: accountId}\n" +
-                "Res: ${p.resolutionWidth}x${p.resolutionHeight} | VP: [${vp.left}, ${vp.top}, ${vp.right}, ${vp.bottom}]\n" +
-                "State Anchors: ${p.stateAnchors.size} | Troop Anchors: ${p.troopAnchors.size}\n" +
-                "Perimeter: ${p.perimeterSegments.size} edges\n" +
-                "Collectors: ${p.collectionTargets.size} | Camera reference: ${if (referenceSaved) "saved" else "none"}\n" +
-                "Verified: ${p.isVerified} (earned locally via live attack)"
+            val missing = CALIBRATION_TARGETS.filter { it.required && !targetSet(it.name) }
+            val area = "Game area ${p.resolutionWidth}x${p.resolutionHeight}" + if (frame == null) ", no screenshot yet" else ""
+            val attack = if (missing.isEmpty()) "Everything an attack needs is set."
+            else "Still needed to attack: ${missing.joinToString(", ") { it.label }}."
+            val collectors = when (p.collectionTargets.size) {
+                0 -> "No collectors"
+                1 -> "1 collector"
+                else -> "${p.collectionTargets.size} collectors"
+            } + if (referenceSaved) ", camera reference saved" else ", no camera reference"
+            val verified = if (p.isVerified) "Confirmed by a supervised attack."
+            else "Not confirmed yet: after saving, run one supervised attack."
+            return listOf(area, attack, collectors, verified).joinToString("\n")
         }
+
+    /** Whether Start from the standard positions can run: not while a read, capture or save does. */
+    val standardEnabled: Boolean get() = loaded && !working
 
     init {
         work(READING) { load() }
@@ -131,9 +187,33 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         job.cancel()
     }
 
-    /** "Back to dashboard". */
+    /** "Back to dashboard", and Escape: asks first when points would be lost. */
     fun back() {
-        onBack()
+        if (question != null) return
+        if (unsaved) question = Question.LEAVE else onBack()
+    }
+
+    /** The answer that goes ahead with [question]'s action. */
+    fun confirmQuestion() {
+        when (question ?: return) {
+            Question.LEAVE -> {
+                question = null
+                onBack()
+            }
+            Question.RETAKE -> {
+                question = null
+                retake()
+            }
+            Question.STANDARD -> {
+                question = null
+                useStandard()
+            }
+        }
+    }
+
+    /** The answer that leaves everything as it was. */
+    fun cancelQuestion() {
+        question = null
     }
 
     /** A click on the frame, in frame pixels. */
@@ -142,11 +222,78 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         tempPoint = point
     }
 
-    /** Picks a target from the list. Picking the one already shown keeps the clicked point, as the Spinner did. */
+    /**
+     * An arrow key on the frame: moves the point Apply would save by [dx], [dy] frame pixels,
+     * starting from the target's saved point when nothing has been clicked for it. Kept on the frame.
+     */
+    fun nudge(dx: Int, dy: Int) {
+        val image = frame ?: return
+        if (!targetEnabled(profile, target.name)) return
+        val from = tempPoint ?: targetPoint(target.name) ?: return
+        click(Point((from.x + dx).coerceIn(0, image.width - 1), (from.y + dy).coerceIn(0, image.height - 1)))
+    }
+
+    /**
+     * Picks a target from the list. Picking the one already shown keeps the clicked point, as the
+     * Spinner did; a game-area corner a capture sets can't be picked ([targetEnabled]).
+     */
     fun pickTarget(index: Int) {
         if (index == targetIndex || index !in CALIBRATION_TARGETS.indices) return
+        if (!targetEnabled(profile, CALIBRATION_TARGETS[index].name)) return
         targetIndex = index
         tempPoint = null
+    }
+
+    /** Moves off a target that can't be picked on the profile now, to the first that can after it. */
+    private fun skipDisabled() {
+        if (targetEnabled(profile, target.name)) return
+        val next = CALIBRATION_TARGETS.indices.firstOrNull { it > targetIndex && targetEnabled(profile, CALIBRATION_TARGETS[it].name) }
+            ?: return
+        targetIndex = next
+        tempPoint = null
+    }
+
+    /**
+     * "Start from the standard positions" ([StarterProfile]). It asks first when it would replace
+     * a saved calibration or points set since the last save.
+     */
+    fun startFromStandard() {
+        if (!standardEnabled || question != null) return
+        if (hasSaved || unsaved) question = Question.STANDARD else useStandard()
+    }
+
+    /**
+     * Loads the standard positions onto the game area on show and picks the main troop card, the
+     * first point the user must check against their own tray. Nothing is saved until Save.
+     */
+    private fun useStandard() {
+        if (working) return
+        work(STANDARD) {
+            val starter = try {
+                withContext(Dispatchers.IO) { StarterProfile.load() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.log("calibration_failed", "accountId" to accountId, "step" to "standard", "error" to e.message)
+                host.toast("Could not read the standard positions. Set the points by hand.", long = true)
+                return@work
+            }
+            val shown = frame?.let { SurfaceSize(it.width, it.height) }
+            val next = try {
+                StarterProfile.onto(starter, profile, StarterProfile.sizeFor(shown, profile, starter))
+            } catch (e: StopException) {
+                host.toast(e.message ?: "The standard positions don't fit this game area.", long = true)
+                return@work
+            }
+            profile = next
+            selectedRegion = null
+            tempPoint = null
+            // The standard edges have two different ends each, so none needs remembering.
+            appliedEnds = emptySet()
+            AppLog.log("standard_positions_loaded", "accountId" to accountId, "size" to "${next.resolutionWidth}x${next.resolutionHeight}")
+            CALIBRATION_TARGETS.indexOfFirst { it.name == "valkyries" }.takeIf { it >= 0 }?.let { targetIndex = it }
+            host.toast(STANDARD_LOADED, long = true)
+        }
     }
 
     /** "Capture game screen": one frame of Clash, kept as the account's calibration/frozen.png. */
@@ -181,14 +328,15 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                         }
                     }
                     if (note != null) host.toast(note, long = true)
-                    else host.toast("Captured real game screen (${bitmap.width}x${bitmap.height})")
+                    else host.toast("Captured the game (${bitmap.width}x${bitmap.height})")
                 } finally {
                     bitmap.recycle()
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                host.toast("Capture failed: ${e.message}", long = true)
+                AppLog.log("calibration_failed", "accountId" to accountId, "step" to "capture", "error" to e.message)
+                host.toast(CAPTURE_FAILED, long = true)
             }
         }
     }
@@ -211,9 +359,16 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
 
     /**
      * For a village that was rebuilt: the old reference is kept beside the new one under a dated
-     * name, and the collectors measured on it are cleared on disk before it goes, not at Save.
+     * name, and the collectors measured on it are cleared on disk before it goes, not at Save. It
+     * asks first when there is a reference or collectors to lose.
      */
     fun retakeCameraReference() {
+        if (working || question != null) return
+        val loses = referenceSaved || profile.collectionTargets.isNotEmpty() || openedProfile.collectionTargets.isNotEmpty()
+        if (loses) question = Question.RETAKE else retake()
+    }
+
+    private fun retake() {
         if (working) return
         work(REFERENCE) {
             if (retireReference()) cameraReference()
@@ -270,6 +425,10 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
 
         val idx = targetIndex
         val target = CALIBRATION_TARGETS[idx]
+        if (!targetEnabled(profile, target.name)) {
+            host.toast("Capture sets the game area on the PC; pick another point")
+            return
+        }
 
         if (target.name == COLLECTOR) {
             if (!frameIsCameraReference) {
@@ -288,15 +447,28 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         }
 
         profile = applyTarget(profile, target.name, pt)
+        if (isPerimeterEnd(target.name)) appliedEnds = appliedEnds + target.name
 
         // A card's area is centred on its tap, so the box shows a tap that missed the card's middle.
         selectedRegion = profile.troopRois[target.name]
-        host.toast("Saved ${target.label} to (${pt.x}, ${pt.y})")
+        host.toast("${target.label}: set at x ${pt.x}, y ${pt.y}. Save when you're done.")
 
-        // Advance to next target if available
-        if (idx < CALIBRATION_TARGETS.size - 1) {
-            pickTarget(idx + 1)
-        }
+        // On to the next target that can be picked, if there is one.
+        CALIBRATION_TARGETS.indices.firstOrNull { it > idx && targetEnabled(profile, CALIBRATION_TARGETS[it].name) }
+            ?.let { pickTarget(it) }
+    }
+
+    /**
+     * "Not in my army": removes the optional card shown ([withoutCard]), so the attack skips it.
+     * The standard positions set the jump spell and all four heroes, which not every army has.
+     */
+    fun removeCard() {
+        if (working || !removable) return
+        val label = target.label.substringBefore(" (")
+        profile = withoutCard(profile, target.name)
+        selectedRegion = null
+        tempPoint = null
+        host.toast("$label removed. The bot won't use this card. Save when you're done.")
     }
 
     /**
@@ -347,11 +519,12 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                 openedProfile = saved
                 hasSaved = true
                 AppLog.log("profile_saved", "accountId" to accountId, "path" to file.absolutePath)
-                host.toast("Profile saved (Verified: ${saved.isVerified})")
+                host.toast(if (saved.isVerified) "Saved" else "Saved. Run one supervised attack to confirm it.")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                host.toast("Validation error: ${e.message}", long = true)
+                AppLog.log("calibration_failed", "accountId" to accountId, "step" to "save", "error" to e.message)
+                host.toast(saveFailure(e), long = true)
             }
         }
     }
@@ -398,6 +571,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         accountName = saved.name
         referenceSaved = saved.reference
         saved.frozen?.let { show(it, reference = false) }
+        skipDisabled()
         loaded = true
     }
 
@@ -458,7 +632,8 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            host.toast("Reference failed: ${e.message}", long = true)
+            AppLog.log("calibration_failed", "accountId" to accountId, "step" to "reference", "error" to e.message)
+            host.toast("Could not capture the camera reference. Make sure Clash is open on the village, then try again.", long = true)
         }
     }
 
@@ -468,7 +643,9 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
      */
     private fun fitTo(width: Int, height: Int): String? {
         val fit = refit(profile, width, height)
-        if (fit.profile !== profile) AppLog.log(
+        // A game area reset at the same size is not a move.
+        val moved = width != profile.resolutionWidth || height != profile.resolutionHeight
+        if (moved && fit.profile !== profile) AppLog.log(
             "profile_moved",
             "accountId" to accountId,
             "calibrated" to "${profile.resolutionWidth}x${profile.resolutionHeight}",
@@ -476,6 +653,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
             "where" to "calibrate"
         )
         profile = fit.profile
+        skipDisabled()
         return fit.note
     }
 
@@ -492,10 +670,48 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /** The PNG at [file] as a frame, or null when it will not decode, as BitmapFactory gave. */
     private fun decode(file: File): ImageBitmap? = runCatching { ImageIO.read(file)?.toComposeImageBitmap() }.getOrNull()
 
+    /** What [question] asks, as [CalibrationScreen] shows it. */
+    enum class Question(val title: String, val message: String, val confirm: String, val dismiss: String) {
+        LEAVE(
+            "Leave without saving?",
+            "The points you set or moved since the last save will be lost.",
+            "Leave without saving", "Keep editing"
+        ),
+        RETAKE(
+            "Retake the camera reference?",
+            "This clears the collectors saved for this account. Mark them again on the new reference.",
+            "Retake", "Cancel"
+        ),
+        STANDARD(
+            "Use the standard positions?",
+            "This replaces the points on this screen with the standard positions. Your saved calibration stays as " +
+                "it is until you press Save.",
+            "Use standard positions", "Cancel"
+        )
+    }
+
     private companion object {
         const val READING = "Reading the saved calibration..."
         const val CAPTURING = "Capturing the game screen..."
         const val REFERENCE = "Capturing the camera reference..."
         const val SAVING = "Saving calibration..."
+        const val STANDARD = "Loading the standard positions..."
+        const val CAPTURE_FAILED = "Could not capture the game. Make sure Clash is open and not minimised, then try again."
+        const val STANDARD_LOADED = "Standard positions loaded. Check each troop card against your own battle tray, " +
+            "move any that differ, and press Not in my army on any hero or spell you don't have. Then save."
     }
+}
+
+/**
+ * Why Save failed, in words for the user. The validator's messages name anchors and viewports
+ * ("State anchor 'attack' at Point(x=..) is outside viewport ..."); every one of them means a
+ * point lies off the game area.
+ */
+internal fun saveFailure(error: Throwable): String {
+    val message = error.message.orEmpty()
+    if (error is StopException && (message.contains("outside viewport") || message.contains("out of bounds"))) {
+        return "Could not save: a point is outside the game area. Capture the game, check the points, then save again."
+    }
+    if (error is StopException && message.isNotBlank()) return "Could not save: ${message.trimEnd('.')}."
+    return "Could not save the calibration. Check that the disk has space, then try again."
 }

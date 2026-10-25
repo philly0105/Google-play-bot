@@ -1,0 +1,216 @@
+{
+  "resolutionWidth": 1740,
+  "resolutionHeight": 978,
+  "viewport": {
+    "top": 0,
+    "left": 0,
+    "bottom": 978,
+    "right": 1740
+  },
+  "stateAnchors": {
+    "find_match": {
+      "x": 220,
+      "y": 690
+    },
+    "army": {
+      "x": 1470,
+      "y": 832
+    },
+    "next": {
+      "x": 1612,
+      "y": 745
+    },
+    "end_battle": {
+      "x": 105,
+      "y": 768
+    },
+    "attack": {
+      "x": 96,
+      "y": 885
+    },
+    "return_home": {
+      "x": 870,
+      "y": 869
+    }
+  },
+  "troopAnchors": {
+    "rages": {
+      "x": 881,
+      "y": 903
+    },
+    "king": {
+      "x": 429,
+      "y": 903
+    },
+    "queen": {
+      "x": 539,
+      "y": 903
+    },
+    "valkyries": {
+      "x": 307,
+      "y": 903
+    },
+    "jumps": {
+      "x": 991,
+      "y": 903
+    },
+    "warden": {
+      "x": 649,
+      "y": 903
+    },
+    "champion": {
+      "x": 759,
+      "y": 903
+    }
+  },
+  "troopRois": {
+    "rages": {
+      "top": 846,
+      "left": 844,
+      "bottom": 962,
+      "right": 919
+    },
+    "king": {
+      "top": 846,
+      "left": 392,
+      "bottom": 962,
+      "right": 467
+    },
+    "queen": {
+      "top": 846,
+      "left": 502,
+      "bottom": 962,
+      "right": 577
+    },
+    "valkyries": {
+      "top": 846,
+      "left": 270,
+      "bottom": 962,
+      "right": 345
+    },
+    "jumps": {
+      "top": 846,
+      "left": 954,
+      "bottom": 962,
+      "right": 1029
+    },
+    "warden": {
+      "top": 846,
+      "left": 612,
+      "bottom": 962,
+      "right": 687
+    },
+    "champion": {
+      "top": 846,
+      "left": 722,
+      "bottom": 962,
+      "right": 797
+    }
+  },
+  "perimeterSegments": [
+    {
+      "start": {
+        "x": 307,
+        "y": 322
+      },
+      "end": {
+        "x": 179,
+        "y": 418
+      }
+    },
+    {
+      "start": {
+        "x": 179,
+        "y": 466
+      },
+      "end": {
+        "x": 307,
+        "y": 562
+      }
+    },
+    {
+      "start": {
+        "x": 1445,
+        "y": 310
+      },
+      "end": {
+        "x": 1573,
+        "y": 406
+      }
+    },
+    {
+      "start": {
+        "x": 1573,
+        "y": 454
+      },
+      "end": {
+        "x": 1445,
+        "y": 550
+      }
+    }
+  ],
+  "heroDrop": {
+    "x": 235,
+    "y": 376
+  },
+  "scoutLootRois": {
+    "gold": {
+      "top": 99,
+      "left": 74,
+      "bottom": 133,
+      "right": 242
+    },
+    "elixir": {
+      "top": 141,
+      "left": 74,
+      "bottom": 175,
+      "right": 242
+    },
+    "dark_elixir": {
+      "top": 185,
+      "left": 74,
+      "bottom": 219,
+      "right": 242
+    }
+  },
+  "scoutCountdownRoi": {
+    "top": 44,
+    "left": 814,
+    "bottom": 82,
+    "right": 928
+  },
+  "scoutFeeRoi": {
+    "top": 749,
+    "left": 1578,
+    "bottom": 783,
+    "right": 1678
+  },
+  "homeResourceRois": {
+    "gold": {
+      "top": 22,
+      "left": 1485,
+      "bottom": 62,
+      "right": 1705
+    },
+    "elixir": {
+      "top": 78,
+      "left": 1498,
+      "bottom": 118,
+      "right": 1718
+    },
+    "dark_elixir": {
+      "top": 134,
+      "left": 1508,
+      "bottom": 174,
+      "right": 1728
+    }
+  },
+  "deploymentPoints": [],
+  "wallPoints": [],
+  "wallCursor": {
+    "index": 0,
+    "row": 0
+  },
+  "collectionTargets": [],
+  "isVerified": false
+}

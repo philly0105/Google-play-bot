@@ -1,5 +1,6 @@
 package local.clashfarmer.desktop.ui.calibration
 
+import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.PcProfiles
@@ -20,9 +21,20 @@ internal class Refit(val profile: PhoneProfile, val note: String?)
  * profile that can't be moved, such as the phone-shaped default, keeps the phone's relabel, and a
  * frame the bot can't read says why. Collectors are dropped with the move: they belong to the
  * camera reference, which was taken at the old size.
+ *
+ * At the profile's own size the points stay, but on a PC frame the game area is made the whole
+ * frame, as a move makes it: the corners can't be picked there ([targetEnabled]), and an earlier
+ * build let a stray click on them shrink it, which every move and check would then keep.
  */
 internal fun refit(profile: PhoneProfile, width: Int, height: Int): Refit {
-    if (width == profile.resolutionWidth && height == profile.resolutionHeight) return Refit(profile, null)
+    if (width == profile.resolutionWidth && height == profile.resolutionHeight) {
+        val whole = Viewport(0, 0, width, height)
+        if (profile.viewport == whole || !PcGeometry.isPc(whole)) return Refit(profile, null)
+        return Refit(
+            profile.copy(viewport = whole, isVerified = false),
+            "The game area was set to the whole screenshot. Check the points on this frame, then save."
+        )
+    }
     val from = "${profile.resolutionWidth}x${profile.resolutionHeight}"
     val empty = profile.copy(isVerified = false) == PhoneProfile.createDefault(profile.resolutionWidth, profile.resolutionHeight)
     return try {

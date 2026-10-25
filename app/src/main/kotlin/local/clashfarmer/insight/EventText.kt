@@ -462,6 +462,14 @@ object EventText {
         // Calibration and files.
         "profile_saved" -> "Calibration saved" to Tone.NEUTRAL
         "profile_load_failed" -> "Calibration could not be loaded" to Tone.BAD
+        "calibration_failed" -> when (str(e, "step")) {
+            "capture" -> "Calibration could not capture the game"
+            "save" -> "Calibration could not be saved"
+            "reference" -> "Calibration could not capture the camera reference"
+            "standard" -> "The standard positions could not be read"
+            else -> "Calibration could not finish a step"
+        } to Tone.WARN
+        "standard_positions_loaded" -> "Loaded the standard positions into calibration" to Tone.NEUTRAL
         "profile_earned_verification" -> "Calibration verified by this run" to Tone.OK
         "profile_verification_skipped_recalibrated" -> "Not marked verified: the calibration changed during the run" to Tone.WARN
         "failed_to_save_verification" -> "The calibration's verification could not be saved" to Tone.WARN
