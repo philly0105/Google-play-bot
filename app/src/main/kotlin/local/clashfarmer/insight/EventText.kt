@@ -461,7 +461,7 @@ object EventText {
         "calibration_failed" -> when (str(e, "step")) {
             "capture" -> "Calibration could not capture the game"
             "save" -> "Calibration could not be saved"
-            "reference" -> "Calibration could not take the village view"
+            "reference" -> "Calibration could not capture the camera reference"
             "standard" -> "The standard positions could not be read"
             else -> "Calibration could not finish a step"
         } to Tone.WARN
