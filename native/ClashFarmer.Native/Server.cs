@@ -35,6 +35,7 @@ internal sealed class Server(Stream input, Stream output)
         // Gesture steps of 8 ms need a finer timer than the default 15.6 ms.
         Win32.timeBeginPeriod(1);
         PaddleOcr.Warm();
+        PcState.WatchDisplay();
         Log($"sidecar {Version} ready, pid {Environment.ProcessId}");
         try
         {
@@ -107,7 +108,10 @@ internal sealed class Server(Stream input, Stream output)
         "launch" => Done(() => Launch(Str(r, "url"))),
         "power" => Power(),
         "keepAwake" => Done(() => SystemState.KeepAwake(Bool(r, "on"))),
+        "keepSystemAwake" => Done(() => PcState.KeepSystemAwake(Bool(r, "on"))),
         "input" => Activity(),
+        "sessionState" => SessionState(),
+        "pcInfo" => PcInfo(),
         _ => throw new SidecarException("bad_request", $"Unknown op '{op}'")
     };
 
@@ -132,6 +136,7 @@ internal sealed class Server(Stream input, Stream output)
         var window = GameWindow.Find();
         if (window == null) return new JsonObject { ["found"] = false };
         Win32.GetClientRect(window.Game, out var game);
+        var (ownerPid, ownerStartedMs) = PcState.Owner(window.Top);
         return new JsonObject
         {
             ["found"] = true,
@@ -144,9 +149,26 @@ internal sealed class Server(Stream input, Stream output)
             ["width"] = game.Width,
             ["height"] = game.Height,
             ["foreground"] = Win32.GetForegroundWindow() == window.Top,
-            ["monitorDpi"] = Win32.MonitorDpi(window.Top)
+            ["monitorDpi"] = Win32.MonitorDpi(window.Top),
+            // Google Play Games keeps the game running when the window is closed, and shows it in
+            // the same process when it is opened again; a new process means a fresh start.
+            ["ownerPid"] = ownerPid,
+            ["ownerStartedMs"] = ownerStartedMs,
+            ["fullscreen"] = PcState.FullScreen(window.Top)
         };
     }
+
+    private static (JsonObject, byte[]) SessionState()
+    {
+        var (locked, displayOn) = PcState.Session();
+        return (new JsonObject { ["locked"] = locked, ["displayOn"] = displayOn }, []);
+    }
+
+    private static (JsonObject, byte[]) PcInfo() =>
+        (new JsonObject
+        {
+            ["osBuild"] = PcState.OsBuild(), ["gpgInstalled"] = PcState.GpgInstalled(), ["clashInstalled"] = PcState.ClashInstalled()
+        }, []);
 
     private (JsonObject, byte[]) Capture(JsonObject r)
     {
@@ -180,7 +202,13 @@ internal sealed class Server(Stream input, Stream output)
             _capture = null;
             throw;
         }
-        return (new JsonObject { ["width"] = frame.Width, ["height"] = frame.Height, ["timestampMs"] = frame.TimestampMs }, frame.Bgra);
+        // Windows sends a frame only when the window changes, so an old frame is either a game
+        // standing still or a locked PC or dark display; the app tells which with sessionState.
+        var ageMs = Math.Max(0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - frame.TimestampMs);
+        return (new JsonObject
+        {
+            ["width"] = frame.Width, ["height"] = frame.Height, ["timestampMs"] = frame.TimestampMs, ["ageMs"] = ageMs
+        }, frame.Bgra);
     }
 
     private static (JsonObject, byte[]) Gesture(JsonObject r)
@@ -287,6 +315,8 @@ internal sealed class Server(Stream input, Stream output)
         {
             throw new SidecarException("bad_request", "Only googleplaygames:// links are launched");
         }
+        // Without Google Play Games the shell shows its own "how do you want to open this" dialog.
+        if (!PcState.GpgInstalled()) throw new SidecarException("not_installed", "Google Play Games is not installed");
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
     }
 
