@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1969 tests, 1637 copied
-from the phone and the PC's 332 (317 under `desktop/` and `accounts/PcAccountTest.kt`'s 15), and
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1970 tests, 1637 copied
+from the phone and the PC's 333 (317 under `desktop/` and `accounts/PcAccountTest.kt`'s 16), and
 none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
@@ -52,7 +52,7 @@ since the app no longer ships the owner's (`docs/DIVERGENCES.md`).
 
 ## PC tests
 
-317 `@Test` methods in 35 files under `desktop/`, and 15 in `accounts/PcAccountTest.kt`. Their
+317 `@Test` methods in 35 files under `desktop/`, and 16 in `accounts/PcAccountTest.kt`. Their
 fixtures are in `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from
 Blood's game window at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter,
 and a few PNG crops. `identity/pc/blood.png` is
@@ -68,7 +68,7 @@ same strip on the Settings tab and the village at 1860x1162
 | `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, capping it to the monitor, moving the calibration onto the size reached (the same profile at 1740x978, unverified at 16:10 until a supervised attack writes surfaces.json and never profile.json), refusing every account but the PC's, refusing unattended starts and the remote page's account check before the account is read, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, `LatestFrame.heightFor`, and the daily pruning | 33 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
 | `PcAccountSwitcherTest` | The identity check on the profile menu's Settings strip: the Settings tab by its words, and a template cut at 1740x978 or 1860x1162 matching the strip at both sizes and not the village or the profile tab, and the real 1740x978 and 1860x1162 strips matching each other both ways within the cross-size limit while the real 16:10 village does not | 11 |
-| `accounts/PcAccountTest` (outside `desktop/`) | The fresh install's neutral account and its no-op on an existing index, the template and frame files, a damaged template counting as not read, `forget` and `undoRead`, the name and tag read off the strip, and the refusal texts | 15 |
+| `accounts/PcAccountTest` (outside `desktop/`) | The fresh install's neutral account and its no-op on an existing index, the template and frame files, a damaged template counting as not read, `forget` and `undoRead`, the name and tag read off the strip, a tag another account holds, and the refusal texts | 16 |
 | `PcBuildersCornerTest` | The builders' counter read again from an upscaled crop of a village frame, through a fake OCR backend | 7 |
 | `PcUpgradeListTest` | The builder panel's mangled timers, the prices beside them, and a card's name read line by line | 5 |
 | `PcReplayTest` | Return Home on a replay's end screen | 5 |

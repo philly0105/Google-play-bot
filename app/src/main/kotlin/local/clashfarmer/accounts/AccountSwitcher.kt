@@ -385,8 +385,12 @@ class AccountSwitcher(
                     else PcAccount.readIdentity(screenReader.observeRegion(frame.bitmap, region, scale = 5).boxes)
                 if (identity != null) {
                     val store = AccountStore(service.filesDir)
-                    val stored = store.load().firstOrNull { it.id == target.id }
+                    val accounts = store.load()
+                    val stored = accounts.firstOrNull { it.id == target.id }
                         ?: throw StopException("Account not found")
+                    // Desktop: another account's tag saved here would leave index.json, and the app, unable to load.
+                    PcAccount.tagHolder(accounts, target.id, identity.playerTag)
+                        ?.let { throw StopException(PcAccount.anotherAccountShown(it.villageName)) }
                     store.update(stored.copy(villageName = identity.villageName, playerTag = identity.playerTag))
                     PcAccount.saveTemplate(service.filesDir, target.id, frame.bitmap, region)
                     // The tag is the player's own; the log, which a person may share, keeps the name only.

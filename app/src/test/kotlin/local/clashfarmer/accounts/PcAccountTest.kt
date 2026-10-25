@@ -177,7 +177,7 @@ class PcAccountTest {
     @Test
     fun `the refusals name no village of the owner's and say what to do`() {
         val texts = listOf(PcAccount.ENROL_FIRST, PcAccount.IDENTITY_UNREADABLE, PcAccount.NOT_THE_READ_VILLAGE,
-            PcAccount.otherAccountRefused("Second village"))
+            PcAccount.otherAccountRefused("Second village"), PcAccount.anotherAccountShown("Second village"))
         for (text in texts) {
             assertFalse(text, text.contains("Blood"))
             assertFalse(text, Regex("phone|android|accessibility", RegexOption.IGNORE_CASE).containsMatchIn(text))
@@ -185,6 +185,18 @@ class PcAccountTest {
         assertEquals("Run one supervised attack first so the bot can read your account.", PcAccount.ENROL_FIRST)
         assertEquals("Clash Farmer runs one account on this PC, and Second village is not it.",
             PcAccount.otherAccountRefused("Second village"))
+    }
+
+    @Test
+    fun `a tag another account holds is found, whatever its case and spaces`() {
+        val mine = AccountRecord(PcAccount.ID, "Farmland", "Supercell ID 1", "#TEST2468", AccountSettings())
+        val other = AccountRecord(AccountStore.SWEAT_ID, "Second village", "Supercell ID 2", "#OTHER135", AccountSettings())
+        val accounts = listOf(other, mine)
+        assertEquals(other, PcAccount.tagHolder(accounts, PcAccount.ID, "#OTHER135"))
+        assertEquals(other, PcAccount.tagHolder(accounts, PcAccount.ID, " #other135 "))
+        // Its own tag, read again, and a new one are free.
+        assertNull(PcAccount.tagHolder(accounts, PcAccount.ID, "#TEST2468"))
+        assertNull(PcAccount.tagHolder(accounts, PcAccount.ID, "#NEW97531"))
     }
 
     @Test

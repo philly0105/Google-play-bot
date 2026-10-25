@@ -13,6 +13,7 @@ import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.Locale
 
 /**
  * Desktop: the one account the PC runs, and what the bot knows of it. It sits in Blood's id slot,
@@ -56,6 +57,20 @@ object PcAccount {
     /** A start for any account but this one. The account check would switch accounts in Clash. */
     fun otherAccountRefused(villageName: String) =
         "Clash Farmer runs one account on this PC, and $villageName is not it."
+
+    /** A read found the tag of [villageName], another account in the index. */
+    fun anotherAccountShown(villageName: String) =
+        "Clash shows $villageName, another account in Clash Farmer. Switch Clash to the village you farm here, " +
+            "then try again."
+
+    /**
+     * The account other than [id] that already holds [tag], or null. index.json refuses two
+     * records with one tag, so saving it onto [id] would leave the app unable to start.
+     */
+    fun tagHolder(accounts: List<AccountRecord>, id: String, tag: String): AccountRecord? =
+        accounts.firstOrNull { it.id != id && normalTag(it.playerTag) == normalTag(tag) }
+
+    private fun normalTag(tag: String) = tag.trim().uppercase(Locale.ROOT)
 
     /**
      * Writes an index holding only the neutral account, when there is no index yet, and says
