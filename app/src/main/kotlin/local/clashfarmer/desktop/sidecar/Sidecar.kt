@@ -48,7 +48,10 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
             foreground = json.getBoolean("foreground"),
             monitorDpi = json.getInt("monitorDpi"),
             // A sidecar from before the field answers without it.
-            visible = json.optBoolean("visible", true)
+            visible = json.optBoolean("visible", true),
+            room = if (json.has("roomWidth") && !json.isNull("roomWidth")) {
+                SurfaceSize(json.getInt("roomWidth"), json.getInt("roomHeight"))
+            } else null
         )
     }
 
@@ -188,6 +191,8 @@ data class Hello(val version: String, val pid: Int, val ocrReady: Boolean)
  * [top] and [game] are window handles; [width] and [height] are the game surface's physical pixels.
  * [visible] is false once the window was closed by hand: Google Play Games hides it and keeps the
  * game running, and starting Clash then is the relaunch that broke input (docs/gpg-spike.md).
+ * [room] is the largest game surface a resize can reach with the window kept on its monitor, null
+ * when the sidecar can't measure it (minimized) or is older than the field.
  */
 data class ClashWindow(
     val top: Long,
@@ -198,7 +203,8 @@ data class ClashWindow(
     val height: Int,
     val foreground: Boolean,
     val monitorDpi: Int,
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    val room: SurfaceSize? = null
 )
 
 /** [pixels] are ARGB, top row first, the layout Android's Bitmap keeps. [timestampMs] is Unix ms. */

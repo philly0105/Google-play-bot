@@ -132,9 +132,13 @@ internal sealed class Server(Stream input, Stream output)
         var window = GameWindow.Find();
         if (window == null) return new JsonObject { ["found"] = false };
         Win32.GetClientRect(window.Game, out var game);
+        var room = Room(window);
         return new JsonObject
         {
             ["found"] = true,
+            // The largest game area a resize can reach on this monitor, when it can be measured.
+            ["roomWidth"] = room?.Item1,
+            ["roomHeight"] = room?.Item2,
             ["top"] = window.Top.ToInt64(),
             ["game"] = window.Game.ToInt64(),
             ["title"] = window.Title,
@@ -223,11 +227,23 @@ internal sealed class Server(Stream input, Stream output)
      * Games keeps the surface at the aspect it chose at launch, inside its own title bar and
      * sidebar, so the chrome is measured and kept, and a second pass corrects what the first
      * missed. A window the new size runs off its monitor is then moved back onto it.
+     *
+     * A size the monitor's work area can't hold with the chrome around it is shrunk, at the same
+     * aspect, to the largest that fits: a window bigger than its screen was pushed to the top left
+     * and its bottom rows, where Battle and the troops are, went under the taskbar. The reply
+     * gives the size reached, the size asked for, and whether it was capped.
      */
     private static (JsonObject, byte[]) Resize(JsonObject r)
     {
-        int width = Int(r, "width"), height = Int(r, "height");
+        int requestedWidth = Int(r, "width"), requestedHeight = Int(r, "height");
         var window = Require();
+        var (width, height) = (requestedWidth, requestedHeight);
+        var room = Room(window);
+        if (room.HasValue) (width, height) = FitInside(width, height, room.Value.Item1, room.Value.Item2);
+        if (width != requestedWidth || height != requestedHeight)
+        {
+            Log($"capped the game area at {width}x{height}, not {requestedWidth}x{requestedHeight}, to keep it on its monitor");
+        }
         for (var pass = 0; pass < 2; pass++)
         {
             Win32.GetClientRect(window.Game, out var game);
@@ -239,7 +255,39 @@ internal sealed class Server(Stream input, Stream output)
         }
         KeepOnMonitor(window.Top);
         Win32.GetClientRect(window.Game, out var now);
-        return (new JsonObject { ["width"] = now.Width, ["height"] = now.Height }, []);
+        return (new JsonObject
+        {
+            ["width"] = now.Width,
+            ["height"] = now.Height,
+            ["requestedWidth"] = requestedWidth,
+            ["requestedHeight"] = requestedHeight,
+            ["capped"] = width != requestedWidth || height != requestedHeight
+        }, []);
+    }
+
+    /**
+     * The largest game surface the work area of [window]'s monitor holds with the window's chrome
+     * around it, or null when that can't be measured, as for a minimized window.
+     */
+    private static (int, int)? Room(GameWindow window)
+    {
+        var info = new Win32.MONITORINFO { cbSize = Marshal.SizeOf<Win32.MONITORINFO>() };
+        if (Win32.IsIconic(window.Top) || !Win32.GetMonitorInfo(Win32.MonitorFromWindow(window.Top, 2), ref info)) return null;
+        if (Win32.DwmGetWindowAttribute(window.Top, Win32.DWMWA_EXTENDED_FRAME_BOUNDS, out var seen, Marshal.SizeOf<Win32.RECT>()) != 0) return null;
+        Win32.GetClientRect(window.Game, out var game);
+        if (game.Width <= 0 || game.Height <= 0) return null;
+        return (info.rcWork.Width - (seen.Width - game.Width), info.rcWork.Height - (seen.Height - game.Height));
+    }
+
+    /**
+     * [width] by [height], or the largest size of its aspect inside [roomWidth] by [roomHeight]
+     * when it doesn't fit. PcProfiles.fitInside in the app does the same sum, and its tests cover it.
+     */
+    private static (int, int) FitInside(int width, int height, int roomWidth, int roomHeight)
+    {
+        if (width <= roomWidth && height <= roomHeight) return (width, height);
+        var scale = Math.Min((double)roomWidth / width, (double)roomHeight / height);
+        return ((int)Math.Floor(width * scale), (int)Math.Floor(height * scale));
     }
 
     /**
