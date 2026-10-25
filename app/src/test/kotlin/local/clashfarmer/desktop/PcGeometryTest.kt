@@ -517,8 +517,8 @@ class PcGeometryTest {
 
     /**
      * Synthetic: the army screen scaled about the centre onto both 16:10 frames, by the height or by
-     * the width, still reads its tabs, labels and cards. No army screen has been captured at 16:10,
-     * so either scale may be the one Clash uses.
+     * the width, still reads its tabs, labels and cards. The capture below shows Clash uses the
+     * width at 1860x1162; the recipes tab has not been captured at 16:10.
      */
     @Test fun theArmyScreenReadsUnderEitherScaleAt16by10() {
         for (viewport in listOf(wide, resized)) for (byHeight in listOf(true, false)) {
@@ -538,5 +538,20 @@ class PcGeometryTest {
             assertNull(at, ArmyRecipes.find(recipes, viewport, "Imported Army 3"))
             assertNull(at, ArmyRecipes.find(recipes, viewport, "Army 1"))
         }
+    }
+
+    /**
+     * The army screen captured at 1860x1162, which Clash fits inside the game area by the width.
+     * OCR read the My Army tab as "My" [357,188,412,222] and "ARMy" [407,188,501,222].
+     */
+    @Test fun theCaptured16by10ArmyScreenReads() {
+        val boxes = frame("live-1860-army", wide)
+        assertEquals(ScreenState.ARMY, classifyScreen(boxes, wide))
+        assertEquals(ArmyTab.MY_ARMY, ArmyRecipes.tab(boxes, wide))
+        assertEquals(Point(429, 205), ArmyRecipes.myArmyLabel(boxes, wide))
+        assertEquals(Point(928, 205), ArmyRecipes.savedRecipesLabel(boxes, wide))
+        // Each word alone is not the label.
+        assertNull(ArmyRecipes.myArmyLabel(boxes.filter { it.text != "ARMy" }, wide))
+        assertNull(ArmyRecipes.myArmyLabel(boxes.filter { it.text != "My" }, wide))
     }
 }

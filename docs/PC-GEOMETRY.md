@@ -74,10 +74,14 @@ the result screen by 978/720 = 1.358 about the centre. A selected building's but
 phone's pixel size. Where a screen is not captured, "the model" below is the phone's position
 scaled by one of these about the phone's centre (800,360) and placed about (870,489).
 
-No list, army or result screen has been captured at 16:10. Clash may scale a centred screen there
-by the height, which is what CENTRE does, or by the width, W/1740, which is 1.069 at 1860x1162 and
-0.899 at 1565x978. PcGeometryTest checks the army and result screens both ways. The height is
-likelier, since the HUD follows it.
+The army screen has been captured at 16:10 (`live-1860-army`), and Clash fits it inside the game
+area: it scales by the smaller of W/1740 and H/978 about the centre, so at 1860x1162 it grows by
+the width's 1.069, not the height's 1.188. Its Attack!, gem and clan buttons sit within 6 px of that
+rule. The profile menu and its Settings tab, also captured at 16:10, follow the height
+(`audit-evidence/live/20261025-034323-profile3`). No list, recipes tab or result screen has been
+captured at 16:10; Clash may scale them by the height, which is what CENTRE does, or fit them, by
+1.069 at 1860x1162 and 0.899 at 1565x978. PcGeometryTest checks the recipes tab and the result
+screen both ways.
 
 ## Moving a calibration
 
@@ -89,20 +93,23 @@ profile's own size in place of 1740x978. At the calibrated size the profile is u
 | --- | --- | --- |
 | `stateAnchors` attack, end_battle, find_match | LEFT | Battle and End Battle sit in the HUD's left corners; Find a Match's cards run from the left |
 | `stateAnchors` next | RIGHT | Next sits in the HUD's right corner |
-| other `stateAnchors` (return_home, army, ...) | CENTRE | drawn on centred panels |
+| `stateAnchors` army | fitted | the army screen is fitted inside the game area: scaled about the centre by min(W/1740, H/978) over the same for the calibration's size |
+| other `stateAnchors` (return_home, ...) | CENTRE | drawn on centred panels |
 | `troopAnchors`, `troopRois` | CENTRE | the tray is centred along the bottom |
 | `deploymentPoints`, `perimeterSegments`, `heroDrop`, `wallPoints`, `wallRows` | CENTRE | map space, about the centre |
-| `wallConfig` dialog fields | CENTRE | centred dialog |
+| `wallConfig` dialog fields | CENTRE | centred dialog, not seen at 16:10 |
 | `homeResourceRois`, `wallConfig.resourceRois`, `scoutFeeRoi` | RIGHT | the storage balances and the fee sit at the right edge |
 | `scoutLootRois` | LEFT | the scout's loot panel sits at the left edge |
 | `scoutCountdownRoi` | CENTRE | centred at the top |
 | `collectionTargets` | dropped | measured on the camera reference, taken at the calibrated size |
 
-Proven on a 16:10 capture (PcProfilesTest): Battle moved from Blood's 1740x978 calibration lands
-inside its button on `live-1860-village`, and the storage boxes over the balances the OCR read.
-The tray, the army button, Next and the battle map are moved by the rule but were never seen at
-16:10, which is why a moved profile counts as verified only after a supervised attack at that
-aspect (`desktop/SurfaceVerification`, `accounts/<id>/surfaces.json`).
+Proven on 16:10 captures (PcProfilesTest): Battle moved from Blood's 1740x978 calibration lands
+inside its button on `live-1860-village`, the storage boxes over the balances the OCR read, and the
+army tap on Attack! on `live-1860-army`, 20 px or more from the gem and clan buttons. End Battle,
+Next, the countdown, the loot and the tray's cards matched the rule within 6 px on a 16:10 scout
+(`audit-evidence/live/20261025-034044-scout`). No attack has run at 16:10, so the battle map and
+the drops are unproven there, which is why a moved profile counts as verified only after a
+supervised attack at that aspect (`desktop/SurfaceVerification`, `accounts/<id>/surfaces.json`).
 
 ## PC values
 
@@ -124,7 +131,7 @@ The phone's value still applies at 1600x720 in every row.
 | `recognition/ArmyRecipes.kt` | `MY_ARMY_LABEL` | x 0.15-0.35, y 0.03-0.14 | x 0.12-0.34, y 0.08-0.22 | The tab label [333,121,474,159] centres at (0.232,0.143) on `geo-army`, below the phone's band. |
 | `recognition/ArmyRecipes.kt` | `SAVED_RECIPES_LABEL` | x 0.40-0.60, y 0.03-0.14 | x 0.39-0.61, y 0.08-0.22 | The tab label [773,123,966,161] centres at (0.499,0.145). |
 | `recognition/ArmyRecipes.kt` | `BUTTON_COLUMN` | x 0.80-0.89, y 0.14-1.0 | x 0.80-0.95, y 0.14-1.0, estimated | Use centres at x 0.876 on `geo-recipes`, inside both. Kept from the centre at 1860x1162 it moves to 0.918. |
-| `recognition/ArmyRecipes.kt` | `BOOST_ROW` | x 0.55-0.85, y 0.12-0.26 | x 0.55-0.90, y 0.12-0.30, estimated | The boosts read at (1212,210) and (1428,210) on `geo-army`. At 16:10 "HeRoes" moves to x 0.857 by the height, or to y 0.264 by the width. |
+| `recognition/ArmyRecipes.kt` | `BOOST_ROW` | x 0.55-0.85, y 0.12-0.26 | x 0.55-0.90, y 0.12-0.30, estimated | The boosts read at (1212,210) and (1428,210) on `geo-army`. At 16:10 "HeRoes" moves to x 0.857 by the height, or to y 0.264 by the width; on `live-1860-army` it reads at (0.823,0.262). |
 | `recognition/ArmyRecipes.kt` | `PC_TITLE_COLUMN` | 240 of 1600 | 197, CENTRE | Card titles start at x 209-210 on `geo-recipes`, and the phone's line at 261 counted every one as stray. 197 keeps the phone's 11 px gap, scaled. |
 | `recognition/ArmyRecipes.kt` | `PC_TITLE_LEFT_MIN` | 160 of 1600 | 112, CENTRE, estimated | The phone's line catches a title with the drag handle merged in, which starts near x 175. 112 is the phone's 160 moved by the model at 1.185. No merged title has been read on the PC. |
 | `recognition/ArmyRecipes.kt` | `PC_USE_CENTRE_MIN` | 170 of 720 | 264 of 978 | Boost Heroes ends at y 247 on `geo-myarmy`, and the first Use centres at 277 on `geo-recipes`. The phone's line falls at 231, above Boost Heroes' end. |
@@ -232,6 +239,7 @@ The five below were fixed on 25 October from captures and logs. None of the fixe
 | `live-1860-village` | `audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.json` |
 | `live-1860-counter` | `audit-evidence/live/20261024-034034-dragmeasure/4a-right150.json` |
 | `live-1860-replay` | `audit-evidence/live/20261024-033349-look/frame.json`, the attacker's name replaced |
+| `live-1860-army` | `audit-evidence/live/20261025-033812-menus/2-army.json`, the lines above y 150 (the HUD's names and balances) left out |
 
 The `corner-*` fixtures hold the lines the sidecar's recogniser read, offline, from the x3 crop of
 `Builders.pcCornerRegion` on a saved PNG. Each also has the crop's region and scale.
@@ -246,7 +254,7 @@ The `corner-*` fixtures hold the lines the sidecar's recogniser read, offline, f
 | `corner-1860-dragged` | `audit-evidence/live/20261024-034034-dragmeasure/1a-down300.png` |
 
 Some inputs are built in the test rather than captured. The 1565x978 HUD boxes come from the image
-by correlation. The 16:10 list, army and result screens are the 1740x978 captures moved by the
+by correlation. The 16:10 list, recipes and result screens are the 1740x978 captures moved by the
 model. The Wall rows are `geo-list-end` with two countdowns removed and two names changed to
 "Wall x 9" and "Wall x 80".
 
@@ -254,7 +262,7 @@ model. The Wall rows are `geo-list-end` with two countdowns removed and two name
 
 | Capture | Settles |
 | --- | --- |
-| the army screen and recipes at 16:10 | the height or the width, and the army values marked estimated |
+| the recipes tab at 16:10 | whether it is fitted like My Army, and the army values marked estimated |
 | the upgrade list at 16:10, and how far a swipe scrolls it | the panel, `CARD_LINE_GAP`, the coin column, both list swipes |
 | a result at 16:10, and a defeat | `RESULT_*` and the result reader's PC lengths |
 | a selected building at 16:10 | `PC_BUTTON_PITCH` |

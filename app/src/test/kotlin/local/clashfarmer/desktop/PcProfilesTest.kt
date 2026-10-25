@@ -29,7 +29,8 @@ import kotlin.math.roundToInt
  *
  * [calibrated] is the owner's working calibration, its positions only. The 16:10 checks read the
  * OCR of `live-1860-village`, copied from the sidecar's read of
- * audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.png.
+ * audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.png, and of `live-1860-army`,
+ * the army screen in audit-evidence/live/20261025-033812-menus/2-army.png without the HUD's top rows.
  */
 class PcProfilesTest {
 
@@ -142,7 +143,7 @@ class PcProfilesTest {
         assertEquals(Point(261, 820), moved.stateAnchors["find_match"])
         assertEquals(Point(1708, 885), moved.stateAnchors["next"])
         assertEquals(Point(930, 1032), moved.stateAnchors["return_home"])
-        assertEquals(Point(1643, 989), moved.stateAnchors["army"])
+        assertEquals(Point(1571, 948), moved.stateAnchors["army"])
         assertEquals(Point(261, 1073), moved.troopAnchors["valkyries"])
         assertEquals(1074, moved.troopAnchors.getValue("jumps").x)
         assertEquals(Point(176, 447), moved.heroDrop)
@@ -369,6 +370,10 @@ class PcProfilesTest {
         return Region(x(box.left), y(box.top), x(box.right), y(box.bottom))
     }
 
+    /** A 1740x978 box on a screen Clash fits inside [size]: scaled alike both ways, by the smaller scale. */
+    private fun fitted(box: Region, size: SurfaceSize): Region =
+        centred(box, size, byHeight = size.height / 978.0 <= size.width / 1740.0)
+
     /** A 1740x978 box placed on [size] by [PcGeometry], keeping its distance from [anchor]'s edge. */
     private fun placed(box: RecognizedBox, size: SurfaceSize, anchor: Anchor): RecognizedBox {
         val viewport = Viewport(0, 0, size.width, size.height)
@@ -391,9 +396,10 @@ class PcProfilesTest {
 
     @Test
     fun theMovedArmyTapStaysOnAttackAndAwayFromTheGemButton() {
-        // Hand-made: geo-army has no OCR for the buttons under the army, so their green faces were
-        // measured on audit-evidence/spike/geo-army.png. The left one finishes training for gems;
-        // the right one asks the clan for troops. The army is tapped without reading its label.
+        // Hand-made: the OCR has no words for the buttons under the army, so their green faces were
+        // measured on audit-evidence/spike/geo-army.png at 1740x978 and on the 16:10 capture behind
+        // live-1860-army. The left one finishes training for gems; the right one asks the clan for
+        // troops. The army is tapped without reading its label.
         val attack = Region(1322, 805, 1617, 866)
         val gems = Region(1322, 728, 1460, 790)
         val clan = Region(1478, 726, 1618, 790)
@@ -402,15 +408,44 @@ class PcProfilesTest {
         val army = calibrated.stateAnchors.getValue("army")
         assertTrue(attack.contains(army))
 
-        for (size in listOf(wide, resized, SurfaceSize(1920, 1080))) {
-            val moved = PcProfiles.derive(calibrated, size, emptySet()).stateAnchors.getValue("army")
-            assertTrue("$size: $moved is off Attack!", centred(attack, size, byHeight = true).contains(moved))
-            for (byHeight in listOf(true, false)) {
-                val at = "$size by the ${if (byHeight) "height" else "width"}"
-                assertTrue("$at: $moved is near the gem button", clear(moved, centred(gems, size, byHeight), 8))
-                assertTrue("$at: $moved is near the clan button", clear(moved, centred(clan, size, byHeight), 8))
-            }
+        // At 1860x1162 Clash fits the army screen inside the game area: it grows by the width's
+        // 1.069, not the height's 1.188, about the centre, so each face is within 8 px of fitted().
+        val wideAttack = Region(1419, 924, 1731, 983)
+        val wideGems = Region(1419, 841, 1561, 899)
+        val wideClan = Region(1588, 841, 1731, 899)
+        val wideWord = frame("live-1860-army").single { it.text == "Attack!" }
+        assertTrue(wideAttack.contains((wideWord.left + wideWord.right) / 2, (wideWord.top + wideWord.bottom) / 2))
+        for ((at1740, at1860) in listOf(attack to wideAttack, gems to wideGems, clan to wideClan)) {
+            val placed = fitted(at1740, wide)
+            assertTrue(
+                "$at1740 fits to $placed, measured $at1860",
+                abs(placed.left - at1860.left) <= 8 && abs(placed.top - at1860.top) <= 8 &&
+                    abs(placed.right - at1860.right) <= 8 && abs(placed.bottom - at1860.bottom) <= 8
+            )
         }
+        val tap = PcProfiles.derive(calibrated, wide, emptySet()).stateAnchors.getValue("army")
+        assertTrue("$tap is off Attack!", wideAttack.contains(tap))
+        assertTrue("$tap is near the gem button", clear(tap, wideGems, 20))
+        assertTrue("$tap is near the clan button", clear(tap, wideClan, 20))
+        // The height's rule, which the rest of the 16:10 screens follow, misses the button's bottom.
+        val byHeight = PcGeometry.point(Viewport(0, 0, wide.width, wide.height), army.x, army.y, Anchor.CENTRE)
+        assertFalse("$byHeight should miss", wideAttack.contains(byHeight))
+
+        for (size in listOf(wide, resized, SurfaceSize(1920, 1080), SurfaceSize(1280, 720))) {
+            val moved = PcProfiles.derive(calibrated, size, emptySet()).stateAnchors.getValue("army")
+            assertTrue("$size: $moved is off Attack!", fitted(attack, size).contains(moved))
+            assertTrue("$size: $moved is near the gem button", clear(moved, fitted(gems, size), 8))
+            assertTrue("$size: $moved is near the clan button", clear(moved, fitted(clan, size), 8))
+        }
+    }
+
+    @Test
+    fun a16by10CalibrationPutsTheArmyTapBackOn16by9() {
+        // A friend who calibrates at 1860x1162 and later gets 1740x978: the army screen shrinks by
+        // the width's 0.935, and the tap lands where the 16:9 calibration has it.
+        val at1610 = PcProfiles.derive(calibrated, wide, emptySet()).copy(isVerified = true)
+        assertEquals(Point(1470, 832), PcProfiles.derive(at1610, SurfaceSize(1740, 978), emptySet()).stateAnchors["army"])
+        assertEquals(Point(1622, 919), PcProfiles.derive(at1610, SurfaceSize(1920, 1080), emptySet()).stateAnchors["army"])
     }
 
     @Test

@@ -11,6 +11,7 @@ import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.recognition.WallConfig
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * A calibration moved onto the game area Google Play Games gives now.
@@ -22,7 +23,9 @@ import kotlin.math.abs
  * [PcGeometry] uses for its own values: everything scales by the height, and each x keeps its
  * distance from the edge or centre Clash draws it about. The 16:10 HUD follows that rule within
  * 5 px (PcGeometryTest), and the Battle button and storage balances are checked on a 16:10 capture
- * (PcProfilesTest). docs/PC-GEOMETRY.md has the anchors and their evidence.
+ * (PcProfilesTest). The army screen is the exception: Clash fits it inside the game area, so its
+ * Attack! button is moved by the smaller of the two scales about the centre. docs/PC-GEOMETRY.md
+ * has the anchors and their evidence.
  *
  * A moved profile is used for one run and never saved: profile.json keeps the points the user
  * tapped. At another aspect it counts as verified only once a supervised attack has worked at that
@@ -196,12 +199,12 @@ object PcProfiles {
                     "${toW}x$toH. Open Calibrate, capture the game, and save the points again."
             )
         }
-        val move = Mover(fromW, toW, toH, toH.toDouble() / fromH)
+        val move = Mover(fromW, fromH, toW, toH)
         return profile.copy(
             resolutionWidth = toW,
             resolutionHeight = toH,
             viewport = Viewport(0, 0, toW, toH),
-            stateAnchors = profile.stateAnchors.mapValues { (name, point) -> move.point(point, stateAnchor(name)) },
+            stateAnchors = profile.stateAnchors.mapValues { (name, point) -> stateAnchor(name, point, move) },
             troopAnchors = profile.troopAnchors.mapValues { move.point(it.value, Anchor.CENTRE) },
             troopRois = profile.troopRois.mapValues { move.region(it.value, Anchor.CENTRE) },
             deploymentPoints = profile.deploymentPoints.map { move.point(it, Anchor.CENTRE) },
@@ -228,14 +231,18 @@ object PcProfiles {
     }
 
     /**
-     * The edge Clash keeps each tapped button at. Battle and End Battle sit in the HUD's left
-     * corners and Next in its right; Find a Match's cards run from the left. Return Home, the army
-     * screen and anything else are on panels drawn about the centre.
+     * [point], the button [name] taps, moved the way Clash moves that button. Battle and End Battle
+     * sit in the HUD's left corners and Next in its right; Find a Match's cards run from the left.
+     * The army screen is a dialog Clash fits inside the game area: at 1860x1162 it grows by the
+     * width's 1.069, not the height's 1.188, about the centre, and the height's rule would put the
+     * tap on Attack!'s bottom edge. Return Home and anything else are on panels drawn about the
+     * centre.
      */
-    private fun stateAnchor(name: String): Anchor = when (name) {
-        "attack", "end_battle", "find_match" -> Anchor.LEFT
-        "next" -> Anchor.RIGHT
-        else -> Anchor.CENTRE
+    private fun stateAnchor(name: String, point: Point, move: Mover): Point = when (name) {
+        "attack", "end_battle", "find_match" -> move.point(point, Anchor.LEFT)
+        "next" -> move.point(point, Anchor.RIGHT)
+        "army" -> move.fitted(point)
+        else -> move.point(point, Anchor.CENTRE)
     }
 
     /** The wall dialogs are centred popups; the balances they read are the HUD's, on the right. */
@@ -258,11 +265,23 @@ object PcProfiles {
     )
 
     /**
-     * Moves points and boxes from a frame [fromW] wide to one [toW]x[toH], by [scale]. A point
-     * that lands past an edge is kept on the frame's last pixel, and a box edge on the frame's
-     * border, so the moved profile still passes [PhoneProfile.validate].
+     * Moves points and boxes from a frame [fromW]x[fromH] to one [toW]x[toH], by the heights'
+     * [scale]. A point that lands past an edge is kept on the frame's last pixel, and a box edge on
+     * the frame's border, so the moved profile still passes [PhoneProfile.validate].
      */
-    private class Mover(val fromW: Int, val toW: Int, val toH: Int, val scale: Double) {
+    private class Mover(val fromW: Int, val fromH: Int, val toW: Int, val toH: Int) {
+        val scale = toH.toDouble() / fromH
+
+        /**
+         * The scale of something Clash fits inside the frame, drawn for a 16:9 game area: the
+         * smaller of the width's and the height's against 1740x978 at each end, so a 16:10
+         * calibration moved onto 16:9 shrinks by the width's 0.935 and comes back.
+         */
+        private val fit = fitScale(toW, toH) / fitScale(fromW, fromH)
+
+        private fun fitScale(width: Int, height: Int): Double =
+            minOf(width.toDouble() / PcGeometry.WIDTH, height.toDouble() / PcGeometry.HEIGHT)
+
         fun point(p: Point, anchor: Anchor): Point = Point(
             PcGeometry.moveX(p.x, fromW, toW, scale, anchor).coerceIn(0, toW - 1),
             PcGeometry.moveY(p.y, scale).coerceIn(0, toH - 1)
@@ -273,6 +292,12 @@ object PcProfiles {
             PcGeometry.moveY(r.top, scale).coerceIn(0, toH - 1),
             PcGeometry.moveX(r.right, fromW, toW, scale, anchor).coerceIn(1, toW),
             PcGeometry.moveY(r.bottom, scale).coerceIn(1, toH)
+        )
+
+        /** [p] on something Clash fits inside the frame, scaled by [fit] about the centre. */
+        fun fitted(p: Point): Point = Point(
+            (toW / 2.0 + (p.x - fromW / 2.0) * fit).roundToInt().coerceIn(0, toW - 1),
+            (toH / 2.0 + (p.y - fromH / 2.0) * fit).roundToInt().coerceIn(0, toH - 1)
         )
     }
 }

@@ -200,9 +200,23 @@ object ArmyRecipes {
     fun savedRecipesLabel(boxes: List<RecognizedBox>, viewport: Viewport): Point? =
         boxes.firstOrNull { "recipe" in compact(it.text) && SAVED_RECIPES_LABEL.holds(it.center, viewport) }?.center
 
-    /** The "My Army" tab label's centre, or null. */
-    fun myArmyLabel(boxes: List<RecognizedBox>, viewport: Viewport): Point? =
-        boxes.firstOrNull { compact(it.text) == "myarmy" && MY_ARMY_LABEL.holds(it.center, viewport) }?.center
+    /**
+     * The "My Army" tab label's centre, or null. OCR may read the label as two boxes, "My" and
+     * "ARMy" side by side (the PC at 1860x1162, live-1860-army); their joined box counts too.
+     */
+    fun myArmyLabel(boxes: List<RecognizedBox>, viewport: Viewport): Point? {
+        boxes.firstOrNull { compact(it.text) == "myarmy" && MY_ARMY_LABEL.holds(it.center, viewport) }?.let { return it.center }
+        for (my in boxes) {
+            if (compact(my.text) != "my") continue
+            val army = boxes.firstOrNull {
+                compact(it.text) == "army" && it.left >= my.left && it.left - my.right <= my.bottom - my.top &&
+                    it.center.y in my.top..my.bottom
+            } ?: continue
+            val joined = RecognizedBox("My Army", my.left, minOf(my.top, army.top), army.right, maxOf(my.bottom, army.bottom))
+            if (MY_ARMY_LABEL.holds(joined.center, viewport)) return joined.center
+        }
+        return null
+    }
 
     /**
      * Whether [read] is the card title [wanted]. Case and spaces do not count. A trailing number
