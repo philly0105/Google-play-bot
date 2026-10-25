@@ -120,6 +120,24 @@ start was reloaded, as it should be.
 Evidence: `audit-evidence/live/20261025-071936-verify1610` (every result screen, with the crops
 checked in `check/`).
 
+At 15:48 a third unattended run at 16:10 started on `f23fe74`, the build with the tray fixes
+(`PC_CARD_PITCH` and the slot-2 check), set to 15 attacks. It recorded all 15 and finished at 16:26
+on its limit, with no stop, restart or waited-out screen. Every tray read as Blood's plain tray,
+as it is. The last 11 result screens were captured, and their damage, stars and loot all match
+what the app recorded; the first four were not captured.
+
+| Stars | 1 | 2 | 3 |
+| --- | --- | --- | --- |
+| Battles | 10 | 1 | 4 |
+
+Damage ran from 54% to 100%. The loot read 6,597,794 gold, 5,546,235 elixir and 60,975 dark
+elixir. Gold and elixir were full from the third attack on, and dark elixir rose from 368,475 to
+470,000. The Valkyries' card was tapped again in one battle, three times before it emptied
+(16:17).
+
+Evidence: `audit-evidence/live/20261025-090000-build-f23fe74` (the result screens, with star crops
+in `check/`).
+
 ### Not done
 
 - A defeat, walls, ending a battle early, the in-app Calibrate flow, the remote page from another
@@ -129,7 +147,8 @@ checked in `check/`).
   Blood's two scout frames rearranged.
 - An account without the King or the Queen has not run either. Its tray is now read at the card
   width Clash draws (`PC_CARD_PITCH`); that is tested offline only.
-- The Valkyries' card is still tapped twice now and then at 16:10: three times in the 14:19 run.
+- The Valkyries' card is still tapped again now and then at 16:10: three times in the 14:19 run
+  and in one battle of the 15:48 run.
 - Stopping a run when the storages are full needs their sizes entered in Setup; Blood's are not
   entered, so both runs kept attacking with gold and elixir full.
 
