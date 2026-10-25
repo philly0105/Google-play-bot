@@ -117,7 +117,9 @@ fun returnHomeTarget(boxes: List<RecognizedBox>, viewport: Viewport, calibrated:
     val candidates = boxes.filter { isResultButtonLine(it.text) && RESULT_BUTTON.holds(it.center, viewport) }
     val anchor = calibrated?.takeIf { RESULT_BUTTON.holds(it, viewport) }
     if (candidates.isEmpty()) {
-        return anchor?.takeIf { screenEvidence(boxes, viewport).resultAnchor }
+        val result = screenEvidence(boxes, viewport).resultAnchor
+        if (result) pcReplayReturn(boxes, viewport)?.let { return it }
+        return anchor?.takeIf { result }
     }
     val spread = candidates.maxOf { a -> candidates.maxOf { b -> distance(a.center, b.center) } }
     if (spread > BUTTON_SPREAD) return null
@@ -127,6 +129,27 @@ fun returnHomeTarget(boxes: List<RecognizedBox>, viewport: Viewport, calibrated:
         candidates.firstOrNull { words(it.text).contains("return") } ?: candidates.first()
     }
     return chosen.center
+}
+
+/**
+ * A replay's end screen on the PC: its Return and Home at the bottom left, x 40-190, y 1053-1131 of
+ * 1860x1162, under Total damage and Troops expended (audit-evidence/live/20261024-033349-look). It
+ * reads as a result screen, which is right, since Return Home is the way out; but its bottom centre,
+ * where the calibrated point is, is bare village. Both words must read there: a battle's result
+ * screen draws nothing in that corner.
+ */
+private val PC_REPLAY_RETURN = Band(0.0, 0.8, 0.2, 1.0)
+
+/** The centre of the replay's Return Home on the PC, or null when it is not there. */
+private fun pcReplayReturn(boxes: List<RecognizedBox>, viewport: Viewport): Point? {
+    if (!PcGeometry.isPc(viewport)) return null
+    val corner = boxes.filter { PC_REPLAY_RETURN.holds(it.center, viewport) }
+    val ret = corner.firstOrNull { words(it.text).contains("return") } ?: return null
+    val home = corner.firstOrNull { words(it.text).contains("home") } ?: return null
+    return Point(
+        (minOf(ret.left, home.left) + maxOf(ret.right, home.right)) / 2,
+        (minOf(ret.top, home.top) + maxOf(ret.bottom, home.bottom)) / 2
+    )
 }
 
 private fun distance(a: Point, b: Point): Double =
