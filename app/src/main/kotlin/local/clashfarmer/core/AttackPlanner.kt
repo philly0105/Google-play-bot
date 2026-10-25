@@ -2,6 +2,7 @@ package local.clashfarmer.core
 
 import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.recognition.ScreenReader
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.random.Random
@@ -92,9 +93,9 @@ object AttackPlanner {
      * September 2026, now the random-troop event of October 2026).
      *
      * The event adds [EVENT_TROOP_COUNT] troops to every army, and their card takes the first
-     * slot: every card the profile calibrated moves one card width to the right. The width is
-     * the gap between two neighbouring hero cards. The saved profile is left alone, so the
-     * ordinary attack is right again the day the event ends.
+     * slot: every card the profile calibrated moves one card width ([cardPitch]) to the right.
+     * The saved profile is left alone, so the ordinary attack is right again the day the event
+     * ends.
      *
      * The game does not keep the event and Valkyrie cards in the same order: the scout at 02:49
      * UTC on 25 September had Kanes first, and the battle straight after had Valkyries first.
@@ -105,7 +106,7 @@ object AttackPlanner {
         val first = profile.troopAnchors["valkyries"]
             ?: throw StopException("Missing calibrated Valkyries troop card select anchor")
         val pitch = cardPitch(profile)
-            ?: throw StopException("The event attack needs the king and queen cards calibrated to measure the tray")
+            ?: throw StopException("The calibration has no two cards side by side to measure the event tray's card width from")
         val anchors = profile.troopAnchors.mapValues { (_, p) -> Point(p.x + pitch, p.y) }
         val rois = profile.troopRois.mapValues { (_, r) -> Region(r.left + pitch, r.top, r.right + pitch, r.bottom) }
         return profile.copy(
@@ -114,11 +115,31 @@ object AttackPlanner {
         )
     }
 
-    /** One card width in the tray: the gap between two neighbouring hero cards. */
+    /**
+     * One card width in the PC's tray, in pixels of 1740x978, scaled with the frame's height as
+     * the tray is. The standard positions put the heroes at x 429, 539, 649 and 759 and the rage
+     * and jump cards at 881 and 991, and the PC's scout draws its cards 110 px apart from hero to
+     * hero (audit-evidence/spike/geo-scout.png).
+     */
+    private const val PC_CARD_PITCH = 110
+
+    /**
+     * One card width in the tray, from what is calibrated: the smallest gap between two hero
+     * cards side by side, else the gap between the rage and jump cards, which are neighbours, else
+     * on the PC [PC_CARD_PITCH]. Null when nothing measures it on the phone.
+     *
+     * The phone took the King's card to the Queen's, and a friend whose account lacks either
+     * presses "Not in my army" on it, which left the tray unread. A hero the account lacks has no
+     * card, so the heroes it has sit side by side. The smallest gap still measures one card when a
+     * hero between two others has a card but no tap.
+     */
     private fun cardPitch(profile: PhoneProfile): Int? {
-        val king = profile.troopAnchors["king"] ?: return null
-        val queen = profile.troopAnchors["queen"] ?: return null
-        return queen.x - king.x
+        val heroes = listOf("king", "queen", "warden", "champion").mapNotNull { profile.troopAnchors[it]?.x }.sorted()
+        heroes.zipWithNext { a, b -> b - a }.filter { it > 0 }.minOrNull()?.let { return it }
+        val rages = profile.troopAnchors["rages"]
+        val jumps = profile.troopAnchors["jumps"]
+        if (rages != null && jumps != null && jumps.x != rages.x) return abs(jumps.x - rages.x)
+        return if (PcGeometry.isPc(profile.viewport)) PcGeometry.length(profile.viewport, PC_CARD_PITCH) else null
     }
 
     /**
@@ -148,8 +169,8 @@ object AttackPlanner {
      * Blood's event scout of 7 October, "x50" sat at x 282-328 and "x44" at x 380-425, both at
      * y 597-617, inside the x span of the calibrated Valkyrie ROI (269-335) and of that ROI moved
      * one card right. Slot 1 is where the calibrated Valkyries sit; slot 2 is one card width
-     * further right. Null when the Valkyrie ROI or the two heroes that measure a card width are
-     * not calibrated, which leaves the tray unread.
+     * further right. Null when the Valkyrie ROI is not calibrated or nothing measures a card
+     * width ([cardPitch]), which leaves the tray unread.
      */
     fun trayBadgeRegions(profile: PhoneProfile): List<Region>? {
         val roi = profile.troopRois["valkyries"] ?: return null

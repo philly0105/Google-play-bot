@@ -7,6 +7,8 @@ import local.clashfarmer.core.Region
 import local.clashfarmer.core.Resource
 import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
+import local.clashfarmer.desktop.PcProfiles
+import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.recognition.PhoneProfile
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -89,6 +91,52 @@ class CalibrationTest {
         assertSame(starter, withoutCard(starter, "valkyries"))
         assertSame(starter, withoutCard(starter, "rages"))
         assertSame(noWarden, withoutCard(noWarden, "warden"))
+    }
+
+    /** The card width the tray is read with: how far right of the first badge band the second sits. */
+    private fun cardWidth(profile: PhoneProfile): Int {
+        val bands = AttackPlanner.trayBadgeRegions(profile)
+        assertNotNull(bands)
+        return bands!![1].left - bands[0].left
+    }
+
+    @Test
+    fun `an army without the Queen or the King still has its tray read for an event card`() {
+        val starter = StarterProfile.load()
+        // The standard positions put the heroes 110 px apart.
+        assertEquals(110, cardWidth(starter))
+        // A hero the account lacks has no card in the tray, so the cards after it sit one card left.
+        val noQueen = listOf("warden" to 539, "champion" to 649, "rages" to 771, "jumps" to 881)
+            .fold(withoutCard(starter, "queen")) { p, (name, x) -> applyTarget(p, name, Point(x, 903)) }
+        assertEquals(110, cardWidth(noQueen))
+        assertEquals(Point(539, 903), AttackPlanner.withEventCard(noQueen).troopAnchors["king"])
+        // Not in my army pressed on the Queen with the Warden left at its standard position: the
+        // King and the Warden are two cards apart there, and the Warden and the Champion one.
+        assertEquals(110, cardWidth(withoutCard(starter, "queen")))
+        val noKing = listOf("queen" to 429, "warden" to 539, "champion" to 649)
+            .fold(withoutCard(starter, "king")) { p, (name, x) -> applyTarget(p, name, Point(x, 903)) }
+        assertEquals(110, cardWidth(noKing))
+        assertEquals(110, cardWidth(withoutCard(starter, "king")))
+    }
+
+    @Test
+    fun `a PC army with no heroes still has its tray read, at the standard card width`() {
+        val starter = StarterProfile.load()
+        val heroes = listOf("king", "queen", "warden", "champion")
+        val bare = (heroes + "jumps").fold(starter) { p, name -> withoutCard(p, name) }
+        bare.validateForAttack()
+        assertEquals(110, cardWidth(bare))
+        assertNotNull(AttackPlanner.withEventCard(bare).troopAnchors["event"])
+        // One hero and no jump spell measure nothing either.
+        assertEquals(110, cardWidth((heroes - "king" + "jumps").fold(starter) { p, name -> withoutCard(p, name) }))
+        // The standard width scales with the frame's height, as the tray does: at 1860x1162 the
+        // standard heroes moved there sit 130 and 131 px apart.
+        val size = SurfaceSize(1860, 1162)
+        assertEquals(131, cardWidth(PcProfiles.derive(bare, size, emptySet())))
+        assertTrue(kotlin.math.abs(cardWidth(PcProfiles.derive(starter, size, emptySet())) - 131) <= 1)
+        // The phone has no standard tray, so a phone profile with nothing to measure stays unread.
+        val phone = PhoneProfile.createDefault().withTroopCard("valkyries", Point(302, 650)).withTroopCard("rages", Point(808, 650))
+        assertNull(AttackPlanner.trayBadgeRegions(phone))
     }
 
     @Test
