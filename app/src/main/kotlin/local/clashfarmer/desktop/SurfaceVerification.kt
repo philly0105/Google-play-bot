@@ -1,5 +1,6 @@
 package local.clashfarmer.desktop
 
+import local.clashfarmer.recognition.PhoneProfile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -15,7 +16,7 @@ import kotlin.math.roundToInt
  * A calibration moved onto another shape ([PcProfiles.derive]) is unverified until one supervised
  * attack works there, as a new calibration is. That success is kept here rather than in
  * profile.json, which holds only the points the user tapped, at the size they were tapped at.
- * Saving a calibration clears the file, since the shapes were checked against the old points.
+ * Saving changed points clears the file, since the shapes were checked against the old points.
  */
 object SurfaceVerification {
     const val FILE_NAME = "surfaces.json"
@@ -50,6 +51,16 @@ object SurfaceVerification {
     @Synchronized
     fun clear(profileFile: File) {
         file(profileFile).delete()
+    }
+
+    /**
+     * After Calibrate saved [saved] to [profileFile]. A save that changed the calibration leaves it
+     * unverified, and then every verified shape goes too: those attacks vouched for points moved
+     * from the old calibration, and would otherwise count again once the new one is verified at
+     * its own shape. A save of collectors alone keeps the calibration verified and keeps them.
+     */
+    fun calibrationSaved(profileFile: File, saved: PhoneProfile) {
+        if (!saved.isVerified) clear(profileFile)
     }
 
     private fun write(target: File, content: String) {

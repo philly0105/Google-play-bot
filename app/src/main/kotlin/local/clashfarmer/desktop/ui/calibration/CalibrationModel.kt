@@ -19,7 +19,7 @@ import local.clashfarmer.core.CollectionPolicy
 import local.clashfarmer.core.CollectionTarget
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
-import local.clashfarmer.core.Viewport
+import local.clashfarmer.desktop.SurfaceVerification
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.NOT_RUNNING
 import local.clashfarmer.log.AppLog
@@ -46,14 +46,27 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /**
      * The profile being edited. Until the saved one is read, and for an account without one, it is
      * the default at the preferred size ([FarmerService.preferredSurface]) when the window watcher
-     * has measured the surface (a 16:10 one, such as 1860x1162, keeps its own size), else at the
-     * phone's 1600x720. A capture sets the frame's own size either way.
+     * has measured the surface (a 16:10 one, such as 1860x1162, keeps its own size, and a small
+     * monitor caps it), else at the phone's 1600x720. A capture moves it onto the frame's own size
+     * either way ([refit]).
      */
     var profile: PhoneProfile by mutableStateOf(
-        host.windowStatus.value.surface?.let { FarmerService.preferredSurface(it) }?.let { PhoneProfile.createDefault(it.width, it.height) }
+        host.windowStatus.value.let { status ->
+            status.surface?.let { FarmerService.preferredSurface(it, status.window?.room) }
+        }?.let { PhoneProfile.createDefault(it.width, it.height) }
             ?: PhoneProfile.createDefault()
     )
         private set
+
+    /**
+     * What Save asks before it replaces a saved calibration of another shape, shown as a dialog;
+     * null when nothing is being asked. [confirmSave] and [cancelSave] answer it.
+     */
+    var saveQuestion: String? by mutableStateOf(null)
+        private set
+
+    /** Whether the account had a saved profile when this visit read it, or has saved one since. */
+    private var hasSaved = false
     /** The profile as loaded, so a save writes only what was changed here. */
     private var openedProfile: PhoneProfile = profile
     private var tempPoint: Point? by mutableStateOf(null)
@@ -155,14 +168,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                 try {
                     val image = withContext(Dispatchers.IO) { bitmap.toBufferedImage().toComposeImageBitmap() }
 
-                    if (bitmap.width != profile.resolutionWidth || bitmap.height != profile.resolutionHeight) {
-                        profile = profile.copy(
-                            resolutionWidth = bitmap.width,
-                            resolutionHeight = bitmap.height,
-                            viewport = Viewport(0, 0, bitmap.width, bitmap.height),
-                            isVerified = false
-                        )
-                    }
+                    val note = fitTo(bitmap.width, bitmap.height)
 
                     show(image, reference = false)
 
@@ -174,7 +180,8 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                         }
                     }
-                    host.toast("Captured real game screen (${bitmap.width}x${bitmap.height})")
+                    if (note != null) host.toast(note, long = true)
+                    else host.toast("Captured real game screen (${bitmap.width}x${bitmap.height})")
                 } finally {
                     bitmap.recycle()
                 }
@@ -209,39 +216,47 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     fun retakeCameraReference() {
         if (working) return
         work(REFERENCE) {
-            val cleared = try {
-                withContext(Dispatchers.IO) { accountStore.clearCollectionTargets(accountId) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                host.toast("Could not clear the saved collectors: ${e.message}", long = true)
-                return@work
-            }
-            if (cleared != null) AppLog.log("collection_targets_cleared", "accountId" to accountId)
-            openedProfile = openedProfile.withCollectionTargets(emptyList())
-            val backup = try {
-                withContext(Dispatchers.IO) {
-                    val file = cameraReferenceFile()
-                    if (!file.exists()) {
-                        null
-                    } else {
-                        val backup = File(file.parentFile, "wall_camera-${System.currentTimeMillis()}.png")
-                        if (!file.renameTo(backup)) throw IllegalStateException("rename failed")
-                        backup
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                host.toast("Could not set the old camera reference aside", long = true)
-                return@work
-            }
-            if (backup != null) AppLog.log("camera_reference_retired", "accountId" to accountId, "backup" to backup.name)
-            profile = profile.withCollectionTargets(emptyList())
-            frameIsCameraReference = false
-            referenceSaved = false
-            cameraReference()
+            if (retireReference()) cameraReference()
         }
+    }
+
+    /**
+     * Sets the saved camera reference aside under a dated name, clearing the collectors measured
+     * on it first. False, with a toast, when either fails.
+     */
+    private suspend fun retireReference(): Boolean {
+        val cleared = try {
+            withContext(Dispatchers.IO) { accountStore.clearCollectionTargets(accountId) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            host.toast("Could not clear the saved collectors: ${e.message}", long = true)
+            return false
+        }
+        if (cleared != null) AppLog.log("collection_targets_cleared", "accountId" to accountId)
+        openedProfile = openedProfile.withCollectionTargets(emptyList())
+        val backup = try {
+            withContext(Dispatchers.IO) {
+                val file = cameraReferenceFile()
+                if (!file.exists()) {
+                    null
+                } else {
+                    val backup = File(file.parentFile, "wall_camera-${System.currentTimeMillis()}.png")
+                    if (!file.renameTo(backup)) throw IllegalStateException("rename failed")
+                    backup
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            host.toast("Could not set the old camera reference aside", long = true)
+            return false
+        }
+        if (backup != null) AppLog.log("camera_reference_retired", "accountId" to accountId, "backup" to backup.name)
+        profile = profile.withCollectionTargets(emptyList())
+        frameIsCameraReference = false
+        referenceSaved = false
+        return true
     }
 
     /** "Apply selected point": saves the clicked point for the target shown, then moves to the next one. */
@@ -284,8 +299,38 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         }
     }
 
-    /** "Save calibration": checks the profile and writes what changed here since it was read. */
+    /**
+     * "Save calibration": checks the profile and writes what changed here since it was read. A
+     * game area the bot can't work at is refused, and replacing a saved calibration of another
+     * shape is asked first ([saveQuestion]).
+     */
     fun save() {
+        if (working || saveQuestion != null) return
+        saveProblem(profile)?.let {
+            host.toast(it, long = true)
+            return
+        }
+        val question = saveQuestion(openedProfile, profile, hasSaved)
+        if (question != null) saveQuestion = question else write()
+    }
+
+    /** The answer Save to [saveQuestion]. */
+    fun confirmSave() {
+        if (saveQuestion == null) return
+        saveQuestion = null
+        write()
+    }
+
+    /** The answer Cancel to [saveQuestion]: nothing is written. */
+    fun cancelSave() {
+        saveQuestion = null
+    }
+
+    /**
+     * Writes the profile, then forgets the shapes supervised attacks verified when the save
+     * changed the calibration ([SurfaceVerification.calibrationSaved]).
+     */
+    private fun write() {
         if (working) return
         val edited = profile
         val opened = openedProfile
@@ -293,10 +338,14 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
             try {
                 val (saved, file) = withContext(Dispatchers.IO) {
                     edited.validate()
-                    accountStore.saveCalibration(accountId, opened, edited) to accountStore.profileFile(accountId)
+                    val saved = accountStore.saveCalibration(accountId, opened, edited)
+                    val file = accountStore.profileFile(accountId)
+                    SurfaceVerification.calibrationSaved(file, saved)
+                    saved to file
                 }
                 profile = saved
                 openedProfile = saved
+                hasSaved = true
                 AppLog.log("profile_saved", "accountId" to accountId, "path" to file.absolutePath)
                 host.toast("Profile saved (Verified: ${saved.isVerified})")
             } catch (e: CancellationException) {
@@ -342,6 +391,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                 if (read != null) {
                     profile = read
                     openedProfile = read
+                    hasSaved = true
                 }
             }
             .onFailure { AppLog.log("profile_load_failed", "accountId" to accountId, "error" to it.message) }
@@ -354,7 +404,12 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /** What [load] read on IO. */
     private class Saved(val profile: Result<PhoneProfile?>, val name: String?, val frozen: ImageBitmap?, val reference: Boolean)
 
-    /** The body of [showCameraReference], which Retake runs too once the old reference is aside. */
+    /**
+     * The body of [showCameraReference], which Retake runs too once the old reference is aside. A
+     * saved reference of another size than the profile, taken before the game area changed, is
+     * set aside with its collectors, as Retake does, and a new one captured: collectors marked on
+     * it would be tapped where that frame had them.
+     */
     private suspend fun cameraReference() {
         try {
             val (file, exists) = withContext(Dispatchers.IO) {
@@ -367,9 +422,17 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                     host.toast("The camera reference will not decode", long = true)
                     return
                 }
-                show(image, reference = true)
-                host.toast("Showing the saved camera reference")
-                return
+                if (image.width == profile.resolutionWidth && image.height == profile.resolutionHeight) {
+                    show(image, reference = true)
+                    host.toast("Showing the saved camera reference")
+                    return
+                }
+                if (!retireReference()) return
+                host.toast(
+                    "The saved camera reference is ${image.width}x${image.height}, not this calibration's " +
+                        "${profile.resolutionWidth}x${profile.resolutionHeight}. Capturing a new one; mark the collectors on it again.",
+                    long = true
+                )
             }
             val service = FarmerService.instance
             if (service == null) {
@@ -381,9 +444,10 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                 service.captureNormalizedVillage(current).bitmap
             }
             try {
-                if (bitmap.width != profile.resolutionWidth || bitmap.height != profile.resolutionHeight) {
-                    throw IllegalStateException("Frame is ${bitmap.width}x${bitmap.height}, not the calibrated display")
-                }
+                // The run moves the calibration onto the game area it finds, so the frame can be
+                // another size; the profile follows it, as a capture's does.
+                val note = fitTo(bitmap.width, bitmap.height)
+                note?.let { host.toast(it, long = true) }
                 val image = withContext(Dispatchers.IO) {
                     file.parentFile?.mkdirs()
                     val temp = File(file.parentFile, "${file.name}.tmp")
@@ -403,6 +467,23 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         } catch (e: Exception) {
             host.toast("Reference failed: ${e.message}", long = true)
         }
+    }
+
+    /**
+     * Moves the profile being edited onto a frame of [width]x[height] ([refit]) and returns what
+     * the user should be told, or null.
+     */
+    private fun fitTo(width: Int, height: Int): String? {
+        val fit = refit(profile, width, height)
+        if (fit.profile !== profile) AppLog.log(
+            "profile_moved",
+            "accountId" to accountId,
+            "calibrated" to "${profile.resolutionWidth}x${profile.resolutionHeight}",
+            "surface" to "${width}x$height",
+            "where" to "calibrate"
+        )
+        profile = fit.profile
+        return fit.note
     }
 
     /** The phone's CalibrationView.bitmap setter: a new frame drops the card box drawn on the last one. */
