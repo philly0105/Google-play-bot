@@ -33,7 +33,9 @@ First run
 3. Calibrate when Setup asks you to. Press "Start from the standard positions", then check
    each troop card against your own battle tray, press "Not in my army" on any hero or the jump
    spell if you don't have it, and press "Save calibration". The army needs one spell, such
-   as Rage, for the bot to cast inside the base: that card can't be left out.
+   as Rage, for the bot to cast inside the base: that card can't be left out. The card right
+   of the main troop should not be another troop with a count of x5 or more, because the bot
+   takes that for an event card in front of the tray.
 4. Start one supervised attack and watch it all the way through before you leave it alone.
 
 Closing the window keeps Clash Farmer running in the notification area (next to the clock).

@@ -124,22 +124,24 @@ object AttackPlanner {
     private const val PC_CARD_PITCH = 110
 
     /**
-     * One card width in the tray, from what is calibrated: the smallest gap between two hero
-     * cards side by side, else the gap between the rage and jump cards, which are neighbours, else
-     * on the PC [PC_CARD_PITCH]. Null when nothing measures it on the phone.
+     * One card width in the tray. On the PC it is [PC_CARD_PITCH]: Clash draws the cards at that
+     * pitch whatever the taps were, and taps placed by hand a few pixels short would clip slot 2's
+     * badge, whose last digit already reaches the band's end. On the phone it is measured from
+     * what is calibrated: the smallest gap between two hero cards side by side, else the gap
+     * between the rage and jump cards, which are neighbours. Null when nothing measures it.
      *
      * The phone took the King's card to the Queen's, and a friend whose account lacks either
      * presses "Not in my army" on it, which left the tray unread. A hero the account lacks has no
      * card, so the heroes it has sit side by side. The smallest gap still measures one card when a
      * hero between two others has a card but no tap.
      */
-    private fun cardPitch(profile: PhoneProfile): Int? {
+    fun cardPitch(profile: PhoneProfile): Int? {
+        if (PcGeometry.isPc(profile.viewport)) return PcGeometry.length(profile.viewport, PC_CARD_PITCH)
         val heroes = listOf("king", "queen", "warden", "champion").mapNotNull { profile.troopAnchors[it]?.x }.sorted()
         heroes.zipWithNext { a, b -> b - a }.filter { it > 0 }.minOrNull()?.let { return it }
         val rages = profile.troopAnchors["rages"]
         val jumps = profile.troopAnchors["jumps"]
-        if (rages != null && jumps != null && jumps.x != rages.x) return abs(jumps.x - rages.x)
-        return if (PcGeometry.isPc(profile.viewport)) PcGeometry.length(profile.viewport, PC_CARD_PITCH) else null
+        return if (rages != null && jumps != null && jumps.x != rages.x) abs(jumps.x - rages.x) else null
     }
 
     /**

@@ -67,7 +67,7 @@ object EventText {
         // Inside a battle.
         "attack_wait", "attack_zoomed_out", "hero_deployed", "hero_ability_used", "hero_card_unverified",
         "spell_card_spent", "spell_card_unverified", "troop_card_partially_unspent", "event_card_detected",
-        "event_card_ambiguous", "event_attack_planned", "stall_trajectory", "stall_damage_unreadable",
+        "event_card_ambiguous", "event_card_ruled_out", "event_attack_planned", "stall_trajectory", "stall_damage_unreadable",
         "stall_would_surrender", "early_end_confirmed", "early_end_confirm_unread", "early_end_damage_floor",
         "early_end_dialog_closed", "early_end_no_button", "deploy_timing_failed",
         "early_end_back_skipped_after_hold", "battle_checked_after_pause", "early_end_quit_prompt",
@@ -218,6 +218,8 @@ object EventText {
             "Left before deploying: the ${hero(str(e, "slot"))}'s card showed a troop count" to Tone.BAD
         }
         "event_card_ambiguous" -> "The event troop card was unclear; deployed the normal army" to Tone.WARN
+        "event_card_ruled_out" ->
+            "The card right of the main troop was another troop, not an event card; deployed the normal army" to Tone.WARN
         "event_attack_planned" -> "Planned an attack with the event troops" to Tone.NEUTRAL
         "card_retry" -> "Tapped a tray card again" to Tone.NEUTRAL
         "deploy_timing" -> "Recorded how long deploying took" to Tone.NEUTRAL
