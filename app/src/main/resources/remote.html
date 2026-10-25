@@ -370,6 +370,11 @@ function renderFrame() {
     : "Last seen " + hhmm(s.frameAt);
 }
 $("frame").onerror = () => { $("frame").hidden = true; $("noframe").hidden = false; };
+// The box takes the frame's own shape, so a PC frame is not cropped to the phone's.
+$("frame").onload = () => {
+  const img = $("frame");
+  if (img.naturalWidth && img.naturalHeight) img.parentElement.style.aspectRatio = img.naturalWidth + " / " + img.naturalHeight;
+};
 
 let connError = false;
 async function refreshStatus() {
