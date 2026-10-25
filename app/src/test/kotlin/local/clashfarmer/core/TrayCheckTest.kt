@@ -322,15 +322,30 @@ class TrayCheckTest {
             TrayCheck.slot(bloodProfile(), "event", Region(269, 600, 335, 702), listOf("x50", "x5"), 58.2).verdict)
     }
 
+    /** Blood's tray with no hero and no jump spell tapped: on the phone nothing measures a card's width. */
+    private fun unmeasuredProfile(): PhoneProfile = bloodProfile().let { p ->
+        p.copy(troopAnchors = p.troopAnchors - listOf("king", "queen", "warden", "champion", "jumps"))
+    }
+
     @Test
     fun aTrayWithoutTheHeroesToMeasureItIsReadUnshifted() {
-        val profile = bloodProfile().let { p -> p.copy(troopAnchors = p.troopAnchors - "queen") }
-        val report = TrayCheck.check(profile, bloodEventScout) { 120.0 }
+        val report = TrayCheck.check(unmeasuredProfile(), bloodEventScout) { 120.0 }
 
         assertEquals(AttackPlanner.TrayLayout.UNKNOWN, report.layout)
         assertEquals(Region(775, 600, 842, 702), report.slot("rages").roi)
-        // Nothing was read for the layout, so the line does not say the badges did not read.
-        assertTrue(report.layoutLine.contains("cannot look for an event card"))
+        // Nothing was read for the layout, so the line does not say the badges did not read. It
+        // names no card the account may not have.
+        assertEquals("The calibration has no two cards side by side to measure a card's width from, so the bot " +
+            "cannot look for an event card. Card areas are read where they were calibrated.", report.layoutLine)
+        val noTroopArea = bloodProfile().let { p -> p.copy(troopRois = p.troopRois - "valkyries") }
+        assertEquals("The main troop card's area is not calibrated, so the bot cannot look for an event card. " +
+            "Card areas are read where they were calibrated.", TrayCheck.check(noTroopArea, bloodEventScout) { 120.0 }.layoutLine)
+
+        // An account without the Queen has no card for her; the heroes it has still measure the tray.
+        val noQueen = bloodProfile().let { p -> p.copy(troopAnchors = p.troopAnchors - "queen", troopRois = p.troopRois - "queen") }
+        val event = TrayCheck.check(noQueen, bloodEventScout) { 120.0 }
+        assertEquals(AttackPlanner.TrayLayout.EVENT, event.layout)
+        assertEquals(Region(872, 600, 939, 702), event.slot("rages").roi)
     }
 
     @Test
@@ -539,8 +554,7 @@ class TrayCheckTest {
         val blank = TrayCheck.check(bloodProfile(), { listOf("") }) { 100.0 }
         texts += blank.headline
         texts += blank.slots.map { it.verdict.text }
-        val unmeasured = bloodProfile().let { p -> p.copy(troopAnchors = p.troopAnchors - "queen") }
-        texts += TrayCheck.check(unmeasured, bloodEventScout) { 120.0 }.layoutLine
+        texts += TrayCheck.check(unmeasuredProfile(), bloodEventScout) { 120.0 }.layoutLine
         texts += ScreenState.values().mapNotNull { TrayCheck.frameProblem(it, 1600, 720, bloodProfile()) }
         texts += listOfNotNull(TrayCheck.refusal(null), TrayCheck.refusal(bloodProfile().copy(troopRois = emptyMap())))
         for (layout in AttackPlanner.TrayLayout.values()) {

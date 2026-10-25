@@ -258,9 +258,32 @@ class AttackPlannerTest {
     }
 
     @Test
-    fun noBadgeBandsWithoutTheHeroesToMeasureTheTray() {
-        val profile = phoneTrayProfile().let { it.copy(troopAnchors = it.troopAnchors - "queen") }
+    fun noBadgeBandsWithNothingToMeasureTheTray() {
+        // No hero and no jump spell: on the phone no two cards give a card's width.
+        val profile = phoneTrayProfile().let {
+            it.copy(troopAnchors = it.troopAnchors - listOf("king", "queen", "warden", "champion", "jumps"))
+        }
         assertNull(AttackPlanner.trayBadgeRegions(profile))
+        // The stop says what is missing without naming a hero the account may not have.
+        val stop = runCatching { AttackPlanner.withEventCard(profile) }.exceptionOrNull()
+        assertTrue(stop is StopException)
+        assertEquals("The calibration has no two cards side by side to measure the event tray's card width from", stop!!.message)
+    }
+
+    @Test
+    fun theCardWidthIsMeasuredFromTheCardsTheArmyHas() {
+        fun secondBand(profile: PhoneProfile) = AttackPlanner.trayBadgeRegions(profile)?.get(1)?.left
+        val tray = phoneTrayProfile()
+        // An account without the Queen has no card for her, so its Warden and Champion sit one card left.
+        val noQueen = tray.copy(troopAnchors = tray.troopAnchors - "queen" + ("warden" to Point(506, 650)) + ("champion" to Point(603, 650)))
+        assertEquals(366, secondBand(noQueen))
+        assertEquals(Point(506, 650), AttackPlanner.withEventCard(noQueen).troopAnchors["king"])
+        // Without the King, the Queen and the Warden measure it.
+        assertEquals(366, secondBand(tray.copy(troopAnchors = tray.troopAnchors - "king")))
+        // A hero card left without a tap leaves a double gap; the heroes side by side still measure one card.
+        assertEquals(366, secondBand(tray.copy(troopAnchors = tray.troopAnchors - "queen")))
+        // One hero alone measures nothing, so the rage and jump cards, neighbours in the tray, do.
+        assertEquals(366, secondBand(tray.copy(troopAnchors = tray.troopAnchors - listOf("queen", "warden", "champion"))))
     }
 
     @Test

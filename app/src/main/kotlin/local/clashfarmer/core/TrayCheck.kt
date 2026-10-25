@@ -156,8 +156,19 @@ object TrayCheck {
             val band = AttackPlanner.badgeBand(roi)
             slot(tray, name, roi, reads.getOrPut(band) { readBadge(band) }, saturation(roi))
         }
-        return report(layout, slots, measured = bands != null, shiftFailure = shift.exceptionOrNull()?.message)
+        val unmeasured = when {
+            bands != null -> null
+            profile.troopRois["valkyries"] == null -> NO_TROOP_AREA
+            else -> NO_CARD_WIDTH
+        }
+        return report(layout, slots, unmeasured, shiftFailure = shift.exceptionOrNull()?.message)
     }
+
+    /** Why [check] cannot place the first two badges: the main troop card's area is not saved. */
+    const val NO_TROOP_AREA = "The main troop card's area is not calibrated"
+
+    /** Why [check] cannot place the first two badges: no two cards measure a card's width. */
+    const val NO_CARD_WIDTH = "The calibration has no two cards side by side to measure a card's width from"
 
     /**
      * The hero slots of the tray an attack is about to deploy, judged as [check] judges them, off
@@ -179,7 +190,7 @@ object TrayCheck {
         val slots = tray.troopRois.entries.filter { isHeroSlot(it.key) }.sortedBy { it.value.left }.map { (name, roi) ->
             slot(tray, name, roi, readBadge(AttackPlanner.badgeBand(roi)), saturation(roi))
         }
-        return report(layout, slots, measured = true, shiftFailure = null)
+        return report(layout, slots, unmeasured = null, shiftFailure = null)
     }
 
     /**
@@ -212,15 +223,16 @@ object TrayCheck {
         village?.trim()?.takeIf { it.isNotEmpty() }?.let { "$it's" } ?: "This account's"
 
     /**
-     * The report on [slots] judged under [layout]. [measured] is false when the profile cannot
-     * place the first two badges; [shiftFailure] is why an event layout could not shift the card
-     * areas. On a frame where no band read a badge, a slot's "no count badge" red is only amber:
-     * the picture, not the card, is the likely cause.
+     * The report on [slots] judged under [layout]. [unmeasured] is why the profile cannot place
+     * the first two badges ([NO_TROOP_AREA] or [NO_CARD_WIDTH]), null when it can; [shiftFailure]
+     * is why an event layout could not shift the card areas. On a frame where no band read a
+     * badge, a slot's "no count badge" red is only amber: the picture, not the card, is the likely
+     * cause.
      */
-    fun report(layout: AttackPlanner.TrayLayout, slots: List<Slot>, measured: Boolean, shiftFailure: String?): Report {
+    fun report(layout: AttackPlanner.TrayLayout, slots: List<Slot>, unmeasured: String?, shiftFailure: String?): Report {
         val note = when {
-            !measured -> "The Valkyries card area or the King and Queen taps are not calibrated, so the bot cannot " +
-                "look for an event card. Card areas are read where they were calibrated."
+            unmeasured != null -> "$unmeasured, so the bot cannot look for an event card. Card areas are read " +
+                "where they were calibrated."
             shiftFailure != null -> "The tray starts with an event card, but the card areas could not be moved one " +
                 "card right ($shiftFailure), so they are read where they were calibrated."
             else -> null
