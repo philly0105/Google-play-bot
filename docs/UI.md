@@ -41,7 +41,8 @@ Phone paths are under `android/app/src/main/java/local/clashfarmer/`; PC paths a
 | `ui/components/Chip.kt` | `components/Chip.kt` | Adds `Dot` |
 | `ui/components/{CheckRow,SectionHeader,Segmented,StatTile,Stepper,TabIcon,ToggleRow}.kt` | `components/`, same names | |
 | Android's `EditText` | `components/TextInput.kt` | |
-| None | `PcChecklist.kt` | Setup's Game window, Windows, Text reader, Tray icon and Remote page lines |
+| None | `PcChecklist.kt` | Setup's Game window, Windows, Text reader, Tray icon, Power and Remote page lines |
+| None | `FirstRun.kt` | The one-time "Before you start" dialog and the ban warning Setup shows too |
 
 Pure logic that lived inside class 4 files is ported, not moved: `CALIBRATION_TARGETS` and
 `applyTarget` (CalibrationActivity's target list and Apply), `FrameFit` (CalibrationView's fit),
@@ -67,8 +68,16 @@ class FarmerController(
     // Read by FarmerWindowContent: dashboard, currentToast, alerts, editor, calibration
 }
 
-@Composable fun FarmerWindowContent(controller: FarmerController)
+@Composable fun FarmerWindowContent(controller: FarmerController, onQuit: () -> Unit)
 ```
+
+On a fresh install `FarmerWindowContent` shows "Before you start" (`FirstRun.kt`) over
+everything while `first-run.json` is missing from the files directory: the ban risk in one
+sentence, then three numbered steps (open Clash of Clans in Google Play Games, calibrate your
+account in Setup, run one supervised attack and watch it). "I understand" writes the file and
+opens Setup; Quit calls `onQuit`, Main's quit. Escape and a click outside do nothing
+(`MessageDialog(buttonsOnly = true)`), so the flag is written only on purpose. The owner's data
+folder had no flag either, so the owner sees it once.
 
 `Main.kt` builds it inside `application`, on the Swing thread, after `onServiceConnected()`, and
 draws the window only while it is open, so `FarmerWindowContent` calls `windowShown()` when the
@@ -131,8 +140,9 @@ exists, following the rule in `docs/gpg-spike.md` (Restarting). Calibration call
 
 Everything else it calls is the phone's: `instance`, `isBusy`, `inspecting`, `runGuard`,
 `latestFrame`, `overlay`, `pendingStart`, `cancelPendingStart`, `scheduleStart`, `startPlan`,
-`startPlanCombined`, `startSwitchOnly`, `stop`, `captureClashGame`, `readDeviceHealth` and
-`remoteKey`.
+`startPlanCombined`, `startSwitchOnly`, `stop`, `captureClashGame` and `readDeviceHealth`. The
+PC adds `hasBattery` for Setup's Power line, and Setup reads the remote key from its file
+(`RemoteLink.key`) rather than `remoteKey`, which a new link leaves behind.
 
 ## Tray and status panel
 
@@ -144,7 +154,20 @@ notices from `RunNotifier` show as Windows notifications from the icon.
 
 Closing the window leaves the bot running behind the icon, as the phone's service outlived its
 screen, and says so in a notification the first time. Quit stops any run and ends the app. With
-no notification area, closing the window quits.
+no notification area, closing the window quits. While a run is busy (`FarmerService.isBusy`),
+Quit, and closing the window with no notification area, open the window on "Stop the run and
+quit?" first; "Stop and quit" quits, Cancel or Escape keeps the run going.
+
+The window's title is "Clash Farmer", and "Clash Farmer - <phase>" while a run is live, so the
+taskbar tells a working bot from an idle one (`windowTitle` in `Main.kt`).
+
+The window opens where it was left (`WindowPlacement.kt`, `window.json` in the files directory):
+its position, size and whether it was maximized are saved when it closes to the tray or the app
+quits. A first start centres it at 1100x760, shrunk to 92% of the main screen's work area where
+that is smaller, so a 1080p laptop at 150% (about 1280x688 above the taskbar) sees the footer. A
+saved window is kept on its monitor while 100x100 of it is still on one, moved inside that
+monitor's work area and shrunk to fit it; one left on a monitor since unplugged is centred on the
+main one. The window can't be dragged smaller than 860x600, or the work area where that is less.
 
 One app runs per files directory (`SingleInstance.kt`, the first thing `main` does). It holds an
 OS lock on `app.lock`, which Windows drops when the process ends, crash or not, and listens on a
@@ -254,7 +277,7 @@ Setup:
 
 - The machine section is "This PC". Its Game window and Tray icon lines replace the phone's
   accessibility and notification lines, Text reader is new, and Remote page replaces the phone's
-  remote line; battery and the per-account lines are kept.
+  remote line, Power replaces battery and heat, and the per-account lines are kept.
 - Game window reads the window watcher. Before the first lookup it is not read and not counted.
   A failed lookup is red with the reason. No window is amber, "Not open", with the fix "Open
   Clash of Clans", which sends `launch_clash`. A window closed by hand is red, "Closed", with no
@@ -293,10 +316,16 @@ Setup:
   load is red, "Failed", with the sidecar's reason (usually a DLL that would not load) and what to
   do: unzip again into a new folder, then install the Visual C++ Redistributable (x64).
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
-- Remote page replaces the phone's remote line and is never counted: "Off (Tailscale not
-  connected)" in grey; amber when port 8765 is taken, or when Windows won't bind the Tailscale
-  address yet (as after sleep), each with its own text and retry time; or "On" with the Tailscale
-  IPv4 address.
+- Power replaces the phone's battery and heat line. A PC with no battery (the sidecar's
+  `power.hasBattery`, `FarmerService.hasBattery`) is green, "No battery", says the battery guard
+  never stops a run, and is not counted. A laptop's line gives the level and whether it is plugged
+  in, green and counted; at 15% or less on battery it is red and says to plug the laptop in.
+  Not read is grey and not counted. The PC reads no temperature, so the line says nothing of heat.
+- Remote page replaces the phone's remote line and is never counted: without Tailscale it is a
+  grey "Optional" that says the page is not needed to farm and how to turn it on; amber when port
+  8765 is taken, or when Windows won't bind the Tailscale address yet (as after sleep), each with
+  its own text and retry time; or "On" with the Tailscale IPv4 address, saying the copied link
+  works like a password.
 - Each account's block opens with an Account line (`PcChecklist.account`) saying whether the bot
   has read the account off Clash's Settings (`PcAccount.enrolled`, read with the other files on
   IO). Not read is amber, "Not read", with no fix, and says the first supervised attack reads the
@@ -306,10 +335,15 @@ Setup:
   identity template, toasts "The next supervised attack will read your account again." and turns
   the line amber. The block's header shows the tag only once the account is read, so a fresh
   install never shows a placeholder tag.
-- The battery line is the service's last sidecar reading. The machine lines are read on IO and
+- The Power line is the service's last sidecar reading. The machine lines are read on IO and
   kept for 30 s.
-- Copy link shows only while the remote page is on, and puts the link on the AWT clipboard. The
-  key is never shown or logged.
+- An amber card at the top of the page, under the title, says the ban risk
+  (`FirstRun.BAN_WARNING`); the phone's warning sat at the foot of the page.
+- Copy link and New remote link show only while the remote page is on. Copy link puts the link
+  on the AWT clipboard, with the key read from `remote_key.txt`. New remote link asks first ("Make
+  a new remote link?"), then writes a fresh key and swaps it into the running page
+  (`RemoteLink.renew`, `RemotePage.use`), so the old link stops working at once, and copies the
+  new link. The key is never shown or logged.
 - The foot of the page names the build ("Clash Farmer PC 1.1.0 (commit). Settings and logs are
   in ...", `BuildInfo.kt`) beside Open logs folder.
 
