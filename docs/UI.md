@@ -406,7 +406,7 @@ Calibration:
   collectors) is kept from the profile being edited, moved onto that game area first when it is
   another size, which drops its collectors as a capture does. It asks first when there is a saved
   calibration or unsaved points, then picks the main troop card, since the tray is the one place an
-  army differs, and its toast says to remove any hero or spell the army lacks. Nothing
+  army differs, and its toast says to remove any hero, or the jump spell, the army lacks. Nothing
   is written until Save, and the result is unverified until a supervised attack. Setup's
   calibration row for an account with no calibration says to start there
   (`StarterProfile.setupLine`).

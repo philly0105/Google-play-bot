@@ -716,7 +716,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         const val STANDARD = "Loading the standard positions..."
         const val CAPTURE_FAILED = "Could not capture the game. Make sure Clash is open and not minimised, then try again."
         const val STANDARD_LOADED = "Standard positions loaded. Check each troop card against your own battle tray, " +
-            "move any that differ, and press Not in my army on any hero or spell you don't have. Then save."
+            "move any that differ, and press Not in my army on any hero, or the jump spell, you don't have. Then save."
     }
 }
 
