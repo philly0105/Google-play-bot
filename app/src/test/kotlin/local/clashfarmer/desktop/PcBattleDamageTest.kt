@@ -2,7 +2,9 @@ package local.clashfarmer.desktop
 
 import local.clashfarmer.recognition.BattleDamage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -36,5 +38,57 @@ class PcBattleDamageTest {
         assertNull(BattleDamage.overallPercent("OveRall Damage End Battle 68 "))
         // Two words between are not one label.
         assertNull(BattleDamage.overallPercent("OveRall Damage Surrender Surrender 40% "))
+    }
+
+    /**
+     * The stars beside the value read as a lone "e", "d" or "*". Each reading is the tail of a
+     * stall_damage_unreadable line of Blood's unattended run of 25 October, in order; every one of
+     * them went unread then, twelve in a row in one battle that ended at 93%.
+     */
+    @Test
+    fun `a lone glyph beside the label or the value is skipped`() {
+        val readings = listOf(
+            "4 252 9 OveRall Damage SURReNdeR e 48% XO XO XO 80 R " to 48,
+            "238 888 e Overall Damage End Battle e 99% x0 XO 80 12 R " to 99,
+            "4 324 * e Overall Damage SURReNdeR e 44% XO 80 12 R " to 44,
+            "754 1543 Overall Damage d End Battle 69% MM XO e 80 12 R " to 69,
+            "754 1543 e de Overall Damage d End Battle 75% XO 0 " to 75,
+            "329 207 90 Overall Damage d End Battle 81% XO 80 " to 81,
+            "329 207 90 e Overall Damage d End Battle 83% 80 " to 83,
+            "329 207 90 e Overall Damage d End Battle * 87% 4 " to 87,
+            "329 207 90 Overall Damage d End Battle * 88% 4 XO xO " to 88,
+            "329 207 90 e Overall Damage d End Battle 88% XO xO " to 88,
+            "329 207 90 e Overall Damage d End Battle 90% 4 " to 90,
+            "329 264 e Overall Damage d End Battle * 92% 4 " to 92,
+            "329 297 e Overall Damage d End Battle * 93% 4 XO XO " to 93,
+            "329 297 Overall Damage End Battle * 93% 4 XO XO " to 93,
+            "341 465 1 665 Overall Damage End Battle * 65% " to 65,
+            "783 2 973 e Overall Damage End Battle * 79% XO " to 79,
+            "783 2 973 * Overall Damage End Battle * 83% " to 83,
+            "411781 1 683 Overall Damage End Battle * 49% x0 " to 49
+        )
+        for ((text, percent) in readings) assertEquals(text, percent, BattleDamage.overallPercent(text))
+        // Two strays on each side still read; a stray before the hero level's skip as well.
+        assertEquals(57, BattleDamage.overallPercent("Overall Damage e d End Battle * e 57% "))
+        assertEquals(34, BattleDamage.overallPercent("Overall Damage End Battle * 100 34% "))
+    }
+
+    @Test
+    fun `a stray that could be a digit or the sign is not skipped`() {
+        // o and B can be a split value's first digit, and three strays are not stars.
+        assertNull(BattleDamage.overallPercent("Overall Damage o 48% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage B 8% "))
+        assertNull(BattleDamage.overallPercent("Overall Damage End Battle 5 % "))
+        assertNull(BattleDamage.overallPercent("Overall Damage End Battle e * d 48% "))
+        // The result screen's damage is not the battle's.
+        assertNull(BattleDamage.overallPercent("31 000 000 11 071 869 Total damage: 0% 174 833 VictORY End Battle "))
+    }
+
+    @Test
+    fun `the result screen sweeping in is told apart from a miss`() {
+        assertTrue(BattleDamage.resultWipe("31 000 000 11 071 869 Total damage: 0% 174 833 VictORY End Battle "))
+        assertTrue(BattleDamage.resultWipe("31 000 000 12 730 631 Total damage: 0% 189 791 VictORY"))
+        assertFalse(BattleDamage.resultWipe("Overall Damage End Battle 68% "))
+        assertFalse(BattleDamage.resultWipe("Overall Damage d End Battle * 87% 4 "))
     }
 }

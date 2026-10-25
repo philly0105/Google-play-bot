@@ -31,11 +31,29 @@ import java.util.Locale
  * damage readings of Blood's supervised attack of 24 October, none of them read), so that label is
  * skipped too: a word of seven to ten letters starting with s, or one starting with e and then one
  * starting with b.
+ *
+ * The stars beside the value come back as a lone "e", "d" or "*" on many PC frames, before the
+ * label or after it ("Overall Damage d End Battle * 87%", "SURReNdeR e 44%"). On Blood's unattended
+ * run of 25 October that left 18 of 336 samples unread, twelve of them in a row in one battle, and
+ * the stall watcher took a battle still climbing from 79% to 93% for a stall. So up to two such
+ * one-character tokens are skipped on each side of the label. A token that could be a digit (0-9,
+ * the lookalikes read as digits above, b for 8) or the sign itself is never skipped, so a stray
+ * can neither supply the value nor hide part of it.
  */
 object BattleDamage {
 
+    /** One stray one-character token that is no digit, lookalike or sign: up to two of them. */
+    private const val STRAY = "(?:\\s+[^\\s0-9soilzgb\$%](?=\\s)){0,2}"
+
     private val OVERALL =
-        Regex("(?<![a-z])ove[a-z]{2,5}[,.]?\\s*d[a-z]{0,7}?\\.?(?:\\s+(?:s[a-z]{6,9}|e[a-z]{1,3}\\s*b[a-z]{4,6}))?(?:\\s+[0-9]{2,3}(?=\\s))?\\s*([0-9soilzg\$]{1,3})%")
+        Regex("(?<![a-z])ove[a-z]{2,5}[,.]?\\s*d[a-z]{0,7}?\\.?$STRAY(?:\\s+(?:s[a-z]{6,9}|e[a-z]{1,3}\\s*b[a-z]{4,6}))?$STRAY(?:\\s+[0-9]{2,3}(?=\\s))?\\s*([0-9soilzg\$]{1,3})%")
+
+    /**
+     * Whether [rawText] is the result screen sweeping in over the battle: its "Total damage: 0%"
+     * counts up from zero, so it is no battle damage and no reader miss either (one frame each on
+     * 25 October, "Total damage: 0% 174 833 VictORY End Battle").
+     */
+    fun resultWipe(rawText: String): Boolean = rawText.lowercase(Locale.ROOT).contains("total damage")
 
     fun overallPercent(rawText: String): Int? {
         val match = OVERALL.find(rawText.lowercase(Locale.ROOT)) ?: return null
