@@ -54,6 +54,19 @@ internal fun saveQuestion(opened: PhoneProfile, edited: PhoneProfile, hasSaved: 
         "then needs one supervised attack before it runs on its own."
 }
 
+/**
+ * What Show camera reference says when the saved reference, [width]x[height], is not the size of
+ * [profile], the one being edited, or null when it is. Collectors can't be marked on it, and only
+ * Retake sets it aside: showing it changes nothing, so a capture at another size that is never
+ * saved costs no collectors.
+ */
+internal fun referenceMismatch(width: Int, height: Int, profile: PhoneProfile): String? {
+    if (width == profile.resolutionWidth && height == profile.resolutionHeight) return null
+    return "This camera reference was taken at ${width}x$height, and the calibration is now " +
+        "${profile.resolutionWidth}x${profile.resolutionHeight}, so collectors can't be marked on it. " +
+        "To mark them at this size, press Retake camera reference."
+}
+
 /** Why Save refuses a profile of this size, in words for the user, or null when it may be saved. */
 internal fun saveProblem(edited: PhoneProfile): String? =
     PcProfiles.surfaceProblem(SurfaceSize(edited.resolutionWidth, edited.resolutionHeight))

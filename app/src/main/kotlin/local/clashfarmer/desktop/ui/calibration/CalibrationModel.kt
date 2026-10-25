@@ -407,8 +407,8 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /**
      * The body of [showCameraReference], which Retake runs too once the old reference is aside. A
      * saved reference of another size than the profile, taken before the game area changed, is
-     * set aside with its collectors, as Retake does, and a new one captured: collectors marked on
-     * it would be tapped where that frame had them.
+     * shown with a note and not as the reference: collectors marked on it would be tapped where
+     * that frame had them ([referenceMismatch]).
      */
     private suspend fun cameraReference() {
         try {
@@ -422,17 +422,10 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
                     host.toast("The camera reference will not decode", long = true)
                     return
                 }
-                if (image.width == profile.resolutionWidth && image.height == profile.resolutionHeight) {
-                    show(image, reference = true)
-                    host.toast("Showing the saved camera reference")
-                    return
-                }
-                if (!retireReference()) return
-                host.toast(
-                    "The saved camera reference is ${image.width}x${image.height}, not this calibration's " +
-                        "${profile.resolutionWidth}x${profile.resolutionHeight}. Capturing a new one; mark the collectors on it again.",
-                    long = true
-                )
+                val mismatch = referenceMismatch(image.width, image.height, profile)
+                show(image, reference = mismatch == null)
+                if (mismatch == null) host.toast("Showing the saved camera reference") else host.toast(mismatch, long = true)
+                return
             }
             val service = FarmerService.instance
             if (service == null) {

@@ -112,4 +112,14 @@ class CalibrationSizeTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `a saved camera reference of another size points to Retake`() {
+        assertNull(referenceMismatch(1740, 978, calibrated))
+        // A capture at 16:10 moved the profile being edited; nothing is saved yet.
+        val moved = refit(calibrated, 1860, 1162).profile
+        val note = referenceMismatch(1740, 978, moved)!!
+        assertTrue(note, note.contains("taken at 1740x978") && note.contains("now 1860x1162"))
+        assertTrue(note, note.endsWith("press Retake camera reference."))
+    }
 }
