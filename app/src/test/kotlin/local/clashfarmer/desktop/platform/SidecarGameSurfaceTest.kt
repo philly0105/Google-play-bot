@@ -162,10 +162,89 @@ class SidecarGameSurfaceTest {
 
         surface.takeScreenshot(callback)
         fail(fake.next(), "timeout", "No frame within 3000 ms")
+        answerSession(locked = false, displayOn = true)
         assertEquals("No frame within 3000 ms retryable=true", withTimeout(5000) { answers.receive() })
 
         surface.takeScreenshot(callback)
         fail(fake.next(), "no_window", "No Clash window")
         assertEquals("No Clash window retryable=false", withTimeout(5000) { answers.receive() })
+    }
+
+    private fun screenshots(): Pair<Channel<String>, ScreenshotCallback> {
+        val answers = Channel<String>(Channel.UNLIMITED)
+        return answers to object : ScreenshotCallback {
+            override fun onSuccess(bitmap: Bitmap) { answers.trySend("frame") }
+            override fun onFailure(message: String, retryable: Boolean) { answers.trySend("$message retryable=$retryable") }
+        }
+    }
+
+    private fun answerCapture(ageMs: Long) {
+        val capture = fake.next()
+        assertEquals("capture", capture.op)
+        fake.ok(capture, byteArrayOf(1, 2, 3, 0)) { put("width", 1).put("height", 1).put("timestampMs", 1L).put("ageMs", ageMs) }
+    }
+
+    private fun answerSession(locked: Boolean?, displayOn: Boolean?) {
+        val request = fake.next()
+        assertEquals("sessionState", request.op)
+        fake.ok(request) { put("locked", locked ?: JSONObject.NULL).put("displayOn", displayOn ?: JSONObject.NULL) }
+    }
+
+    @Test
+    fun `an old frame from a locked PC stops the run, not to be retried`() = runBlocking {
+        val (answers, callback) = screenshots()
+        surface.takeScreenshot(callback)
+        answerCapture(ageMs = 12_000)
+        answerSession(locked = true, displayOn = true)
+        assertEquals("${SidecarGameSurface.FRAMES_STOPPED} retryable=false", withTimeout(5000) { answers.receive() })
+    }
+
+    @Test
+    fun `an old frame with the display off stops the run`() = runBlocking {
+        val (answers, callback) = screenshots()
+        surface.takeScreenshot(callback)
+        answerCapture(ageMs = 12_000)
+        answerSession(locked = false, displayOn = false)
+        assertEquals("${SidecarGameSurface.FRAMES_STOPPED} retryable=false", withTimeout(5000) { answers.receive() })
+    }
+
+    @Test
+    fun `no frame in time on a locked PC stops the run too`() = runBlocking {
+        val (answers, callback) = screenshots()
+        surface.takeScreenshot(callback)
+        fail(fake.next(), "timeout", "No frame within 3000 ms")
+        answerSession(locked = true, displayOn = null)
+        assertEquals("${SidecarGameSurface.FRAMES_STOPPED} retryable=false", withTimeout(5000) { answers.receive() })
+    }
+
+    @Test
+    fun `an old frame from a quiet village on an unlocked PC is still a frame`() = runBlocking {
+        val (answers, callback) = screenshots()
+        surface.takeScreenshot(callback)
+        answerCapture(ageMs = 60_000)
+        answerSession(locked = false, displayOn = true)
+        assertEquals("frame", withTimeout(5000) { answers.receive() })
+
+        // Windows not saying either way counts as unlocked.
+        surface.takeScreenshot(callback)
+        answerCapture(ageMs = 60_000)
+        answerSession(locked = null, displayOn = null)
+        assertEquals("frame", withTimeout(5000) { answers.receive() })
+
+        // A sidecar without the call counts as unlocked as well.
+        surface.takeScreenshot(callback)
+        answerCapture(ageMs = 60_000)
+        fail(fake.next(), "bad_request", "Unknown op 'sessionState'")
+        assertEquals("frame", withTimeout(5000) { answers.receive() })
+    }
+
+    @Test
+    fun `a new frame is not checked against the lock`() = runBlocking {
+        val (answers, callback) = screenshots()
+        surface.takeScreenshot(callback)
+        answerCapture(ageMs = SidecarGameSurface.STALE_MS - 1)
+        assertEquals("frame", withTimeout(5000) { answers.receive() })
+        surface.back()
+        assertEquals("key", fake.next().op)
     }
 }

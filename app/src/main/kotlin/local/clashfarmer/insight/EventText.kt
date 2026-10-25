@@ -429,6 +429,7 @@ object EventText {
         "surface_resized" -> "Resized the game window${str(e, "from")?.let { " from $it" } ?: ""} to ${str(e, "to") ?: "its calibrated size"}" to Tone.NEUTRAL
         "surface_aspect_differs" -> "The game window is not the shape it was calibrated at${str(e, "profile")?.let { " ($it)" } ?: ""}, so it was left as it is" to Tone.WARN
         "surface_resize_failed" -> "The game window could not be resized" to Tone.WARN
+        "clash_launch_failed" -> "Clash of Clans could not be opened through Google Play Games" to Tone.WARN
 
         // Readings.
         "storage_read" -> "Storage read: ${storageText(e)}" to Tone.NEUTRAL
@@ -574,6 +575,11 @@ object EventText {
             r.contains(UserStop.SCREEN_OFF) -> "the screen turned off"
             AppSwitchLatch.isHoldTimeout(r) -> "the notification shade stayed open for ${AppSwitchLatch.HOLD_CAP_MS / 60_000} minutes"
             low.startsWith("service destroyed") -> "the helper service shut down"
+            // Desktop: written out, since clean() would lower the PC's capitals.
+            low.contains("so the game stopped updating") -> "the PC was locked or the screen turned off, so the game stopped updating"
+            low.contains("opened again while google play games kept the game running") ->
+                "the Clash window was opened again while the game kept running, so restart the PC"
+            low.startsWith("the pc was asleep") -> "the PC was asleep at the start time"
             low.contains("screenshot capture failed") -> "the screen could not be captured"
             low.contains("app switched to") || low.contains("not in foreground") -> "Clash left the screen"
             low.contains("device is locked") -> "the phone was locked"

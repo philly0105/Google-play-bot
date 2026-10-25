@@ -30,6 +30,9 @@ import kotlin.math.hypot
  *   transport stops the run as it does for a touch.
  * - A send the sidecar fails is logged and never answered, so the transport's deadline stops the
  *   run.
+ * - Android stopped a run when the screen went off. Windows instead stops sending the game's
+ *   picture while the PC is locked or its display is off, so a frame [STALE_MS] old, or none in
+ *   time, fails with [FRAMES_STOPPED] when the sidecar says the PC is in either state.
  */
 class SidecarGameSurface(
     private val sidecar: Sidecar,
@@ -62,11 +65,34 @@ class SidecarGameSurface(
             val frame = try {
                 sidecar.capture()
             } catch (e: SidecarException) {
-                callback.onFailure(e.message ?: e.code, retryable = e.code in RETRYABLE)
+                if (e.code == "timeout" && framesStopped()) {
+                    callback.onFailure(FRAMES_STOPPED, retryable = false)
+                } else {
+                    callback.onFailure(e.message ?: e.code, retryable = e.code in RETRYABLE)
+                }
+                return@launch
+            }
+            if (frame.ageMs >= STALE_MS && framesStopped()) {
+                callback.onFailure(FRAMES_STOPPED, retryable = false)
                 return@launch
             }
             callback.onSuccess(Bitmap.createBitmap(frame.pixels, frame.width, frame.height, Bitmap.Config.ARGB_8888))
         }
+    }
+
+    /**
+     * Whether Windows has stopped sending the game's picture: the PC is locked or its display is
+     * off. An old frame alone can't say, since Windows sends a picture only when the window
+     * changes and a quiet village changes little. A sidecar that can't tell counts as sending.
+     */
+    private suspend fun framesStopped(): Boolean {
+        val state = try {
+            sidecar.sessionState()
+        } catch (e: SidecarException) {
+            return false
+        }
+        if (state.framesStopped) log("Frames stopped: locked ${state.locked}, display on ${state.displayOn}")
+        return state.framesStopped
     }
 
     override fun dispatchGesture(strokes: List<GestureStroke>, callback: GestureCallback?): Boolean {
@@ -137,6 +163,12 @@ class SidecarGameSurface(
 
         /** No frame in time, or a sidecar that died; the next call starts another. */
         private val RETRYABLE = setOf("timeout", "failed")
+
+        /** A frame this old is checked against the PC's lock and display state. */
+        const val STALE_MS = 10_000L
+
+        /** The stop reason when the PC's lock or dark display stopped the game's frames. */
+        const val FRAMES_STOPPED = "The PC was locked or the screen turned off, so the game stopped updating."
     }
 }
 

@@ -315,7 +315,7 @@ class RunScreen(private val host: DashboardHost) : DashboardScreen {
             "Start at",
             shown.at != null,
             Modifier.padding(top = 12.dp),
-            subtitle = if (shown.at == null) "Off: the run starts when you press Start" else "The PC must be on and unlocked then",
+            subtitle = if (shown.at == null) "Off: the run starts when you press Start" else "The PC stays awake until then. Leave it unlocked",
             disabledReason = shown.pending?.let { "A start is set for ${Format.time(it.atMs, zone)}; cancel it to set another" }
         ) { on -> toggleStartAt(on) }
         shown.startAtLine?.let { line ->

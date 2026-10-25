@@ -253,8 +253,9 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     /** The rows above the accounts: the game window and tray, the battery and the remote control. */
     private fun checklist(state: DashboardState): Checklist {
         val m = machine
-        val machineLines = listOf(
+        val machineLines = listOfNotNull(
             PcChecklist.gameWindow(windowStatus),
+            PcChecklist.windowsVersion(windowStatus.pc),
             m?.let { PcChecklist.trayIcon(it.tray) } ?: notRead(PcChecklist.TRAY_ICON, "Tray icon"),
             m?.let { SetupChecklist.battery(it.battery) } ?: notRead("battery", "Battery and heat"),
             m?.let { SetupChecklist.remote(it.serviceOn, it.address) } ?: notRead("remote", "Remote control")
