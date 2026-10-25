@@ -41,7 +41,7 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `recognition/BattleDamage.kt` | `OVERALL` skips one battle-button label between "Overall Damage" and the value: a word of seven to ten letters starting with s, or a word starting with e followed by one starting with b. | The PC's recogniser returns lines in reading order, so the button's "SURReNdeR" or "End Battle" stood between the word and the value on all nine damage readings of the 24 October attack, and none read (`audit-evidence/live/20261024-163029-supervised/events.jsonl`). Without a damage the early end at a damage and the stall watcher's damage go unused. |
 | `recognition/BattleResultReader.kt` | On a PC frame `lootRegions` hangs the rows at `PC_ROW_LEFT`, `PC_ROW_RIGHT`, `PC_ROW_OFFSETS` and `PC_ROW_HEIGHT`, `starCentres` samples `PC_STAR_OFFSETS`, and a new `glyphCount(roi, viewport, pixel)` counts with `PC_GLYPH_GAP`, `PC_WIDE_GLYPH` and `PC_EDGE`, all in pixels of 1740x978 scaled by `PcGeometry.length`. The phone's `glyphCount(roi, pixel)` stays and keeps its lengths. | The phone's lengths are pixels of 1600x720. On both result screens of 24 October they put the elixir and dark rows between the digits, so no row read, and their star points fell off the stars, so both battles recorded 0 stars. The PC's digits are also wider (up to 24 px) and further apart (17 px). With the PC values all seven result frames of the second battle read 1 346 371, 474 889 and 4 314 on every cut with the anchor moved up to 11 px, and 2 stars (`audit-evidence/live/20261024-165200-result`). The damage region is unchanged: it read 70% on every mask of every frame. A defeat's result screen has not been seen on the PC. |
 | `recognition/ScreenReader.kt` | `readResultLoot` passes the frame's size to `BattleResultReader.glyphCount`. | So that a PC frame's rows are counted at the PC's lengths (row above). |
-| `insight/EventText.kt` | Added a sentence for `clash_launch_failed`, after `surface_resize_failed`. `stopLine` gains three branches before "screenshot capture failed", for `SidecarGameSurface.FRAMES_STOPPED`, `FarmerService.CLASH_REOPENED` and `FarmerService.PC_ASLEEP`. | `FarmerService` logs `clash_launch_failed` when starting Clash through Google Play Games fails (Setup's Open, Resume, a run), and `EventTextTest` requires a sentence for every logged event. `clean` lowercases all-caps words, so without the branches "PC" would read "pc", and the frames-stopped reason would read as a failed screenshot. |
+| `insight/EventText.kt` | Added a sentence for `clash_launch_failed`, after `surface_resize_failed`. `stopLine` gains four branches before "screenshot capture failed", for `SidecarGameSurface.FRAMES_STOPPED`, `FarmerService.CLASH_REOPENED`, `FarmerService.PC_ASLEEP` and `FarmerService.PC_LOCKED_AT_START`. | `FarmerService` logs `clash_launch_failed` when starting Clash through Google Play Games fails (Setup's Open, Resume, a run), and `EventTextTest` requires a sentence for every logged event. `clean` lowercases all-caps words, so without the branches "PC" would read "pc", and the frames-stopped reason would read as a failed screenshot. |
 | `service/LatestFrame.kt` | `offer` scales the copy to `WIDTH` wide and `heightFor(width, height)` high, the frame's own shape, in place of a fixed 480x216. | The phone's frames were all 1600x720, 2.22:1. The PC's are 1740x978 or 1860x1162, which 480x216 squashed by a quarter in the dashboard, the remote page and every failure snapshot. A 1600x720 frame still gives 480x216. |
 | `app/src/main/resources/remote.html` | The live frame's `onload` sets its box's `aspect-ratio` to the image's own size. The CSS default of 2.22 stays until the first frame loads. | The box was fixed at the phone's 2.22:1, so the PC's 16:9 and 16:10 frames were letterboxed or cut. |
 | `core/AtomicFile.kt` (new, PC only), `core/PresetStore.kt`, `core/StorageStore.kt`, `core/BuilderStore.kt`, `service/PendingStart.kt` (`PendingStartStore.write`), `recognition/PhoneProfile.kt` (`saveToFile`) | Each store's rename of its temp file over the target, with delete-then-rename when it failed, is now `AtomicFile.replace`: a move with `ATOMIC_MOVE` and `REPLACE_EXISTING`, falling back to `REPLACE_EXISTING` alone. `saveToFile` keeps its copy fallback when the move throws. A failed move now fails the save (`PresetStore` and `PendingStartStore` return false, `BuilderStore` false, `StorageStore` throws to `LocalRunner`, which logs `storage_save_failed`), where a failed second rename was silent before. | On Windows `File.renameTo` never replaces an existing file, so every save after the first went through the delete, and a crash or power cut between the delete and the rename lost the presets, the balances, the builder count, a start set for later or a calibration. The move replaces in place. |
@@ -159,8 +159,8 @@ below.
     open, and a second launch may bring Clash to the front. A launch that throws stops the start.
     A window closed by hand (the sidecar's `visible` false) stops the start with `CLASH_CLOSED`
     and launches nothing: the game runs on hidden, and a launch then is the relaunch that broke
-    input. A window the watcher saw hidden and then shown again by the same Google Play Games
-    process (`WindowStatus.reopenedInRunningVm`) is that relaunch done by hand: the start stops
+    input. A window the watcher saw shown, then hidden, then shown again by the same Google Play
+    Games process (`WindowStatus.reopenedInRunningVm`) is that relaunch done by hand: the start stops
     with `CLASH_REOPENED`, before and after the wait for the window, and launches nothing. The
     wait for the read to name Clash is gone, since the window read already does;
     `awaitClashRead` stays for `ClashReadTest`. The blank-frame wait is the phone's. A launch that
@@ -176,11 +176,15 @@ below.
     sleeps. Each run job (`startCombinedRun`, `startSwitchOnly`, `startGuardedAccountSession`, the
     legacy `startFarming`) calls `host.keepAwake(true)` as it starts, and `keepAwake(false)` goes
     out when the last one ends, on a scope `onDestroy` does not cancel. A start set for later
-    holds the system, not the display, awake through `host.keepSystemAwake(true)` from
-    `scheduleStart` until it fires, is cancelled or refused, or `onDestroy`: the start is a
-    coroutine delay, and a PC left alone sleeps through it. A start woken late refuses
-    with `PC_ASLEEP` ("The PC was asleep at the start time") in place of `PendingStart`'s phone
-    wording. Inspect does not hold the PC awake.
+    holds the same keep-awake, system and display, from `scheduleStart` until it fires, is
+    cancelled or refused, or `onDestroy` (`awakeForStart`): the start is a coroutine delay, a PC
+    left alone sleeps through it, and a dark display would stop the run at its first look
+    (`FRAMES_STOPPED`). At fire it lets go only after the run has taken its own hold, so the
+    screen gets no gap to go dark. A start woken late refuses with `PC_ASLEEP` ("The PC was
+    asleep at the start time") in place of `PendingStart`'s phone wording, and one that finds
+    the sidecar's `sessionState` locked or dark refuses with `PC_LOCKED_AT_START`, before the
+    phone's screen and lock checks, which pass on the PC. `firePendingStart` is now a suspend
+    function for that call. Inspect does not hold the PC awake.
   - Leaving the app: `captureClashGame` and `captureNormalizedVillage` keep
     `returnToActivityClass` and ignore it, with no helper screen to reopen. `captureClashGame` no
     longer waits for Clash to fill the display: the PC has no status bar or rotation to wait out.
@@ -207,8 +211,10 @@ below.
     shape (`LatestFrame` above), and beside it `<name>-full.png`, one fresh capture of the game
     window at its real size, waited for up to 5 s and skipped when the window is minimized,
     closed or gone. The phone never captured for a snapshot because of Android's screenshot rate
-    limit; the PC has none, and a reader that failed needs the pixels it read. Both files count
-    toward the failure snapshots `StorageRetention` keeps.
+    limit; the PC has none. It is the screen just after the failure, possibly after a recovery
+    pressed Back, not the frame the failing step read; it gives the detail the 480-wide copy
+    loses. Both files count toward the failure snapshots `StorageRetention` keeps, so a failure
+    with both takes two of its ten places.
   - Added `launchClash()`, Setup's Open Clash of Clans: it starts Clash and returns at once, and
     sends nothing while a run is active or a Clash window exists. `captureNormalizedVillage`'s
     `returnToActivityClass` defaults to null, as `captureClashGame`'s does.

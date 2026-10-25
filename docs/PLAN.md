@@ -92,7 +92,7 @@ test compiles unchanged, and record the move.
 | Global Back | Esc, which GPG maps to Android Back |
 | Clash in foreground | The Clash GPG window exists, is not minimized and shows Clash |
 | Screen off / locked | The session locked or the display off (the sidecar's `sessionState`) while capture delivers only old frames; the run stops with a plain reason. A still village is never read as this |
-| A start set for later | The same, plus a system-only power request (`keepSystemAwake`) so the PC does not sleep through it |
+| A start set for later | The run's own keep-awake (system and display) from the time it is set until it fires, so the PC neither sleeps nor goes dark; at the start time a locked PC or a dark display refuses the start with a plain reason |
 | Battery and heat guard | Laptop battery when unplugged |
 | Restart Clash | Start it through GPG's launch link, only when there is no Clash window |
 | Home (the takeover wait) | Nothing: Clash stays on the takeover dialog. The bot never closes the Clash window, since a relaunch into the running VM broke posted input (`docs/gpg-spike.md`, Restarting) |

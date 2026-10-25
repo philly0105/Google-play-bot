@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1790 tests, the phone's 1635
-and the PC's 155, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1795 tests, the phone's 1635
+and the PC's 160, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -39,14 +39,14 @@ edit is also in `docs/DIVERGENCES.md`.
 
 ## PC tests
 
-155 `@Test` methods in 19 files under `desktop/`. Their fixtures are in
+160 `@Test` methods in 20 files under `desktop/`. Their fixtures are in
 `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from Blood's game window
 at 1740x978 and 1860x1162, and a few PNG crops.
 
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
-| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but Blood, the PC held awake for a start set for later, failure snapshots with their full-size capture, and `LatestFrame.heightFor` | 19 |
+| `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, a window closed by hand or opened again, sizing the game surface, refusing every account but Blood, the PC and its screen held awake for a start set for later and let go when it is cancelled, fires or the app shuts down, a start refused on a locked PC or a dark screen, failure snapshots with their full-size capture, and `LatestFrame.heightFor` | 22 |
 | `AtomicStoresTest` | `AtomicFile`, and each of the five stores that use it saved twice | 6 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
 | `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |
@@ -56,9 +56,10 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | `PcTrayBadgeTest` | The tray badges' cut levels on the PC and the phone, through a fake OCR backend | 2 |
 | `DesktopLogTest` | The desktop log file | 1 |
 | `RunTrayTest` | `RunNotifier` through the tray, and the status panel | 5 |
-| `platform/ClashWindowWatcherTest` | The Clash window lookup, a window opened again by the same game process, `pcInfo` and a failed start | 12 |
+| `PcStopLineTest` | The PC's own stop and refusal reasons in `EventText.stopLine` | 1 |
+| `platform/ClashWindowWatcherTest` | The Clash window lookup, a window opened again by the same game process (and a new game's window that starts hidden, which is not), `pcInfo` and a failed start | 14 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar, and old frames on a locked PC, a dark display and a still village | 14 |
-| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including frame age, the window's process and full screen, `sessionState`, `pcInfo` and `keepSystemAwake` | 14 |
+| `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including frame age, the window's process and full screen, `sessionState`, and `pcInfo` with Clash unknown | 13 |
 | `ui/` (five files) | The Compose UI; see `docs/UI.md` | 44 |
 
 ## When they run

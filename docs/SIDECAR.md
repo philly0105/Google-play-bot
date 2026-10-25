@@ -66,7 +66,9 @@ hides it and keeps the game running, and a launch then is the relaunch that brok
 
 Also `ownerPid` and `ownerStartedMs` (the process that owns the window and when it started, Unix
 ms; null when Windows won't say), so the app can tell the same game process showing its window
-again from a new one, and `fullscreen` (the window's frame covers its whole monitor).
+again from a new one, and `fullscreen` (the window has no title bar, is not maximized, and its
+frame covers its whole monitor; a maximized window under a taskbar that hides itself covers it
+too, so it never counts).
 
 ### `capture`
 
@@ -147,23 +149,20 @@ Returns `ac` (plugged in), `batteryPercent` (-1 when unknown) and `saver` (batte
 Arguments: `on`. While on, Windows keeps the system and the display awake through power requests
 held by the sidecar. They lapse when it exits.
 
-### `keepSystemAwake`
-
-Arguments: `on`. A separate power request that keeps only the system awake, not the display,
-while a start is set for later. It lapses when the sidecar exits; the app sends it again to a
-restarted sidecar.
-
 ### `sessionState`
 
 Returns `locked` (the session is locked) and `displayOn` (false while the display is off; dimmed
-counts as on). Either is null when Windows has not said. The display state comes from a
-`GUID_CONSOLE_DISPLAY_STATE` notification the sidecar registers at start.
+counts as on). Either is null when Windows has not said. The lock comes from
+`WTSQuerySessionInformationW` (`WTSSessionInfoEx`), of which only `Level` and `SessionFlags` are
+read. The display state comes from a `GUID_CONSOLE_DISPLAY_STATE` notification the sidecar
+registers at start.
 
 ### `pcInfo`
 
 Returns `osBuild` (Windows build; below 22000 is Windows 10), `gpgInstalled` (the
 `googleplaygames:` URL scheme is registered) and `clashInstalled` (a Start menu shortcut launches
-Clash of Clans through Google Play Games).
+Clash of Clans through Google Play Games). The shortcut scan skips folders it may not read;
+`clashInstalled` is null when it looked at 2000 shortcuts without finding Clash's or failed.
 
 ### `input`
 

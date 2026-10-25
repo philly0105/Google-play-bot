@@ -33,7 +33,8 @@ ban can be permanent.
   has not been tested there; Setup shows an amber Windows line.
 - The PC must stay unlocked with the screen on during a run. Locking it or letting the screen turn
   off stops the game's picture, and the bot stops the run with a message saying so. A start set
-  for later keeps the PC from sleeping until it fires.
+  for later keeps the PC awake with the screen on until it fires, and does not run if the PC is
+  locked then.
 - Don't run Clash of Clans full screen in Google Play Games, and don't close its window by hand
   while Google Play Games keeps running: opening it again needs a PC restart before the bot's
   taps reach the game. Setup's Game window line flags both.
