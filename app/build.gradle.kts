@@ -45,15 +45,31 @@ tasks.test {
 val appResources = layout.buildDirectory.dir("appResources")
 val sidecarProject = rootProject.file("native/ClashFarmer.Native")
 
+// onnxruntime.dll, which the OCR loads, needs the Visual C++ runtime. Windows doesn't always have
+// it, so these ship beside it; Microsoft allows that app-local copy. Without them OCR fails on a
+// PC that lacks the redistributable, and every run stops on screens it can't read.
+val vcRuntimeDlls = listOf("msvcp140.dll", "msvcp140_1.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+
 val publishSidecar by tasks.registering(Exec::class) {
     val out = appResources.map { it.dir("windows-x64/sidecar") }
     inputs.files(fileTree(sidecarProject) { exclude("bin/**", "obj/**") })
     outputs.dir(out)
     doFirst { delete(out) }
+    // DebugType=None leaves the .pdb out of the app.
     commandLine(
         "dotnet", "publish", sidecarProject.path, "-c", "Release", "-r", "win-x64",
-        "--self-contained", "true", "-o", out.get().asFile.path
+        "--self-contained", "true", "-p:DebugType=None", "-o", out.get().asFile.path
     )
+    doLast {
+        val system32 = File(System.getenv("WINDIR") ?: "C:\\Windows", "System32")
+        for (name in vcRuntimeDlls) {
+            val dll = File(system32, name)
+            if (!dll.isFile) {
+                throw GradleException("$dll is missing. Install the Microsoft Visual C++ Redistributable (x64) on this PC, then build again.")
+            }
+            dll.copyTo(out.get().file(name).asFile, overwrite = true)
+        }
+    }
 }
 
 compose.desktop {

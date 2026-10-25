@@ -12,6 +12,7 @@ import local.clashfarmer.desktop.platform.GameSurface
 import local.clashfarmer.desktop.platform.SidecarClashHost
 import local.clashfarmer.desktop.platform.SidecarGameSurface
 import local.clashfarmer.desktop.sidecar.Sidecar
+import local.clashfarmer.desktop.sidecar.SidecarStatus
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -36,6 +37,7 @@ class DesktopServices(val filesDir: File, sidecarExe: File) : AutoCloseable {
 
     init {
         OcrBackends.install(SidecarOcr(sidecar))
+        SidecarStatus.watch(sidecar, scope)
     }
 
     override fun close() {

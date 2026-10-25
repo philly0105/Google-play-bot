@@ -31,7 +31,9 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
 
     suspend fun hello(): Hello {
         val json = request("hello").json
-        return Hello(json.getString("version"), json.getInt("pid"), json.getBoolean("ocrReady"))
+        // A sidecar from before the field answers without it; one whose reader loaded sends null.
+        val ocrError = if (json.isNull("ocrError")) null else json.getString("ocrError")
+        return Hello(json.getString("version"), json.getInt("pid"), json.getBoolean("ocrReady"), ocrError)
     }
 
     /** The Clash window from Google Play Games, looked up again; null when there is none. */
@@ -182,7 +184,8 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
     }
 }
 
-data class Hello(val version: String, val pid: Int, val ocrReady: Boolean)
+/** [ocrError] is why the text reader failed to load, or null while it loads or once it has. */
+data class Hello(val version: String, val pid: Int, val ocrReady: Boolean, val ocrError: String? = null)
 
 /**
  * [top] and [game] are window handles; [width] and [height] are the game surface's physical pixels.

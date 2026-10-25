@@ -95,7 +95,7 @@ internal sealed class Server(Stream input, Stream output)
 
     private async Task<(JsonObject, byte[])> Dispatch(string op, JsonObject r, byte[] payload) => op switch
     {
-        "hello" => (new JsonObject { ["version"] = Version, ["pid"] = Environment.ProcessId, ["ocrReady"] = PaddleOcr.Ready }, []),
+        "hello" => (new JsonObject { ["version"] = Version, ["pid"] = Environment.ProcessId, ["ocrReady"] = PaddleOcr.Ready, ["ocrError"] = PaddleOcr.Error }, []),
         "find" => (Find(), []),
         "capture" => await InLane(_captureLane, () => Capture(r)),
         "gesture" => await InLane(_inputLane, () => Gesture(r)),
