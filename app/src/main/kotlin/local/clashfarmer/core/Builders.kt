@@ -44,6 +44,16 @@ object Builders {
     private val PC_CORNER = Region(1569, 756, 1723, 816)
     private const val PC_CORNER_BUILDERS_LEFT = 1632
 
+    /**
+     * The PC's second read of the corner: [PC_CORNER] grown by this many pixels of 1740x978 on each
+     * side, cropped and upscaled [PC_CORNER_SCALE] times. A whole frame reaches the recogniser
+     * shrunk to about 0.56, which leaves the 28 px counter about 16 px tall, and it read on 3 of 65
+     * village frames in audit-evidence. The crop read the builders' count on 63 of them, at
+     * 1740x978 and 1860x1162 alike, and the goblin's "0/1" beside it on 62.
+     */
+    private const val PC_CORNER_MARGIN = 12
+    const val PC_CORNER_SCALE = 3
+
     /** One glyph free, a slash, one digit total. The top bar's "O" for a zero is taken as one. */
     private val COUNT = Regex("^([0-9OoDQ])\\s*/\\s*([0-9])$")
 
@@ -124,6 +134,24 @@ object Builders {
 
     private fun corner(boxes: List<RecognizedBox>, viewport: Viewport): List<RecognizedBox> =
         boxes.filter { inCorner(it, viewport) }
+
+    /** The PC's crop of the counters' line for [PC_CORNER_SCALE], or null off the PC. */
+    fun pcCornerRegion(viewport: Viewport): Region? {
+        if (!PcGeometry.isPc(viewport)) return null
+        val grown = Region(
+            PC_CORNER.left - PC_CORNER_MARGIN, PC_CORNER.top - PC_CORNER_MARGIN,
+            PC_CORNER.right + PC_CORNER_MARGIN, PC_CORNER.bottom + PC_CORNER_MARGIN
+        )
+        return PcGeometry.region(viewport, grown, Anchor.RIGHT)
+    }
+
+    /**
+     * [full]'s boxes with the corner's replaced by [crop]'s. A whole frame that read the corner at
+     * all read a part of it, a lone "0/" or the goblin's "0/1", and left beside the crop's it would
+     * be taken for the builders'.
+     */
+    fun withCorner(full: List<RecognizedBox>, crop: List<RecognizedBox>, viewport: Viewport): List<RecognizedBox> =
+        full.filterNot { inCorner(it, viewport) } + crop.filter { inCorner(it, viewport) }
 
     /** Whether [box] is centred on the 18.647 counters' line above Build. */
     fun inCorner(box: RecognizedBox, viewport: Viewport): Boolean {

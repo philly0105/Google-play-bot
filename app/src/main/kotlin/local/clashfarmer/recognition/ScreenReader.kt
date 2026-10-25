@@ -8,10 +8,12 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
+import local.clashfarmer.core.Builders
 import local.clashfarmer.core.PcGeometry
 import local.clashfarmer.core.Policy
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Region
+import local.clashfarmer.core.ScreenState
 import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.log.AppLog
@@ -272,10 +274,11 @@ class ScreenReader : AutoCloseable {
 
             val rawText = allText.toString()
             val state = classifyScreen(boxes, viewport)
+            val read = if (state == ScreenState.HOME) withBuildersCorner(bitmap, boxes, viewport) else boxes
 
             return Observation(
                 state = state,
-                boxes = boxes,
+                boxes = read,
                 rawText = rawText,
                 viewport = viewport,
                 timestampMs = acquisitionTimeMs
@@ -285,6 +288,20 @@ class ScreenReader : AutoCloseable {
                 targetBitmap.recycle()
             }
         }
+    }
+
+    /**
+     * A PC village frame's boxes with the builders' counter read again from an upscaled crop when
+     * the whole frame missed it, so the wall phase knows whether a builder is free. The crop's
+     * boxes stand in for the corner's only when they read a count; otherwise [boxes] come back as
+     * they were. The phone, and a frame that already read the count, take no second read.
+     */
+    private suspend fun withBuildersCorner(bitmap: Bitmap, boxes: List<RecognizedBox>, viewport: Viewport): List<RecognizedBox> {
+        val region = Builders.pcCornerRegion(viewport) ?: return boxes
+        if (Builders.read(boxes, viewport) != null) return boxes
+        val crop = observeRegion(bitmap, region, Builders.PC_CORNER_SCALE).boxes
+        val merged = Builders.withCorner(boxes, crop, viewport)
+        return if (Builders.read(merged, viewport) != null) merged else boxes
     }
 
     /**
