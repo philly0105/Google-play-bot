@@ -358,6 +358,9 @@ Inspect and captures:
 
 - `inspect`, the tray check and calibration capture the window where it is, without the phone's
   return-to-activity step.
+- Inspect reads a frame of another size than the calibration with the calibration moved onto it,
+  as the tray check does (`inspectFrame`). Read as saved, a 16:10 village showed as a screen the
+  bot doesn't know, and its balances were read off 16:9 positions.
 - Resume: the phone brought Clash to the front and resumed 1.5 s later. The PC never brings the
   window forward; it starts Clash only when the window is gone, as the tray's Resume does, and
   resumes 1.5 s later.
