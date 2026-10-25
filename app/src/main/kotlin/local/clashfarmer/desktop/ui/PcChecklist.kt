@@ -84,9 +84,12 @@ object PcChecklist {
         status.tailscale == null -> CheckLine(REMOTE, "Remote page",
             "Off (Tailscale not connected). Optional: connect Tailscale on this PC to control runs from another device; " +
                 "the page turns on within a minute.", "Off", Tone.IDLE, counts = false)
-        !status.listening -> CheckLine(REMOTE, "Remote page",
+        !status.listening && status.failure == RemotePage.Failure.PORT_IN_USE -> CheckLine(REMOTE, "Remote page",
             "Port ${RemoteServer.PORT} is in use by another program, so the page is off. Close that program; " +
                 "Clash Farmer tries again every 10 minutes.", "Off", Tone.WARN, counts = false)
+        !status.listening -> CheckLine(REMOTE, "Remote page",
+            "Tailscale is connected, but the page could not start on its address yet. Clash Farmer tries again " +
+                "every minute; if it stays off, restart Tailscale.", "Off", Tone.WARN, counts = false)
         else -> CheckLine(REMOTE, "Remote page",
             "${status.tailscale}:${RemoteServer.PORT} on your tailnet. The copied link holds the key; keep it private.",
             "On", Tone.OK, counts = false)

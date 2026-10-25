@@ -175,14 +175,20 @@ class PcChecklistTest {
         assertEquals(Tone.IDLE, noTailscale.tone)
         assertEquals("Off", noTailscale.chip)
         assertTrue(noTailscale.detail.startsWith("Off (Tailscale not connected)."))
-        val portTaken = PcChecklist.remote(serviceOn = true, status = RemotePage.Status("100.101.102.103", false))
+        val portTaken = PcChecklist.remote(serviceOn = true,
+            status = RemotePage.Status("100.101.102.103", false, RemotePage.Failure.PORT_IN_USE))
         assertEquals(Tone.WARN, portTaken.tone)
         assertTrue(portTaken.detail.startsWith("Port 8765 is in use"))
+        val notBound = PcChecklist.remote(serviceOn = true,
+            status = RemotePage.Status("100.101.102.103", false, RemotePage.Failure.OTHER))
+        assertEquals(Tone.WARN, notBound.tone)
+        assertTrue(notBound.detail.startsWith("Tailscale is connected, but the page could not start"))
+        assertFalse(notBound.detail.contains("in use"))
         val on = PcChecklist.remote(serviceOn = true, status = RemotePage.Status("100.101.102.103", true))
         assertEquals(Tone.OK, on.tone)
         assertEquals("On", on.chip)
         assertTrue(on.detail.startsWith("100.101.102.103:8765 on your tailnet."))
-        assertTrue(listOf(stopped, noTailscale, portTaken, on).none { it.counts })
+        assertTrue(listOf(stopped, noTailscale, portTaken, notBound, on).none { it.counts })
         assertNull(SetupChecklist.badge(listOf(stopped, noTailscale, on)))
     }
 }

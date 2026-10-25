@@ -98,7 +98,7 @@ test compiles unchanged, and record the move.
 | Floating overlay | Small always-on-top window with status, Pause and Stop |
 | Notifications | Windows notifications from the tray icon |
 | `/data/data/local.clashfarmer/files/` | `%LOCALAPPDATA%\ClashFarmerPC\files\` with the same layout |
-| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules. It listens only on the Tailscale adapter's address and 127.0.0.1, while Tailscale is connected (`desktop/RemotePage.kt`) |
+| Remote page on port 8765 over Tailscale | The same page and API from the PC, same key and peer rules. It listens only on the Tailscale adapter's addresses (IPv4 and tailnet IPv6) and 127.0.0.1, while Tailscale is connected (`desktop/RemotePage.kt`) |
 
 ### Resolution and screen geometry
 

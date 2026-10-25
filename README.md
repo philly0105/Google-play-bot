@@ -63,8 +63,11 @@ captures live in `%LOCALAPPDATA%\ClashFarmerPC\files\`, laid out like the phone'
 A failure nobody caught goes to `logs\desktop.log` there, and a dialog says so. Old logs and
 captures are pruned at start and once a day after that.
 
-The remote page listens on port 8765 only on this PC's Tailscale address and on 127.0.0.1, never
-on the LAN. It checks for Tailscale every minute and turns on or off with it. Its key is
+The remote page listens on port 8765 only on this PC's Tailscale addresses (IPv4 and the tailnet
+IPv6 one) and on 127.0.0.1, never on the LAN. It checks for Tailscale every minute and turns on
+or off with it. Setup says why it is off: Tailscale not connected, port 8765 taken by another
+program (tried again every 10 minutes), or an address Windows won't use yet, as just after sleep
+(tried again every minute). Its key is
 `remote_key.txt` in the files directory. Windows asks once to let the app through the firewall.
 
 ## Sending it to someone

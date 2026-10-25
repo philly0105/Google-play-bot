@@ -44,13 +44,18 @@ class RemoteServer(private val port: Int, private val api: RemoteApi, private va
     @Volatile private var socket: ServerSocket? = null
     private var workers: ExecutorService? = null
 
-    /** Desktop: whether [start] bound its socket and [stop] has not closed it. */
+    /** Desktop: whether [start] bound its socket and neither [stop] nor a failed accept has closed it. */
     val isListening: Boolean get() = socket?.isClosed == false
+
+    /** Desktop: why the last [start] could not bind, so the caller can tell a taken port from the rest. */
+    @Volatile var startError: Exception? = null
+        private set
 
     fun start() {
         val server = try {
             ServerSocket(port, 50, bindAddress)
         } catch (e: Exception) {
+            startError = e
             AppLog.log("remote_server_failed", "port" to port, "error" to e.message)
             return
         }
@@ -66,6 +71,8 @@ class RemoteServer(private val port: Int, private val api: RemoteApi, private va
                 }
                 runCatching { pool.execute { serve(client) } }.onFailure { runCatching { client.close() } }
             }
+            // Desktop: a failed accept ends the loop; closing the socket shows it in isListening.
+            runCatching { server.close() }
         }, "remote-accept").apply { isDaemon = true }.start()
         AppLog.log("remote_server_started", "port" to port)
     }
