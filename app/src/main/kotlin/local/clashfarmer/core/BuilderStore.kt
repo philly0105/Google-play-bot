@@ -30,10 +30,7 @@ class BuilderStore(private val root: File) {
             val json = JSONObject().put("free", count.free).put("total", count.total).put("at", atMs)
             val tmp = File(target.parentFile, "$FILE_NAME.tmp")
             tmp.writeText(json.toString())
-            if (!tmp.renameTo(target)) {
-                target.delete()
-                if (!tmp.renameTo(target)) error("rename failed")
-            }
+            AtomicFile.replace(tmp, target) // Desktop: renameTo never replaces on Windows.
             true
         }.getOrDefault(false)
     }

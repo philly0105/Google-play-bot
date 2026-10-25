@@ -21,6 +21,7 @@ import local.clashfarmer.desktop.platform.ScreenshotCallback
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.sidecar.PowerState
+import local.clashfarmer.desktop.sidecar.SessionState
 import local.clashfarmer.desktop.sidecar.SidecarException
 import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.recognition.PhoneProfile
@@ -77,7 +78,21 @@ class FarmerServicePcTest {
 
         override suspend fun power(): PowerState = battery()
 
-        override suspend fun keepAwake(on: Boolean) {}
+        /** Every keepAwake call, in order. */
+        val awake = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
+
+        override suspend fun keepAwake(on: Boolean) {
+            awake += on
+        }
+
+        /** What [sessionState] answers, and how many times it was asked. */
+        @Volatile var session: SessionState? = null
+        @Volatile var sessionAsked = 0
+
+        override suspend fun sessionState(): SessionState? {
+            sessionAsked++
+            return session
+        }
     }
 
     /** Answers each screenshot at once with the next of [frames], the last one repeating. */
@@ -256,5 +271,106 @@ class FarmerServicePcTest {
         assertFalse(service.isBusy)
         service.startSwitchOnly(blood)
         assertTrue(service.isBusy)
+    }
+
+    @Test
+    fun `a start with the window opened again in the running game stops and launches nothing`() = runBlocking {
+        service.connectTransport()
+        host.window.value = openWindow().copy(reopenedInRunningVm = true)
+        val stop = runCatching { service.ensureClashForeground(timeoutMs = 10_000) }.exceptionOrNull()
+        assertTrue(stop is StopException)
+        assertEquals(FarmerService.CLASH_REOPENED, stop?.message)
+        assertEquals(0, host.launches)
+        assertEquals(0, surface.shots)
+    }
+
+    /** Waits up to two seconds for [done]. */
+    private fun waitFor(done: () -> Boolean) {
+        val until = System.currentTimeMillis() + 2_000
+        while (!done() && System.currentTimeMillis() < until) Thread.sleep(10)
+        assertTrue(done())
+    }
+
+    private val laterPlan
+        get() = local.clashfarmer.core.RunPlan(listOf(AccountStore.BLOOD_ID), local.clashfarmer.core.Length.Attacks(4), walls = false)
+
+    @Test
+    fun `a start set for later keeps the PC and its screen awake until it is cancelled`() {
+        AccountStore(filesDir).ensureMigrated()
+        service.scheduleStart(laterPlan, System.currentTimeMillis() + 3_600_000L)
+        waitFor { host.awake.toList() == listOf(true) }
+        service.cancelPendingStart()
+        waitFor { host.awake.toList() == listOf(true, false) }
+    }
+
+    @Test
+    fun `a start set for later lets the PC go when the app shuts down`() {
+        AccountStore(filesDir).ensureMigrated()
+        service.scheduleStart(laterPlan, System.currentTimeMillis() + 3_600_000L)
+        waitFor { host.awake.toList() == listOf(true) }
+        service.onDestroy()
+        waitFor { host.awake.lastOrNull() == false }
+    }
+
+    @Test
+    fun `a start set for later reads the lock and the screen when it fires, then lets the PC go`() {
+        AccountStore(filesDir).ensureMigrated()
+        host.session = SessionState(locked = true, displayOn = true)
+        service.scheduleStart(laterPlan, System.currentTimeMillis() + 200L)
+        waitFor { host.sessionAsked == 1 && host.awake.lastOrNull() == false }
+        assertEquals(true, host.awake.first())
+        assertFalse(service.isBusy)
+        assertEquals(0, host.launches)
+    }
+
+    @Test
+    fun `a start is refused when the PC is locked or its screen is off, and not when that can't be read`() = runBlocking {
+        host.session = SessionState(locked = true, displayOn = true)
+        assertEquals(FarmerService.PC_LOCKED_AT_START, service.pcProblemAtStart())
+        host.session = SessionState(locked = false, displayOn = false)
+        assertEquals(FarmerService.PC_LOCKED_AT_START, service.pcProblemAtStart())
+        host.session = SessionState(locked = false, displayOn = true)
+        assertNull(service.pcProblemAtStart())
+        host.session = SessionState(locked = null, displayOn = null)
+        assertNull(service.pcProblemAtStart())
+        host.session = null
+        assertNull(service.pcProblemAtStart())
+    }
+
+    private fun captures() = java.io.File(filesDir, "captures").listFiles()?.map { it.name }?.sorted() ?: emptyList()
+
+    @Test
+    fun `a failure snapshot keeps the frame's shape and writes a full-size capture beside it`() {
+        host.window.value = openWindow()
+        service.latestFrame.offer(Bitmap.createBitmap(IntArray(W * H) { GREY }, W, H, Bitmap.Config.ARGB_8888), System.currentTimeMillis())
+        service.saveFailureSnapshot("reader_failed")
+        // Each file exists before it is written, so wait until both read as images.
+        fun read(name: String) = runCatching { javax.imageio.ImageIO.read(java.io.File(filesDir, "captures/$name")) }.getOrNull()
+        waitFor { captures().size == 2 && captures().all { read(it) != null } }
+        val (small, full) = captures().partition { !it.endsWith("-full.png") }.let { it.first.single() to it.second.single() }
+        assertEquals(small.removeSuffix(".png") + "-full.png", full)
+        val smallImage = javax.imageio.ImageIO.read(java.io.File(filesDir, "captures/$small"))
+        assertEquals(480 to 270, smallImage.width to smallImage.height)
+        val fullImage = javax.imageio.ImageIO.read(java.io.File(filesDir, "captures/$full"))
+        assertEquals(W to H, fullImage.width to fullImage.height)
+    }
+
+    @Test
+    fun `a failure snapshot with the window minimized writes only the small copy`() {
+        host.window.value = openWindow(iconic = true)
+        service.latestFrame.offer(Bitmap.createBitmap(IntArray(W * H) { GREY }, W, H, Bitmap.Config.ARGB_8888), System.currentTimeMillis())
+        service.saveFailureSnapshot("reader_failed")
+        waitFor { captures().size == 1 }
+        Thread.sleep(300)
+        assertEquals(1, captures().size)
+        assertEquals(0, surface.shots)
+    }
+
+    @Test
+    fun `the copy kept for the dashboard is 480 wide at the frame's shape`() {
+        assertEquals(216, local.clashfarmer.service.LatestFrame.heightFor(1600, 720))
+        assertEquals(270, local.clashfarmer.service.LatestFrame.heightFor(1740, 978))
+        assertEquals(300, local.clashfarmer.service.LatestFrame.heightFor(1860, 1162))
+        assertEquals(local.clashfarmer.service.LatestFrame.HEIGHT, local.clashfarmer.service.LatestFrame.heightFor(0, 0))
     }
 }

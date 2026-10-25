@@ -2,6 +2,7 @@ package local.clashfarmer.desktop.ui
 
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
+import local.clashfarmer.desktop.sidecar.PcInfo
 import local.clashfarmer.desktop.sidecar.SurfaceSize
 import local.clashfarmer.ui.TabBadge
 import local.clashfarmer.ui.components.Tone
@@ -118,6 +119,81 @@ class PcChecklistTest {
         assertEquals(1 to 2, SetupChecklist.ready(lines))
         assertEquals(TabBadge(0, Tone.WARN), SetupChecklist.badge(lines))
         assertEquals("game_window", SetupChecklist.primaryFix(lines)?.key)
+    }
+
+    @Test
+    fun `without Google Play Games the line is red, with no fix that could not open anything`() {
+        val line = PcChecklist.gameWindow(WindowStatus(checked = true, pc = PcInfo(22631, gpgInstalled = false, clashInstalled = false)))
+        assertEquals(Tone.BAD, line.tone)
+        assertEquals("Not installed", line.chip)
+        assertTrue(line.detail.startsWith("Google Play Games is not installed."))
+        assertNull(line.fix)
+    }
+
+    @Test
+    fun `without Clash the line is amber and still offers to open it`() {
+        val line = PcChecklist.gameWindow(WindowStatus(checked = true, pc = PcInfo(22631, gpgInstalled = true, clashInstalled = false)))
+        assertEquals(Tone.WARN, line.tone)
+        assertEquals("Not installed", line.chip)
+        assertTrue(line.detail.startsWith("Clash of Clans is not installed."))
+        assertEquals(CheckLine.FixKind.ACCESSIBILITY, line.fix?.kind)
+    }
+
+    @Test
+    fun `a failed start says so until the window appears`() {
+        val failed = WindowStatus(checked = true, launchError = "The system cannot find the file specified")
+        val line = PcChecklist.gameWindow(failed)
+        assertEquals(Tone.WARN, line.tone)
+        assertEquals("Did not open", line.chip)
+        assertTrue(line.detail.startsWith("Clash of Clans did not open."))
+        assertFalse(line.detail.contains("system cannot find"))
+        assertEquals(CheckLine.FixKind.ACCESSIBILITY, line.fix?.kind)
+        val found = failed.copy(window = window(), surface = SurfaceSize(1600, 900))
+        assertEquals(Tone.OK, PcChecklist.gameWindow(found).tone)
+    }
+
+    @Test
+    fun `everything installed and no window is the plain open line`() {
+        val line = PcChecklist.gameWindow(WindowStatus(checked = true, pc = PcInfo(22631, gpgInstalled = true, clashInstalled = true)))
+        assertEquals("Not open", line.chip)
+        // A shortcut scan that could not tell says nothing about Clash.
+        val unknown = PcChecklist.gameWindow(WindowStatus(checked = true, pc = PcInfo(22631, gpgInstalled = true, clashInstalled = null)))
+        assertEquals("Not open", unknown.chip)
+    }
+
+    @Test
+    fun `a window opened again in the running game is red, with the restart advice and no fix`() {
+        val status = WindowStatus(checked = true, window = window(), surface = SurfaceSize(1600, 900), reopenedInRunningVm = true)
+        val line = PcChecklist.gameWindow(status)
+        assertEquals(Tone.BAD, line.tone)
+        assertEquals("Reopened", line.chip)
+        assertTrue(line.detail.endsWith("Restart the PC, then open Clash of Clans."))
+        assertTrue(line.counts)
+        assertNull(line.fix)
+    }
+
+    @Test
+    fun `a full-screen window is amber and says how to leave full screen`() {
+        val status = WindowStatus(checked = true, window = window(1920, 1080).copy(fullscreen = true), surface = SurfaceSize(1920, 1080))
+        val line = PcChecklist.gameWindow(status)
+        assertEquals(Tone.WARN, line.tone)
+        assertEquals("Full screen", line.chip)
+        assertEquals("Clash of Clans is full screen. Turn full screen off in Google Play Games so the bot can size the window.", line.detail)
+        assertNull(line.fix)
+    }
+
+    @Test
+    fun `Windows 10 gets an amber line outside the count, Windows 11 none`() {
+        val ten = PcChecklist.windowsVersion(PcInfo(19045, gpgInstalled = true, clashInstalled = true))!!
+        assertEquals("windows", ten.key)
+        assertEquals(Tone.WARN, ten.tone)
+        assertEquals("Windows 10", ten.chip)
+        assertTrue(ten.detail.contains("yellow frame"))
+        assertFalse(ten.counts)
+        assertNull(ten.fix)
+        assertNull(PcChecklist.windowsVersion(PcInfo(22000, gpgInstalled = true, clashInstalled = true)))
+        assertNull(PcChecklist.windowsVersion(PcInfo(26300, gpgInstalled = true, clashInstalled = true)))
+        assertNull(PcChecklist.windowsVersion(null))
     }
 
     @Test

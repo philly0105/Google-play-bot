@@ -32,7 +32,7 @@ class LatestFrame(private val scope: CoroutineScope) {
     /** Called with every successful capture before the caller may recycle [bitmap]. */
     fun offer(bitmap: Bitmap, atMs: Long) {
         val account = accountId
-        val scaled = runCatching { Bitmap.createScaledBitmap(bitmap, WIDTH, HEIGHT, true) }.getOrNull() ?: return
+        val scaled = runCatching { Bitmap.createScaledBitmap(bitmap, WIDTH, heightFor(bitmap.width, bitmap.height), true) }.getOrNull() ?: return
         this.scaled = Scaled(scaled, atMs)
         scope.launch(Dispatchers.Default) {
             runCatching {
@@ -51,5 +51,12 @@ class LatestFrame(private val scope: CoroutineScope) {
     companion object {
         const val WIDTH = 480
         const val HEIGHT = 216
+
+        /**
+         * Desktop: the copy's height at [WIDTH] wide, keeping the frame's shape. The phone's
+         * 1600x720 gives [HEIGHT]; a 1740x978 game window gives 270, not a squashed 216.
+         */
+        fun heightFor(width: Int, height: Int): Int =
+            if (width <= 0 || height <= 0) HEIGHT else maxOf(1, Math.round(WIDTH.toDouble() * height / width).toInt())
     }
 }

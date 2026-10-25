@@ -49,6 +49,10 @@ lines use, and for the three rows marked "New object" a short KDoc and the `obje
 | `service/RunNotice.kt` | `deviceGuard`'s text without a reason reads "The run ended at home to save the battery". | As above. |
 | Tests: `insight/EventTextTest.kt`, `TimelineTest.kt`, `ProblemsTest.kt`, `CalibrationHealthTest.kt`, `ui/SetupChecklistTest.kt` | The assertions on the lines above take their PC wording; `EventTextTest` adds cases for each new `stopLine` branch. | They assert the phone's text the rows above change. |
 | `resources/remote.html` | The supervised button reads "Supervised attack" (its `data-label` too), an HTTP error reads "The PC answered", the screen-off and locked lines say "The PC", and the earlier-lines note points to "the Activity tab in Clash Farmer on the PC". | The page opens on the user's phone but talks about the farming machine, which is the PC; the app calls the one-attack run "supervised attack" everywhere else. The screen-off and locked lines cannot show on the PC today, but now read right if they do. The battery line already hides when the PC sends no level. |
+| `insight/EventText.kt` | Added a sentence for `clash_launch_failed`, after `surface_resize_failed`. `stopLine` gains four branches before "screenshot capture failed", for `SidecarGameSurface.FRAMES_STOPPED`, `FarmerService.CLASH_REOPENED`, `FarmerService.PC_ASLEEP` and `FarmerService.PC_LOCKED_AT_START`. | `FarmerService` logs `clash_launch_failed` when starting Clash through Google Play Games fails (Setup's Open, Resume, a run), and `EventTextTest` requires a sentence for every logged event. `clean` lowercases all-caps words, so without the branches "PC" would read "pc", and the frames-stopped reason would read as a failed screenshot. |
+| `service/LatestFrame.kt` | `offer` scales the copy to `WIDTH` wide and `heightFor(width, height)` high, the frame's own shape, in place of a fixed 480x216. | The phone's frames were all 1600x720, 2.22:1. The PC's are 1740x978 or 1860x1162, which 480x216 squashed by a quarter in the dashboard, the remote page and every failure snapshot. A 1600x720 frame still gives 480x216. |
+| `app/src/main/resources/remote.html` | The live frame's `onload` sets its box's `aspect-ratio` to the image's own size. The CSS default of 2.22 stays until the first frame loads. | The box was fixed at the phone's 2.22:1, so the PC's 16:9 and 16:10 frames were letterboxed or cut. |
+| `core/AtomicFile.kt` (new, PC only), `core/PresetStore.kt`, `core/StorageStore.kt`, `core/BuilderStore.kt`, `service/PendingStart.kt` (`PendingStartStore.write`), `recognition/PhoneProfile.kt` (`saveToFile`) | Each store's rename of its temp file over the target, with delete-then-rename when it failed, is now `AtomicFile.replace`: a move with `ATOMIC_MOVE` and `REPLACE_EXISTING`, falling back to `REPLACE_EXISTING` alone. `saveToFile` keeps its copy fallback when the move throws. A failed move now fails the save (`PresetStore` and `PendingStartStore` return false, `BuilderStore` false, `StorageStore` throws to `LocalRunner`, which logs `storage_save_failed`), where a failed second rename was silent before. | On Windows `File.renameTo` never replaces an existing file, so every save after the first went through the delete, and a crash or power cut between the delete and the rename lost the presets, the balances, the builder count, a start set for later or a calibration. The move replaces in place. |
 
 ## Shims and platform differences
 
@@ -120,8 +124,16 @@ below.
   - Display and lock: `currentDisplayViewport` is the game surface's size, kept while the window
     is minimized and null with no window. `isDeviceUnlocked` is always true, and
     `getSystemService(Context.POWER_SERVICE)` gives a PowerManager whose `isInteractive` is always
-    true. A locked or sleeping PC is left to the captures: one that fails stops or recovers the
-    run. Whether capture fails on a locked PC, rather than returning black frames, is untested.
+    true. A locked PC or a dark display is read from the captures, as the phone's screen-off
+    receiver was: Windows Graphics Capture stops sending frames, so the sidecar's newest frame
+    grows old. When a frame is 10 s old or a capture times out, `SidecarGameSurface` asks the
+    sidecar's `sessionState`, and only a locked session or a display that is off fails the
+    capture with `FRAMES_STOPPED` ("The PC was locked or the screen turned off, so the game
+    stopped updating."). A still village, an unlocked PC or a state Windows does not report
+    delivers the frame, so a quiet screen never stops a run. `farmRestarting`'s recover gives up
+    on that reason, so the run ends rather than restarting into the same dark screen. Whether
+    Windows stops the frames on lock and display-off, rather than sending black ones, is
+    untested live.
   - Surface size: the run guard holds each run to the profile's size, as the phone did, but a PC
     window can be resized by hand or open at another size. `fitSurface` runs after
     `ensureClashForeground` wherever a run token follows (the account check, the switch-only run,
@@ -155,8 +167,13 @@ below.
     open, and a second launch may bring Clash to the front. A launch that throws stops the start.
     A window closed by hand (the sidecar's `visible` false) stops the start with `CLASH_CLOSED`
     and launches nothing: the game runs on hidden, and a launch then is the relaunch that broke
-    input. The wait for the read to name Clash is gone, since the window read already does;
-    `awaitClashRead` stays for `ClashReadTest`. The blank-frame wait is the phone's.
+    input. A window the watcher saw shown, then hidden, then shown again by the same Google Play
+    Games process (`WindowStatus.reopenedInRunningVm`) is that relaunch done by hand: the start stops
+    with `CLASH_REOPENED`, before and after the wait for the window, and launches nothing. The
+    wait for the read to name Clash is gone, since the window read already does;
+    `awaitClashRead` stays for `ClashReadTest`. The blank-frame wait is the phone's. A launch that
+    fails logs `clash_launch_failed` with `at` "run", and the wait's timeout reads "The game did
+    not open within N seconds. Open Clash of Clans from Google Play Games and try again."
   - Home: `performGlobalAction(GLOBAL_ACTION_HOME)`, used only by the takeover wait, does nothing
     and returns true, as Android did on dispatch. The phone put Clash in the background without
     stopping it; on the PC Clash stays on the takeover dialog, the reopening after the wait finds
@@ -166,8 +183,16 @@ below.
   - Keeping awake: the phone held no wake lock and set no keep-screen-on flag, but a PC left alone
     sleeps. Each run job (`startCombinedRun`, `startSwitchOnly`, `startGuardedAccountSession`, the
     legacy `startFarming`) calls `host.keepAwake(true)` as it starts, and `keepAwake(false)` goes
-    out when the last one ends, on a scope `onDestroy` does not cancel. A start set for later and
-    Inspect do not hold the PC awake.
+    out when the last one ends, on a scope `onDestroy` does not cancel. A start set for later
+    holds the same keep-awake, system and display, from `scheduleStart` until it fires, is
+    cancelled or refused, or `onDestroy` (`awakeForStart`): the start is a coroutine delay, a PC
+    left alone sleeps through it, and a dark display would stop the run at its first look
+    (`FRAMES_STOPPED`). At fire it lets go only after the run has taken its own hold, so the
+    screen gets no gap to go dark. A start woken late refuses with `PC_ASLEEP` ("The PC was
+    asleep at the start time") in place of `PendingStart`'s phone wording, and one that finds
+    the sidecar's `sessionState` locked or dark refuses with `PC_LOCKED_AT_START`, before the
+    phone's screen and lock checks, which pass on the PC. `firePendingStart` is now a suspend
+    function for that call. Inspect does not hold the PC awake.
   - Leaving the app: `captureClashGame` and `captureNormalizedVillage` keep
     `returnToActivityClass` and ignore it, with no helper screen to reopen. `captureClashGame` no
     longer waits for Clash to fill the display: the PC has no status bar or rotation to wait out.
@@ -178,7 +203,7 @@ below.
     wait, since the call suspends. Its new `source` parameter, "notification" by default, goes in
     the `pause_button` line and the hold's reason; the dashboard's Resume passes "dashboard".
   - Left out: `onAccessibilityEvent`, `announcedForegroundPackage`, `onInterrupt`, the screen-off
-    receiver (Windows has no matching broadcast; a sleeping PC fails the next capture instead),
+    receiver (the frames-stopped check under Display and lock takes its place),
     the notification control receiver, `awaitImmersiveClash`, `clashCoversDisplay`,
     `IMMERSIVE_WAIT_MS` and `CLASH_READ_WAIT_MS`.
   - Added for the copied callers, in place of Android members: `packageName`
@@ -187,8 +212,17 @@ below.
     `app/src/main/resources`, for `AccountSwitcher`'s identity images and `remote.html`);
     `getSystemService(name)` and `performGlobalAction(action)`, above.
   - Every call to `RunNotifier` and `FarmerOverlay` is kept.
-    Failures only the PC has (keeping awake, the Resume launch, Setup's launch) print to
-    `System.err`, since `insight/EventText.kt` describes no event for them.
+    A failed keep-awake prints to `System.err`. A failed launch (Setup's, Resume's or a run's)
+    logs `clash_launch_failed`, which `insight/EventText.kt` now describes (table above), and
+    the window watcher shows it on Setup's Game window line until a window appears.
+  - Failure snapshots: `saveFailureSnapshot` writes the phone's scaled copy, now at the frame's
+    shape (`LatestFrame` above), and beside it `<name>-full.png`, one fresh capture of the game
+    window at its real size, waited for up to 5 s and skipped when the window is minimized,
+    closed or gone. The phone never captured for a snapshot because of Android's screenshot rate
+    limit; the PC has none. It is the screen just after the failure, possibly after a recovery
+    pressed Back, not the frame the failing step read; it gives the detail the 480-wide copy
+    loses. Both files count toward the failure snapshots `StorageRetention` keeps, so a failure
+    with both takes two of its ten places.
   - A start set for later checks its plan through `ComposerState.readiness` rather than
     `RunPlan.readiness`, so a refused calibration reaches its notice in Run's words, not the
     validator's, which name anchors and ROIs.

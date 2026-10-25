@@ -155,4 +155,71 @@ class SidecarTest {
         second.ok(request) { put("ac", true).put("batteryPercent", -1).put("saver", false) }
         assertEquals(PowerState(ac = true, batteryPercent = -1, saver = false), power.await())
     }
+
+    @Test
+    fun `capture reads the frame's age, and an older sidecar's frame as new`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        val aged = async(Dispatchers.Default) { sidecar.capture() }
+        fake.ok(fake.next(), byteArrayOf(1, 2, 3, 0)) { put("width", 1).put("height", 1).put("timestampMs", 5L).put("ageMs", 12_345L) }
+        assertEquals(12_345L, aged.await().ageMs)
+        val older = async(Dispatchers.Default) { sidecar.capture() }
+        fake.ok(fake.next(), byteArrayOf(1, 2, 3, 0)) { put("width", 1).put("height", 1).put("timestampMs", 5L) }
+        assertEquals(0L, older.await().ageMs)
+    }
+
+    @Test
+    fun `find reads the window's process and full screen, and an older reply without them`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        fun JSONObject.window() = put("found", true).put("top", 1).put("game", 2).put("title", "Clash of Clans")
+            .put("iconic", false).put("width", 1740).put("height", 978).put("foreground", false).put("monitorDpi", 120)
+        val full = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window().put("ownerPid", 4321).put("ownerStartedMs", 1_700_000_000_000L).put("fullscreen", true) }
+        val window = full.await()!!
+        assertEquals(4321L, window.ownerPid)
+        assertEquals(1_700_000_000_000L, window.ownerStartedMs)
+        assertTrue(window.fullscreen)
+        val unknown = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window().put("ownerPid", 4321).put("ownerStartedMs", JSONObject.NULL) }
+        assertEquals(null, unknown.await()!!.ownerStartedMs)
+        val older = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window() }
+        val old = older.await()!!
+        assertEquals(null, old.ownerPid)
+        assertFalse(old.fullscreen)
+    }
+
+    @Test
+    fun `sessionState reads the lock and the display, null where Windows doesn't say`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        val locked = async(Dispatchers.Default) { sidecar.sessionState() }
+        val request = fake.next()
+        assertEquals("sessionState", request.op)
+        fake.ok(request) { put("locked", true).put("displayOn", JSONObject.NULL) }
+        val state = locked.await()
+        assertEquals(SessionState(locked = true, displayOn = null), state)
+        assertTrue(state.framesStopped)
+        assertTrue(SessionState(locked = false, displayOn = false).framesStopped)
+        assertFalse(SessionState(locked = false, displayOn = true).framesStopped)
+        assertFalse(SessionState(locked = null, displayOn = null).framesStopped)
+    }
+
+    @Test
+    fun `pcInfo reads the Windows build and what is installed`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        val info = async(Dispatchers.Default) { sidecar.pcInfo() }
+        val request = fake.next()
+        assertEquals("pcInfo", request.op)
+        fake.ok(request) { put("osBuild", 19045).put("gpgInstalled", true).put("clashInstalled", false) }
+        assertEquals(PcInfo(osBuild = 19045, gpgInstalled = true, clashInstalled = false), info.await())
+
+        // A shortcut scan that could not finish leaves Clash unknown.
+        val unknown = async(Dispatchers.Default) { sidecar.pcInfo() }
+        val again = fake.next()
+        fake.ok(again) { put("osBuild", 22631).put("gpgInstalled", true).put("clashInstalled", JSONObject.NULL) }
+        assertEquals(PcInfo(osBuild = 22631, gpgInstalled = true, clashInstalled = null), unknown.await())
+    }
 }

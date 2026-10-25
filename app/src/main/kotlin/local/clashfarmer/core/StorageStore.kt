@@ -22,10 +22,7 @@ class StorageStore(root: File) {
         root.put(accountId, JSONObject().put("at", reading.atMs).put("values", values))
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeText(root.toString())
-        if (!tmp.renameTo(file)) {
-            file.delete()
-            tmp.renameTo(file)
-        }
+        AtomicFile.replace(tmp, file) // Desktop: renameTo never replaces on Windows.
     }
 
     /**

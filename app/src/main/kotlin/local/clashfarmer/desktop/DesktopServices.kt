@@ -30,7 +30,7 @@ class DesktopServices(val filesDir: File, sidecarExe: File) : AutoCloseable {
     val log: (String) -> Unit = DesktopLog(File(filesDir, "logs/desktop.log"))::write
 
     val sidecar = Sidecar.launching(sidecarExe, log)
-    private val watcher = ClashWindowWatcher({ sidecar.find() }).also { it.start(scope) }
+    private val watcher = ClashWindowWatcher({ sidecar.find() }, pcInfo = { sidecar.pcInfo() }).also { it.start(scope) }
     val host: ClashHost = SidecarClashHost(sidecar, watcher)
     val surface: GameSurface = SidecarGameSurface(sidecar, scope, log)
 

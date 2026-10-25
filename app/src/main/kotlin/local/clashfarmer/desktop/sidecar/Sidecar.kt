@@ -48,7 +48,10 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
             foreground = json.getBoolean("foreground"),
             monitorDpi = json.getInt("monitorDpi"),
             // A sidecar from before the field answers without it.
-            visible = json.optBoolean("visible", true)
+            visible = json.optBoolean("visible", true),
+            ownerPid = json.optLongOrNull("ownerPid"),
+            ownerStartedMs = json.optLongOrNull("ownerStartedMs"),
+            fullscreen = json.optBoolean("fullscreen", false)
         )
     }
 
@@ -64,7 +67,8 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
         if (reply.payload.size != width * height * 4) {
             throw SidecarException("failed", "Frame of ${reply.payload.size} bytes for ${width}x$height")
         }
-        return Frame(width, height, reply.json.getLong("timestampMs"), bgraToArgb(reply.payload))
+        // A sidecar from before the field sends no age; its frames count as new.
+        return Frame(width, height, reply.json.getLong("timestampMs"), bgraToArgb(reply.payload), reply.json.optLong("ageMs", 0))
     }
 
     /** One finger along [strokes] in turn; returns once the button is up. */
@@ -127,6 +131,17 @@ class Sidecar(private val connect: () -> SidecarConnection) : AutoCloseable {
         } finally {
             awake = on
         }
+    }
+
+    /** Whether the PC is locked and the display on; null where Windows doesn't say. */
+    suspend fun sessionState(): SessionState {
+        val json = request("sessionState").json
+        return SessionState(json.optBooleanOrNull("locked"), json.optBooleanOrNull("displayOn"))
+    }
+
+    suspend fun pcInfo(): PcInfo {
+        val json = request("pcInfo").json
+        return PcInfo(json.getInt("osBuild"), json.getBoolean("gpgInstalled"), json.optBooleanOrNull("clashInstalled"))
     }
 
     suspend fun input(): InputState {
@@ -198,11 +213,27 @@ data class ClashWindow(
     val height: Int,
     val foreground: Boolean,
     val monitorDpi: Int,
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    val ownerPid: Long? = null,
+    val ownerStartedMs: Long? = null,
+    val fullscreen: Boolean = false
 )
 
-/** [pixels] are ARGB, top row first, the layout Android's Bitmap keeps. [timestampMs] is Unix ms. */
-class Frame(val width: Int, val height: Int, val timestampMs: Long, val pixels: IntArray)
+/**
+ * [pixels] are ARGB, top row first, the layout Android's Bitmap keeps. [timestampMs] is Unix ms,
+ * when Windows last sent the window's picture; [ageMs] is how long before the capture that was.
+ * Windows sends a picture only when the window changes, so a still game's frames grow old too.
+ */
+class Frame(val width: Int, val height: Int, val timestampMs: Long, val pixels: IntArray, val ageMs: Long = 0)
+
+/** Null where Windows doesn't say, which counts as neither locked nor dark. */
+data class SessionState(val locked: Boolean?, val displayOn: Boolean?) {
+    /** Windows sends the game's picture to nobody while the PC is locked or its display is off. */
+    val framesStopped: Boolean get() = locked == true || displayOn == false
+}
+
+/** [osBuild] 22000 and later is Windows 11. [clashInstalled] is null when the sidecar could not tell. */
+data class PcInfo(val osBuild: Int, val gpgInstalled: Boolean, val clashInstalled: Boolean?)
 
 /** Points are game surface pixels. A tap is a stroke whose two ends are the same point. */
 data class Stroke(val fromX: Int, val fromY: Int, val toX: Int, val toY: Int, val ms: Long)
@@ -226,3 +257,7 @@ internal fun bgraToArgb(bgra: ByteArray): IntArray {
 }
 
 private const val OPAQUE = 0xFF shl 24
+
+private fun JSONObject.optLongOrNull(name: String): Long? = if (isNull(name)) null else getLong(name)
+
+private fun JSONObject.optBooleanOrNull(name: String): Boolean? = if (isNull(name)) null else getBoolean(name)

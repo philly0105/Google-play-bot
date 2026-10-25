@@ -39,6 +39,7 @@ Error codes:
 | `minimized` | The window is minimized and the request said not to restore it. |
 | `closed` | The window was closed by hand: Google Play Games hid it and the game still runs. |
 | `timeout` | No frame arrived in time. |
+| `not_installed` | `launch` found no Google Play Games on this PC. |
 | `bad_request` | Unknown op or a missing argument. |
 | `failed` | Anything else; `error` says what. |
 
@@ -63,12 +64,22 @@ window), and `monitorDpi`. `visible` is false once the window was closed by hand
 hides it and keeps the game running, and a launch then is the relaunch that broke input
 (`docs/gpg-spike.md`, Restarting).
 
+Also `ownerPid` and `ownerStartedMs` (the process that owns the window and when it started, Unix
+ms; null when Windows won't say), so the app can tell the same game process showing its window
+again from a new one, and `fullscreen` (the window has no title bar, is not maximized, and its
+frame covers its whole monitor; a maximized window under a taskbar that hides itself covers it
+too, so it never counts).
+
 ### `capture`
 
 Arguments: `restore` (default true), `timeoutMs` (default 3000).
 
-Returns `width`, `height` and `timestampMs` (Unix ms when the frame arrived), with the frame as the
-payload: BGRA, top row first, no padding between rows.
+Returns `width`, `height`, `timestampMs` (Unix ms when the frame arrived) and `ageMs` (how long
+ago that was), with the frame as the payload: BGRA, top row first, no padding between rows.
+
+An old frame means the window stood still, or the PC locked or turned its display off and Windows
+stopped sending frames. The app tells which with `sessionState`: a still village is never a reason
+to stop.
 
 The sidecar keeps one capture session per window and takes every frame as it arrives, so the
 newest frame is always current. Windows Graphics Capture sends a frame only when the window
@@ -127,6 +138,7 @@ Arguments: `url`. Opens it through the shell, as `Start-Process` does. Clash's U
 `googleplaygames://launch/?id=com.supercell.clashofclans&lid=1&pid=1`. Google Play Games may bring
 its window to the front. The app sends it only when there is no Clash window: a relaunch into the
 running VM broke posted input (`docs/gpg-spike.md`, Restarting). There is no op to close Clash.
+Fails with `not_installed` when the `googleplaygames:` URL scheme is not registered.
 
 ### `power`
 
@@ -136,6 +148,21 @@ Returns `ac` (plugged in), `batteryPercent` (-1 when unknown) and `saver` (batte
 
 Arguments: `on`. While on, Windows keeps the system and the display awake through power requests
 held by the sidecar. They lapse when it exits.
+
+### `sessionState`
+
+Returns `locked` (the session is locked) and `displayOn` (false while the display is off; dimmed
+counts as on). Either is null when Windows has not said. The lock comes from
+`WTSQuerySessionInformationW` (`WTSSessionInfoEx`), of which only `Level` and `SessionFlags` are
+read. The display state comes from a `GUID_CONSOLE_DISPLAY_STATE` notification the sidecar
+registers at start.
+
+### `pcInfo`
+
+Returns `osBuild` (Windows build; below 22000 is Windows 10), `gpgInstalled` (the
+`googleplaygames:` URL scheme is registered) and `clashInstalled` (a Start menu shortcut launches
+Clash of Clans through Google Play Games). The shortcut scan skips folders it may not read;
+`clashInstalled` is null when it looked at 2000 shortcuts without finding Clash's or failed.
 
 ### `input`
 

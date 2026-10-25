@@ -2,7 +2,9 @@ package local.clashfarmer.desktop.platform
 
 import kotlinx.coroutines.flow.StateFlow
 import local.clashfarmer.desktop.sidecar.PowerState
+import local.clashfarmer.desktop.sidecar.SessionState
 import local.clashfarmer.desktop.sidecar.Sidecar
+import local.clashfarmer.desktop.sidecar.SidecarException
 import local.clashfarmer.desktop.sidecar.SurfaceSize
 
 /**
@@ -27,12 +29,30 @@ interface ClashHost {
 
     /** Holds the system and the display awake while [on]. */
     suspend fun keepAwake(on: Boolean)
+
+    /** Whether the PC is locked and its display on; null when that can't be read. */
+    suspend fun sessionState(): SessionState? = null
 }
 
-class SidecarClashHost(private val sidecar: Sidecar, watcher: ClashWindowWatcher) : ClashHost {
+class SidecarClashHost(private val sidecar: Sidecar, private val watcher: ClashWindowWatcher) : ClashHost {
     override val window: StateFlow<WindowStatus> = watcher.status
 
-    override suspend fun launch() = sidecar.launch(CLASH_URL)
+    /** A failure is kept on the window status too, so Setup can say what went wrong. */
+    override suspend fun launch() {
+        try {
+            sidecar.launch(CLASH_URL)
+        } catch (e: SidecarException) {
+            watcher.launchResult(e.message ?: e.code)
+            throw e
+        }
+        watcher.launchResult(null)
+    }
+
+    override suspend fun sessionState(): SessionState? = try {
+        sidecar.sessionState()
+    } catch (e: SidecarException) {
+        null
+    }
 
     override suspend fun resize(width: Int, height: Int): SurfaceSize = sidecar.resize(width, height)
 

@@ -78,10 +78,7 @@ class PresetStore(root: File) {
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeText(root.toString())
-        if (!tmp.renameTo(file)) {
-            file.delete()
-            tmp.renameTo(file)
-        }
+        AtomicFile.replace(tmp, file) // Desktop: renameTo never replaces on Windows.
     }.isSuccess
 
     companion object {

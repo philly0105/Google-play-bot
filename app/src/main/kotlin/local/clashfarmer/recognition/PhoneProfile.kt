@@ -252,12 +252,12 @@ data class PhoneProfile(
         file.parentFile?.mkdirs()
         val tempFile = File(file.parentFile, "${file.name}.tmp")
         tempFile.writeText(toJson())
-        if (!tempFile.renameTo(file)) {
-            file.delete()
-            if (!tempFile.renameTo(file)) {
-                tempFile.copyTo(file, overwrite = true)
-                tempFile.delete()
-            }
+        // Desktop: renameTo never replaces on Windows, so the move replaces in place.
+        try {
+            local.clashfarmer.core.AtomicFile.replace(tempFile, file)
+        } catch (e: java.io.IOException) {
+            tempFile.copyTo(file, overwrite = true)
+            tempFile.delete()
         }
     }
 

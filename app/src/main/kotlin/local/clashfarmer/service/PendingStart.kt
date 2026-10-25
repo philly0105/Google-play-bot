@@ -86,10 +86,7 @@ class PendingStartStore(root: File) {
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeText(start.toJson().toString())
-        if (!tmp.renameTo(file)) {
-            file.delete()
-            tmp.renameTo(file)
-        }
+        local.clashfarmer.core.AtomicFile.replace(tmp, file) // Desktop: renameTo never replaces on Windows.
     }.isSuccess
 
     fun clear() {

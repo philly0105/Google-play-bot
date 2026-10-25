@@ -77,6 +77,8 @@ class FarmerService(
         private const val HEALTH_REFRESH_MS = 30_000L
         /** Desktop: how long a start waits for a window lookup that worked before it decides to launch Clash. */
         private const val WINDOW_LOOKUP_WAIT_MS = 10_000L
+        /** Desktop: how long a failure snapshot waits for its full-size capture. */
+        private const val FULL_SNAPSHOT_WAIT_MS = 5_000L
         /** Desktop: how far a surface's aspect may stray from its profile's and still count as the same. */
         private const val SAME_ASPECT_TOLERANCE = 0.01
         /** Desktop: how long a resize waits for the window watcher, which looks every 500 ms, to see it. */
@@ -84,6 +86,13 @@ class FarmerService(
         /** Desktop: why a start stops when the Clash window was closed by hand. */
         const val CLASH_CLOSED = "The Clash window was closed, and Google Play Games keeps the game running hidden. " +
             "Opening it again stops the bot's taps from reaching the game, so restart the PC, then start again."
+        /** Desktop: why a start stops when the Clash window was opened again into the game left running. */
+        const val CLASH_REOPENED = "The Clash window was opened again while Google Play Games kept the game running, " +
+            "so the bot's taps would not reach the game. Restart the PC, then start again."
+        /** Desktop: a start set for later woken late; PendingStart's own reason names the phone. */
+        const val PC_ASLEEP = "The PC was asleep at the start time"
+        /** Desktop: a start set for later that found the PC locked or its screen off, so the game sent no picture. */
+        const val PC_LOCKED_AT_START = "The PC was locked or its screen was off at the start time. Leave it unlocked with the screen on"
 
         /** Why a start is refused while Inspect or the tray check holds Clash on screen. */
         const val INSPECTING = "The app is reading the game screen for Inspect or the tray check; try again when it ends"
@@ -500,6 +509,7 @@ class FarmerService(
             }
             pendingStart = start
             pendingStore.write(start)
+            awakeForStart = true
             pendingJob = serviceScope.launch {
                 // The delay does not count while the phone sleeps, so the wall clock is reread
                 // at least every slice of awake time; firePendingStart refuses a start woken late.
@@ -514,6 +524,7 @@ class FarmerService(
                 firePendingStart(start)
             }
         }
+        sendKeepAwake()
         overlay?.updateStatus("${start.label} starts at ${clockTime(atMs)}")
     }
 
@@ -522,7 +533,7 @@ class FarmerService(
         dropPendingStart("You cancelled it", notify = false)
     }
 
-    private fun firePendingStart(start: PendingStart) {
+    private suspend fun firePendingStart(start: PendingStart) {
         synchronized(pendingLock) {
             // A service replaced without being destroyed leaves its start to the new one's report.
             if (replaced || pendingStart !== start) return
@@ -531,7 +542,10 @@ class FarmerService(
             pendingStore.clear()
         }
         try {
-            PendingStart.lateProblem(start.atMs, System.currentTimeMillis())?.let { throw IllegalStateException(it) }
+            // Desktop: the phone's reason names the phone.
+            PendingStart.lateProblem(start.atMs, System.currentTimeMillis())?.let { throw IllegalStateException(PC_ASLEEP) }
+            // Desktop: the two checks below read Android and pass on the PC; this one reads Windows.
+            pcProblemAtStart()?.let { throw IllegalStateException(it) }
             val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
             if (power?.isInteractive != true) throw IllegalStateException("The phone's screen is off")
             if (!isDeviceUnlocked()) throw IllegalStateException("The phone is locked")
@@ -562,8 +576,22 @@ class FarmerService(
             runCatching { local.clashfarmer.core.PresetStore(filesDir).setLast(start.asSet) }
         } catch (e: Exception) {
             refusePendingStart(start, e.message ?: "It could not start", notify = true)
+        } finally {
+            // Desktop: let go only now, so a run that started holds the PC itself first and the
+            // screen never gets the chance to go dark in between.
+            awakeForStart = false
+            sendKeepAwake()
         }
     }
+
+    /**
+     * Desktop: why a start set for later can't run on the PC now, or null. Windows sends no
+     * picture of the game while the PC is locked or its screen is off, so a run started then
+     * would stop at its first look; it is refused instead with a reason the user can act on. A
+     * state the sidecar can't read lets the start go ahead, as before.
+     */
+    internal suspend fun pcProblemAtStart(): String? =
+        if (host.sessionState()?.framesStopped == true) PC_LOCKED_AT_START else null
 
     /** Cancels the start set for later, if there is one, and logs why. */
     private fun dropPendingStart(reason: String, notify: Boolean) {
@@ -577,6 +605,8 @@ class FarmerService(
             pendingStore.clear()
             pending
         }
+        awakeForStart = false
+        sendKeepAwake()
         refusePendingStart(start, reason, notify)
     }
 
@@ -651,7 +681,7 @@ class FarmerService(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    System.err.println("FarmerService: starting Clash for Resume failed: ${e.message}")
+                    AppLog.log("clash_launch_failed", "at" to source, "error" to e.message)
                 }
             }
             delay(RESUME_AFTER_MS)
@@ -689,7 +719,7 @@ class FarmerService(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                System.err.println("FarmerService: starting Clash from Setup failed: ${e.message}")
+                AppLog.log("clash_launch_failed", "at" to "setup", "error" to e.message)
             }
         }
     }
@@ -707,7 +737,14 @@ class FarmerService(
 
     /**
      * Writes the newest frame the run already captured to files/captures as a PNG, for a failure
-     * named [event]. Never takes a capture: the frame is LatestFrame's scaled copy (480x216).
+     * named [event]: LatestFrame's scaled copy, 480 wide at the frame's shape.
+     *
+     * Desktop: also writes one fresh capture of the game window at its real size next to it, as
+     * `<name>-full.png`: the screen just after the failure, up to a few seconds later and possibly
+     * after a recovery has moved on, not the frame the failing step read. It shows the full detail
+     * the small copy loses. It is skipped when the window is minimized, closed or gone, and when
+     * the capture does not come within a few seconds. Both files count toward the failure
+     * snapshots StorageRetention keeps, so a failure with both takes two of its places.
      */
     fun saveFailureSnapshot(event: String) {
         val frame = latestFrame.scaled ?: return
@@ -723,11 +760,44 @@ class FarmerService(
                 java.io.FileOutputStream(File(dir, name)).use {
                     frame.bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                 }
-                AppLog.log("failure_snapshot", "trigger" to event, "file" to "captures/$name")
+                val fullName = name.removeSuffix(".png") + "-full.png"
+                val full = captureFullFrame()?.let { bitmap ->
+                    try {
+                        java.io.FileOutputStream(File(dir, fullName)).use {
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                        "captures/$fullName"
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+                AppLog.log("failure_snapshot", "trigger" to event, "file" to "captures/$name", "full" to full)
             } catch (e: Exception) {
                 AppLog.log("failure_snapshot_failed", "trigger" to event, "error" to e.message)
             }
         }
+    }
+
+    /**
+     * Desktop: one capture of the game window at its real size for a failure snapshot, or null
+     * when the window is not on screen or the capture fails or takes longer than
+     * [FULL_SNAPSHOT_WAIT_MS]. A bitmap that comes after that is recycled.
+     */
+    private suspend fun captureFullFrame(): android.graphics.Bitmap? {
+        val window = host.window.value.window ?: return null
+        if (window.iconic || !window.visible) return null
+        val answer = kotlinx.coroutines.CompletableDeferred<android.graphics.Bitmap?>()
+        surface.takeScreenshot(object : local.clashfarmer.desktop.platform.ScreenshotCallback {
+            override fun onSuccess(bitmap: android.graphics.Bitmap) {
+                if (!answer.complete(bitmap)) bitmap.recycle()
+            }
+
+            override fun onFailure(message: String, retryable: Boolean) {
+                answer.complete(null)
+            }
+        })
+        return withTimeoutOrNull(FULL_SNAPSHOT_WAIT_MS) { answer.await() }
+            ?: run { answer.complete(null); null }
     }
 
     /** Desktop: the battery as [refreshDeviceHealth] last read it. */
@@ -1352,6 +1422,11 @@ class FarmerService(
                     } else 0
                 },
                 recover = { reason, restart, remaining ->
+                    // Desktop: the capture's failure is a locked PC or a dark display, which ends
+                    // the run as the phone's screen turning off did; a recovery could not see.
+                    if (reason.contains(local.clashfarmer.desktop.platform.SidecarGameSurface.FRAMES_STOPPED)) {
+                        throw StopException(reason)
+                    }
                     resuming = true
                     // A combined run's counter goes on from where it stood, not from the new session.
                     val context = AppLog.runContextSnapshot()
@@ -1831,25 +1906,30 @@ class FarmerService(
         // Desktop: a window closed by hand is hidden with the game still running. It sends no
         // frames, and starting Clash now is the relaunch that broke input (docs/gpg-spike.md).
         if (host.window.value.window?.visible == false) throw StopException(CLASH_CLOSED)
+        // Desktop: a window opened again into the game left running takes no posted input either.
+        if (host.window.value.reopenedInRunningVm) throw StopException(CLASH_REOPENED)
         if (getActiveForegroundPackage() != CLASH_PACKAGE) {
             try {
                 host.launch()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
+                AppLog.log("clash_launch_failed", "at" to "run", "error" to e.message)
                 throw StopException("Clash of Clans could not be started through Google Play Games: ${e.message}")
             }
         }
 
         while (getActiveForegroundPackage() != CLASH_PACKAGE) {
             if (System.currentTimeMillis() >= deadline) {
+                // Desktop: the phone named its package and helper screen, which mean nothing here.
                 throw StopException(
-                    "Timed out waiting for Clash of Clans ($CLASH_PACKAGE) to enter foreground " +
-                        "(read: ${getActiveForegroundPackage()}, helper on screen: $helperActivityVisible)"
+                    "The game did not open within ${timeoutMs / 1000} seconds. Open Clash of Clans from Google Play Games and try again."
                 )
             }
             delay(500)
         }
+        // Desktop: the start above may have shown the hidden window again in the running game.
+        if (host.window.value.reopenedInRunningVm) throw StopException(CLASH_REOPENED)
 
         // Desktop: the phone waited here for the window read to name Clash (awaitClashRead) once
         // its helper screen had gone. The loop above already has.
@@ -1998,6 +2078,9 @@ class FarmerService(
         // A busy destroy keeps the file for the next connect to report: stop() posts its own
         // notice on the same id, which would hide this one.
         if (!isBusy) dropPendingStart("The helper service shut down", notify = true)
+        // Desktop: a start kept on file for the next connect no longer holds the PC awake.
+        awakeForStart = false
+        sendKeepAwake()
         stop("Service destroyed")
         // The ongoing notice shares one id across services; a replaced one leaves the new one's.
         if (!replaced) notifier?.cancelLive()
@@ -2069,11 +2152,21 @@ class FarmerService(
         }
     }
 
-    /** Desktop: tells [host] what [awakeRuns] wants now, one call at a time, so the last call sent is the current want. */
+    /**
+     * Desktop: true from [scheduleStart] until its start has fired or been dropped. A start set
+     * for later holds the system and the display awake as a run does: the PC's idle sleep would
+     * make it late, and Windows sends no picture of the game once the screen goes dark, which
+     * the run would stop on (SidecarGameSurface.FRAMES_STOPPED). The phone held nothing and was
+     * refused when its screen was off at the start time.
+     */
+    @Volatile
+    private var awakeForStart = false
+
+    /** Desktop: tells [host] what [awakeRuns] and [awakeForStart] want now, one call at a time, so the last call sent is the current want. */
     private fun sendKeepAwake() {
         awakeScope.launch {
             awakeLock.withLock {
-                val on = awakeRuns.get() > 0
+                val on = awakeRuns.get() > 0 || awakeForStart
                 try {
                     host.keepAwake(on)
                 } catch (e: kotlinx.coroutines.CancellationException) {
