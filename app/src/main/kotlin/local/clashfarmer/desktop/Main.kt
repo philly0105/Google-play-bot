@@ -31,7 +31,8 @@ import java.io.PrintStream
 import javax.swing.SwingUtilities
 
 /**
- * Starts the PC services and FarmerService, then the window, the tray icon and the status panel.
+ * Starts the PC services and FarmerService, then the window, the tray icon and the status panel,
+ * which stays hidden until the tray turns it on.
  * Closing the window leaves the bot running behind the tray icon, as the phone's service outlived
  * its screen; the tray's Quit stops any run, shuts the service down and ends the sidecar. Without
  * a notification area, closing the window quits.
@@ -55,7 +56,8 @@ fun main() {
         val trayState = rememberTrayState()
         var windowOpen by remember { mutableStateOf(true) }
         var raise by remember { mutableIntStateOf(0) }
-        var panelShown by remember { mutableStateOf(true) }
+        // The status panel starts hidden; the tray's Status panel turns it on for this launch.
+        var panelShown by remember { mutableStateOf(false) }
         var toldAboutTray by remember { mutableStateOf(false) }
         val quit = {
             controller.close()

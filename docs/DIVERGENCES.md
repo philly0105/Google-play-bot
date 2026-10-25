@@ -198,7 +198,8 @@ below.
   publish a `Panel` that `desktop/ui/StatusPanel.kt` draws as an always-on-top window that never
   takes focus, in the bottom right corner of the main screen. It shows only while a run is busy or
   a start is set: the phone's idle "Ready" pill would sit over every window, and the tray icon opens
-  the app instead. The card's folded state is kept per launch, not in preferences, and
+  the app instead. It also stays hidden until the tray's Status panel is ticked, which starts
+  unticked at every launch, since the user found the pill in the way. The card's folded state is kept per launch, not in preferences, and
   `hideForCapture` only runs its action, since the capture is of the Clash window alone.
   `OverlayGeometry` is verbatim (phone lines 492-533). `StatusBubble` and `PauseGlyph` are drawn in
   Compose in `StatusPanel.kt`.

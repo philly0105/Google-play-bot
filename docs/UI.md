@@ -137,8 +137,9 @@ screen, and says so in a notification the first time. Quit stops any run and end
 no notification area, closing the window quits.
 
 `StatusPanel.kt` draws `FarmerOverlay.panel` as a window over the others in the bottom right
-corner of the main screen, while a run is busy or a start is set. It never takes focus and has no
-taskbar button.
+corner of the main screen, while a run is busy or a start is set and the tray's Status panel is
+ticked. That item starts unticked at every launch, since the user found the pill in the way. The
+panel never takes focus and has no taskbar button.
 
 ## Changes from the phone
 
@@ -289,5 +290,6 @@ of main at b514d40):
 - The remote link on the clipboard can be kept by Windows clipboard history or cloud clipboard.
   Android marked the clip sensitive; Java has no such mark.
 - Every screen draws off-screen without a layout failure. The window has run on this PC since 24
-  October, and runs posted their notifications through the tray, but nobody has looked at the tray
-  icon or the status panel (which shows only during a run) on the screen.
+  October, and runs posted their notifications through the tray. The user has seen the status
+  panel's pill during a run, but nobody has checked the tray icon or the panel's open card on the
+  screen.
