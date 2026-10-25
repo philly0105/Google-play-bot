@@ -1,0 +1,214 @@
+# PC screen geometry
+
+The phone bot finds and taps Clash's screens at fractions or pixels of 1600x720. This file lists
+where those positions fall on the PC's frames, the PC value this branch adds where the phone's
+misses, and what still needs a live capture. Every PC value sits behind `PcGeometry.isPc`, so
+nothing changes at 1600x720 and the copied phone tests are untouched.
+
+Code paths are relative to `app/src/main/kotlin/local/clashfarmer/`. Evidence is in
+`audit-evidence/`, which is gitignored and exists only in the main checkout. In the tables, `geo-x`
+stands for `audit-evidence/spike/geo-x.json` and its `.png`, and `live-x` for the fixture
+`app/src/test/resources/pc-frames/live-x.json`, whose source is listed under Tests.
+
+All positions are frame pixels. After a relaunch, posted taps have landed 35-75 px above their aim.
+That is the input transport's problem and doesn't change these values. The calibration profile's
+positions, such as deploy points, troop cards and the profile's ROIs, are out of scope.
+
+## Which frames are the PC
+
+`PcGeometry.isPc(viewport)` is true when the frame is landscape and its width over its height is at
+least 1.3 and under 2.0. Every phone size in the tests is 2.15:1 or wider, or portrait. The PC
+frames seen so far:
+
+| Frame | Aspect | Seen |
+| --- | --- | --- |
+| 1740x978 | 1.779 | the spike and all four supervised runs |
+| 1920x1080 | 1.778 | a fresh start, per main's `docs/gpg-spike.md` |
+| 1280x720 | 1.778 | a 1680x765 window, before the runs resized it |
+| 1860x1162 | 1.601 | after a relaunch |
+| 1565x978 | 1.600 | 1740x978 requested on the 16:10 surface |
+
+The game keeps its launch aspect through a resize, so a PC frame can be 16:9 or 16:10 and the code
+assumes neither. RunGuardTest's 1920x1080 mismatch case only compares sizes and still holds. A 20:9
+frame caught mid-resize gets the phone's values, and RunGuard stops input on it.
+
+## Placing a PC value
+
+A PC value is a position in pixels of 1740x978. On a frame `W` wide and `H` high, with
+`s = H / 978`:
+
+| Kind | Placed at |
+| --- | --- |
+| length | `round(v * s)` |
+| x kept from the left, LEFT | `left + round(x * s)` |
+| x kept from the right, RIGHT | `right - round((1740 - x) * s)` |
+| x kept from the centre, CENTRE | `left + W / 2 + round((x - 870) * s)` |
+| y | `top + round(y * s)` |
+
+HUD items keep their distance from their edge, scaled by the height. That is the spike's H/858 rule
+inside the phone's 55 px inset, restated at 1740x978. Centred panels and popups keep their offset
+from the centre. A y needs no anchor, since the height sets the scale. At 16:9 the three anchors
+agree within 1.5 px. At 16:10 LEFT and RIGHT put the same value 207 px apart at 1860x1162 and 175 px
+apart at 1565x978.
+
+The HUD at 16:10 follows the rule within 5 px:
+
+| Word | Anchor | 1740x978 | 1860x1162 placed | 1860x1162 read | 1565x978 placed | 1565x978 found |
+| --- | --- | --- | --- | --- | --- | --- |
+| Battle | LEFT | (97,939) | (115,1116) | (114,1111) | (97,939) | (96,939) |
+| Blood | LEFT | (181,77) | (215,91) | (217,90) | | |
+| Build | RIGHT | (1646,939) | (1748,1116) | (1744,1112) | (1471,939) | (1470,939) |
+| SHOP | RIGHT | (1661,520) | (1766,618) | (1766,616) | | |
+| 0/6 | RIGHT | (1609,789) | (1704,937) | (1706,937) | (1434,789) | (1433,789) |
+
+The 1860x1162 reads are OCR on `live-1860-village`, and on `live-1860-counter` for 0/6. The
+1565x978 positions were found by image correlation on
+`audit-evidence/live/20261024-025818-resize/1740x978-got-1565x978.png`, which has no OCR. On
+`audit-evidence/live/20261024-162829-resize/1280x720-got-1280x720.png`, Battle, Build and 0/6 sit
+within 1.5 px of the rule.
+
+Measured from phone pixels to pixels at 1740x978, the HUD scales by 1.14 from its edge, the upgrade
+list's rows by 1.10, the army screen by 1.185 about the centre, the quit prompt by about 1.13 and
+the result screen by 978/720 = 1.358 about the centre. A selected building's buttons keep the
+phone's pixel size. Where a screen is not captured, "the model" below is the phone's position
+scaled by one of these about the phone's centre (800,360) and placed about (870,489).
+
+No list, army or result screen has been captured at 16:10. Clash may scale a centred screen there
+by the height, which is what CENTRE does, or by the width, W/1740, which is 1.069 at 1860x1162 and
+0.899 at 1565x978. PcGeometryTest checks the army and result screens both ways. The height is
+likelier, since the HUD follows it.
+
+## Values this branch adds
+
+The phone's value still applies at 1600x720 in every row.
+
+| File | Constant | Phone | PC value | Evidence |
+| --- | --- | --- | --- | --- |
+| `recognition/ScreenTargets.kt` | `builderCounterPoint` | (1430,553) | (1609,789), RIGHT | The 0/6 box on `geo-home` centres there. The phone's fractions give (1555,751), outside the box. At 16:10 the placed point lands inside the box on `live-1860-counter` and on the 1565x978 image. |
+| `recognition/ScreenTargets.kt` | `upgradeListClosePoint` | (1520,28) | (1711,28), RIGHT | The list's X is [1690,10,1732,47] on `geo-list-top` and [1690,10,1730,45] on `geo-list-scroll1`. The phone's (1653,38) misses it. At 1860x1162 the rule puts the X at x 1801-1850 and the point at (1826,33), by the model only. |
+| `recognition/ScreenTargets.kt` | `upgradePopupRegion`, list panel | x 1118-1545, y 60-625 | (1272,63,1740,873), RIGHT | The list is a full-height panel. Its rows run x 1283-1738, y 61-856 on the three `geo-list-*` frames. |
+| `recognition/ScreenTargets.kt` | `RELOAD_BUTTON` | x 0.3-0.7, y 0.78-1.0 | x 0.25-0.75, y 0.5-1.0, fractions | Android's idle dialog draws RELOAD GAME at (578,545), fraction (0.332,0.557), on `live-1740-idle`, and at (651,660), fraction (0.350,0.568), on `live-1860-idle`. Both sit above the phone's band. The supervised runs tapped (578,545) three times, each followed by `takeover_reloaded`. |
+| `recognition/ScreenTargets.kt` | `isOwnOverlay` | the top-left 600x105 | off | The PC's panel is a window of its own that the capture never holds. Clash's name, clan and scout loot sit in that corner. |
+| `core/Builders.kt` | `PC_CORNER` | x 0.872-0.956, y 0.729-0.803 | (1569,756,1723,816), RIGHT | On `geo-home` the builders' 0/6 centres at (0.925,0.807), below the phone's band, and the goblin's 0/1 at x 1680, past the band's right edge at 1664. |
+| `core/Builders.kt` | `PC_CORNER_BUILDERS_LEFT` | 1450 of 1600 | 1632, RIGHT | The builders' 0/6 starts at x 1576 and the goblin's 0/1 at 1651. |
+| `core/UpgradeListNavigator.kt` | `upgradeListCardShowing` | left 1118 and flush 1500 of 1600, top 60 and bottom 625 of 720 | left 1272 and flush 1694, RIGHT; top 63, bottom 873 | Prices end at x 1708-1738. The village's balances end by 1678, and by 1783 at 1860x1162. With the phone's flush line at 1631, every village capture passed for an open list. The phone's top and bottom fall at y 81 and 849, inside the rows at 61-856. |
+| `core/WallPanel.kt` | `PC_BUTTON_PITCH` | 143 of 1600 wide | 140, a length | A selected building's labels centre at x 592, 732, 872 and 1152 on `geo-selected`, 140 apart. The phone's formula gives 155. |
+| `core/WallPanel.kt` | `priceRegions` | half-width 75 of 1600, from 95 to 35 of 720 above the label | half-width 75, from 86 to 26 above the label, lengths, estimated | The PC's buttons keep the phone's pixel size, and the PC label's top sits about 76 px under its button's top where the phone's sat 81-85. No purchase button has been read on the PC. |
+| `core/CollectionPolicy.kt` | `PC_CORNER_LEFT` | 0.39 | 679, LEFT | The event bar ends at x 636 on `geo-home` and on the 1565x978 image. There the phone's fraction falls at 610, inside the bar's "<". |
+| `recognition/ArmyRecipes.kt` | `MY_ARMY_LABEL` | x 0.15-0.35, y 0.03-0.14 | x 0.12-0.34, y 0.08-0.22 | The tab label [333,121,474,159] centres at (0.232,0.143) on `geo-army`, below the phone's band. |
+| `recognition/ArmyRecipes.kt` | `SAVED_RECIPES_LABEL` | x 0.40-0.60, y 0.03-0.14 | x 0.39-0.61, y 0.08-0.22 | The tab label [773,123,966,161] centres at (0.499,0.145). |
+| `recognition/ArmyRecipes.kt` | `BUTTON_COLUMN` | x 0.80-0.89, y 0.14-1.0 | x 0.80-0.95, y 0.14-1.0, estimated | Use centres at x 0.876 on `geo-recipes`, inside both. Kept from the centre at 1860x1162 it moves to 0.918. |
+| `recognition/ArmyRecipes.kt` | `BOOST_ROW` | x 0.55-0.85, y 0.12-0.26 | x 0.55-0.90, y 0.12-0.30, estimated | The boosts read at (1212,210) and (1428,210) on `geo-army`. At 16:10 "HeRoes" moves to x 0.857 by the height, or to y 0.264 by the width. |
+| `recognition/ArmyRecipes.kt` | `PC_TITLE_COLUMN` | 240 of 1600 | 197, CENTRE | Card titles start at x 209-210 on `geo-recipes`, and the phone's line at 261 counted every one as stray. 197 keeps the phone's 11 px gap, scaled. |
+| `recognition/ArmyRecipes.kt` | `PC_TITLE_LEFT_MIN` | 160 of 1600 | 112, CENTRE, estimated | The phone's line catches a title with the drag handle merged in, which starts near x 175. 112 is the phone's 160 moved by the model at 1.185. No merged title has been read on the PC. |
+| `recognition/ArmyRecipes.kt` | `PC_USE_CENTRE_MIN` | 170 of 720 | 264 of 978 | Boost Heroes ends at y 247 on `geo-myarmy`, and the first Use centres at 277 on `geo-recipes`. The phone's line falls at 231, above Boost Heroes' end. |
+| `recognition/ArmyRecipes.kt` | `listSwipe` | (1080,600) to (1080,300) of 1600x720 | (1202,773) to (1202,418), CENTRE, estimated | The cards are 296 px apart. The phone's fractions drag 407 px, 1.375 cards, and 355 px drags 1.2. The PC's distance is not measured. |
+| `recognition/UpgradeListReader.kt` | `PC_ICON_COLUMN` | 50 | 80, a length | Level badges such as "se" [1292,175,1336,210] and "20" [1285,595,1344,623] end up to 72 px into the panel. With 50 they joined the names after them, "Giant Bomb x 8" and "Hero Hunter Poison Effect". |
+| `recognition/UpgradeListReader.kt` | `PC_COIN_COLUMN` | a sample 30 px past the price | 1696, RIGHT | The coin's yellow is at x 1708-1724 on `geo-list-end`. OCR returns it as a "0" from x 1699 or 1702, or runs a price on to 1734. The phone's sample missed the coin on 5 of 9 priced cards, and the column finds gold on all 9. |
+| `recognition/UpgradeListReader.kt` | `CARD_LINE_GAP` on the PC | 32 | 32, a length, estimated | Second lines sit 22-29 px under their names at 1740x978. Moved to 1860x1162 by the model that is 27-34 px, and a fixed 32 would split three captured cards. |
+
+## Phone values that hold
+
+| File | Constant | Evidence | Verdict |
+| --- | --- | --- | --- |
+| `recognition/ScreenTargets.kt` | `RESULT_BUTTON`, `RESULT_COLUMN`, `BUTTON_SPREAD` | On `live-1740-result`, RetURN centres at (0.501,0.843) and Home at y 0.870, with the result words above. All four runs pressed Return Home at (872,851). Moved about the centre to 16:10, both ways, Return Home stays in the band. | holds |
+| `recognition/ScreenTargets.kt` | `HOME_ATTACK` | Battle at (0.056,0.960), and (0.061,0.956) on `live-1860-village`. | holds |
+| `recognition/ScreenTargets.kt` | `NEXT_BUTTON`, `SURRENDER_BUTTON` | Next at (1641,723) and End Battle at (105,767) on `geo-scout`, fractions (0.943,0.739) and (0.060,0.784). Surrender itself is not captured. | holds |
+| `recognition/ScreenTargets.kt` | `SEARCH_BUTTON`, `SEARCH_TITLE`, `CONFIRM_BUTTON` | By the model only. The quit prompt's OkaY sits at (0.590,0.618), inside `CONFIRM_BUTTON`. | holds by the model |
+| `recognition/ScreenTargets.kt` | `isBuilderPanel` | The list's title reads at (1504,28). | holds |
+| `recognition/ScreenTargets.kt` | `laboratoryColumnRegion` | Calls `upgradePopupRegion` with no boxes, so it gets the phone's popup region. | not captured |
+| `core/Builders.kt` | `COUNTER_*` | The top-bar fallback. No PC capture reads a count there. | holds |
+| `core/Builders.kt` | `DIALOG`, `GEM_BUTTON`, `CLOSE_CORNER` | By the model only. At 16:10 by the height with 1.358, the busy dialog's X would sit at x 0.726, past `CLOSE_CORNER`'s 0.719. A miss presses Back. | holds by the model, thin at 16:10 |
+| `core/WallPanel.kt` | `BAND`, the 76/100 filter | "TowN Hall (Level18)" and INfO read inside the band on `geo-selected`. The button labels start at y 804, below the 76% line at 743. | holds |
+| `recognition/ArmyRecipes.kt` | `TITLE_LEFT_MAX`, `LIST_TOP` | The tab label starts at x 333 against the line at 330.6, and its top at 121 against 129. | holds, thin |
+| `recognition/ArmyRecipes.kt` | `USE_GAP`, `USE_SLACK` | Uses sit 53-55 px apart, 0.054-0.056 of the height, inside 0.035-0.097. The slack is 5.4 px on boxes 32-37 px tall. | holds |
+| `recognition/UpgradeListReader.kt` | `PRICE_EDGE` | The earliest price end, x 1708, clears the line at 1695 by 13 px. At 1860x1162 by the model the margin is 7 px. | holds, thin at 16:10 |
+| `core/CollectionPolicy.kt` | `BALANCES` | The gold bar starts 43 px right of the line at 1740x978, about 6 px at 1860x1162 and 7 px at 1565x978, from images. A RIGHT value of 1375 would restore the margin and was not made. | holds, thin at 16:10 |
+| `core/CollectionPolicy.kt` | `CORNERS_TOP` | The globe button at x 315-400 starts at y 782, 30 px above the line at 812, so a collection tap in that strip could hit it. | holds, thin |
+| `core/CollectionPolicy.kt` | `CORNER_RIGHT`, `OVERLAY`, `PANEL` | The book starts at x 0.836, right of the line at 0.74. The name and clan end at x 271, y 118. The panel reads open on `geo-selected` and `geo-home-4` only. | holds |
+| `core/CameraRegistration.kt` | the window, `MAX_DIFFERENCE` | The shield countdown overlaps the window's top-right corner by 28x29 px at 1740x978 and 50x29 px at 1565x978, of about 1251x503. | holds |
+| `core/PopupGuard.kt` | `DIALOG`, `BUTTON`, `SHOP_CORNER`, `ATTACK_CORNER` | The idle dialog at (0.341,0.442). The Star Bonus notice's OkaY at (0.505,0.839). Build at (0.946,0.960) and Battle as above. | holds |
+| `core/PopupGuard.kt` | `CLOSE_CORNER`, `CHEST_TAP_LABEL`, `CHEST_X`, `CHEST_Y`, `CHEST_RARITY` | By the model only. `CHEST_RARITY` is thin. | holds by the model |
+| `core/PopupGuard.kt` | `CHEST_CONTINUE`, `BUBBLE`, `MAX_LINE_GAP` | The model misses `CHEST_CONTINUE` at 1.10, and at 1.185 by the width at 16:10. A miss taps nothing. No speech bubble has been captured. | not captured |
+| `recognition/HeroCards.kt` | `SEARCH_ABOVE`, `SEARCH_GAP` | A hero's bar sits 19-32 px above its card at 1740x978 by the model, inside 40. At 1860x1162 that is 23-38 px. | holds at 16:9, not captured at 16:10 |
+| `core/AndroidWallDevice.kt`, `core/WallRunner.kt`, `core/WallPanel.kt` | the wall flow's regions and drifts | Blood's walls are maxed, so the bulk panel, its confirm and a Wall card's price have never shown on the PC. | not captured |
+
+`accounts/AccountIdentityParser.kt` reads text only, apart from `parsePickerRows`, which the PC
+never reaches because calib-scale refuses account switches on the PC.
+
+## Spelling fixes
+
+The PC's OCR reads a few words differently. `core/Policy.kt` and `recognition/ScreenTargets.kt` take
+these as well:
+
+- `QUIT_BODY` takes "Che" for "the", from "Do you want Go quit Che game?" on `geo-after-deselect`.
+- `QUIT_TITLE` takes "Exi+" for "Exit", from "CONfiRM Exi+" on the same frame.
+- `BATTLE_READS` and the HOME rules in `STATE_RULES` take "baftle", from `geo-after-deselect`, and
+  "batfle", from six frames at 1860x1162.
+
+## Handled outside this branch
+
+These belong to calib-scale or the main session, and this branch doesn't touch them:
+
+- `accounts/AccountSwitcher.kt`, `PhoneProfile.withTroopCard` and
+  `desktop/ui/calibration/CalibrationTargets.kt`.
+- The tray badge read, `ScreenReader.readTrayBadge` and `AttackPlanner`'s badge band.
+- `BattleResultReader`, `BattleDamage`, `core/RatePrompt.kt`, `core/StarBonusNotice.kt` and
+  `LocalRunner.observeSettled`. calib-scale's result row lengths agree with 978/720 within 3 px, and
+  its first star is exact. By the width at 16:10 they would come out about 11% too large.
+
+`AccountSwitcher` calls `returnHomeTarget` with `Point(800, 624)` as its calibrated anchor. On a PC
+frame that sits at (0.46,0.638), outside `RESULT_BUTTON`, so `returnHomeTarget` drops it and falls
+back to the RetURN box. That fails safe. The PC's equivalent is the phone point moved by 1.358 about
+the centre, `PcGeometry.point(viewport, 870, 848, Anchor.CENTRE)`, inside the green button at
+x 759-984, y 799-888 on `live-1740-result`.
+
+## Readers that still fail
+
+1. The builders' counter reads as "0/6" on only 2 of 39 village frames, `geo-home` and
+   `live-1860-counter`. The goblin's "0/1" reads on none. It needs a second, upscaled read of
+   `PC_CORNER`, as `AndroidWallDevice` does with `observeRegion(scale = 3)`.
+2. Countdown misreads such as "8H", "10 9H", "Gd 9H", "4d0", "40M 0s" and "Id B8H" pass for prices
+   on rows in progress, never on Wall rows. `isCountdown` needs a looser pattern that takes an
+   upper-case H or M on its own, I, B, S and G for digits, and missing spaces.
+3. A second line "983", 27 px under "ElixiR CollectoR x 7" on `geo-list-end`, joins the name. A Wall
+   row's count still parses, since `WALL_ROW` stops at the space.
+4. A replay's end screen at 1860x1162 has RetuRN and HoMe at the bottom left, so it reads as RESULT
+   with no Return Home target. The bot never watches replays.
+
+## Tests
+
+`app/src/test/kotlin/local/clashfarmer/desktop/PcGeometryTest.kt` replays the captures above. The
+`geo-*` fixtures are byte copies of `audit-evidence/spike/`. The `live-*` fixtures come from:
+
+| Fixture | Source |
+| --- | --- |
+| `live-1740-idle` | `audit-evidence/live/20261024-134731-profile2/00-home.json` |
+| `live-1740-result` | `audit-evidence/live/20261024-165200-result/1792886045068.json` |
+| `live-1860-idle` | `audit-evidence/live/20261024-031222-focuscheck/0-before.json` |
+| `live-1860-home` | `audit-evidence/live/20261024-030816-profile/00-home.json` |
+| `live-1860-village` | `audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.json` |
+| `live-1860-counter` | `audit-evidence/live/20261024-034034-dragmeasure/4a-right150.json` |
+
+Some inputs are built in the test rather than captured. The 1565x978 HUD boxes come from the image
+by correlation. The 16:10 list, army and result screens are the 1740x978 captures moved by the
+model. The Wall rows are `geo-list-end` with two countdowns removed and two names changed to
+"Wall x 9" and "Wall x 80".
+
+## Still needs live captures
+
+| Capture | Settles |
+| --- | --- |
+| the army screen and recipes at 16:10 | the height or the width, and the army values marked estimated |
+| the upgrade list at 16:10, and how far a swipe scrolls it | the panel, `CARD_LINE_GAP`, the coin column, both list swipes |
+| a result at 16:10, and a defeat | `RESULT_*` and calib-scale's result lengths |
+| a selected building at 16:10 | `PC_BUTTON_PITCH` |
+| a Clash popup with an X, and "All builders are busy!" | `CLOSE_CORNER` in `PopupGuard` and `Builders`, and `Builders`' other regions |
+| the takeover and connection-lost dialogs | `RELOAD_BUTTON` for Clash's own Reload |
+| Surrender and its confirm dialog | `SURRENDER_BUTTON`, `CONFIRM_BUTTON` |
+| matchmaking with its OCR kept | `SEARCH_BUTTON`, `SEARCH_TITLE` |
+| the reward chest, if the PC shows one | the `CHEST_*` values |
+| a speech bubble | `BUBBLE`, `MAX_LINE_GAP` |
+| the heroes at 16:10 | `HeroCards` |
+| the laboratory | `laboratoryColumnRegion` |
+| the bulk wall panel, its confirm and a Wall card | the wall flow; not possible while Blood's walls are maxed |
