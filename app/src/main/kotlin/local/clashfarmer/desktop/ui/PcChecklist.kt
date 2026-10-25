@@ -1,13 +1,15 @@
 package local.clashfarmer.desktop.ui
 
+import local.clashfarmer.accounts.AccountRecord
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.screens.CheckLine
 import local.clashfarmer.ui.screens.SetupChecklist
 
 /**
- * Setup's two lines about this PC, in place of the phone's accessibility and notification lines.
- * Pure, so their rules run in JVM tests. They are [CheckLine]s like the rest, so
+ * Setup's two lines about this PC, in place of the phone's accessibility and notification lines,
+ * and the account's line about its identity. Pure, so their rules run in JVM tests. They are [CheckLine]s like the rest, so
  * [SetupChecklist.ready], badge and primaryFix count them as they counted the phone's.
  */
 object PcChecklist {
@@ -51,4 +53,21 @@ object PcChecklist {
         if (supported) CheckLine(TRAY_ICON, "Tray icon", "Runs can show their status and stop button.", "On", Tone.OK)
         else CheckLine(TRAY_ICON, "Tray icon", "Runs cannot show their status or stop button in the notification area.",
             "Off", Tone.WARN)
+
+    const val ACCOUNT = "account_identity"
+
+    /**
+     * Whether the bot has read [account] off Clash's Settings ([PcAccount]); [enrolled] is null
+     * before the files are read. Until it has, only a supervised run can start, so the line is
+     * amber. No fix: the read is part of a run, which the person starts from Run.
+     */
+    fun account(account: AccountRecord, enrolled: Boolean?): CheckLine = when (enrolled) {
+        null -> CheckLine(ACCOUNT, "Account", "Checking whether the bot has read your account.",
+            SetupChecklist.chip(Tone.NEUTRAL), Tone.NEUTRAL, counts = false)
+        false -> CheckLine(ACCOUNT, "Account",
+            "Not read yet. The first supervised attack opens Clash's Settings to read your village name and tag. " +
+                "Other runs wait until then.", "Not read", Tone.WARN)
+        true -> CheckLine(ACCOUNT, "Account",
+            "Each run checks that Clash's Settings shows ${account.villageName} before it starts.", "Read", Tone.OK)
+    }
 }

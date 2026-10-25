@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.accounts.AccountStore
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.core.BuilderReading
 import local.clashfarmer.core.BuilderStore
 import local.clashfarmer.core.DeviceHealth
@@ -82,6 +83,8 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     /** Builder readings and profile save times: files, loaded on IO and kept 30 s. */
     private var builders: Map<String, BuilderReading?> by mutableStateOf(emptyMap())
     private var savedAt: Map<String, Long> by mutableStateOf(emptyMap())
+    /** Whether each account has its identity template ([PcAccount]); empty until the files are read. */
+    private var enrolled: Map<String, Boolean> by mutableStateOf(emptyMap())
     private var filesAtMs = 0L
     private var filesFor: List<String>? = null
     private var loading = false
@@ -197,7 +200,9 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         accounts.forEach { (account, lines) ->
             key(account.id) {
                 val id = account.id
-                SectionHeader("${account.displayName} · ${account.playerTag}", action = "Edit settings",
+                // The tag only once the bot has read it off Settings; before that it is a placeholder.
+                val title = if (enrolled[id] == true) "${account.displayName} · ${account.playerTag}" else account.displayName
+                SectionHeader(title, action = "Edit settings",
                     actionEnabled = !trayCheckRunning) { editAccount(id) }
                 Card {
                     lines.forEach { LineRow(it, busy) }
@@ -261,8 +266,9 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         )
         val findings = health(state)
         val accounts = state.accounts.map { account ->
-            account to SetupChecklist.account(account, state.profiles[account.id], findings[account.id].orEmpty(),
-                state.profileError.takeIf { account.id == state.selectedId }, builders[account.id], nowMs)
+            account to listOf(PcChecklist.account(account, enrolled[account.id])) +
+                SetupChecklist.account(account, state.profiles[account.id], findings[account.id].orEmpty(),
+                    state.profileError.takeIf { account.id == state.selectedId }, builders[account.id], nowMs)
         }
         return Checklist(machineLines, accounts)
     }
@@ -322,7 +328,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         )
     }
 
-    /** Builder readings and profile save times on IO; the rows redraw from them when done. */
+    /** Builder readings, profile save times and identity templates on IO; the rows redraw from them when done. */
     private fun loadFiles(force: Boolean) {
         val state = this.state ?: return
         val ids = state.accounts.map { it.id }
@@ -339,7 +345,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                     val saved = ids.mapNotNull { id ->
                         runCatching { accountStore.profileFile(id).takeIf { it.exists() }?.lastModified() }.getOrNull()?.let { id to it }
                     }.toMap()
-                    readings to saved
+                    Triple(readings, saved, ids.associateWith { PcAccount.enrolled(files, it) })
                 }
             }.getOrNull()
             // runCatching also catches cancellation; a closed window's state must not be touched.
@@ -350,6 +356,7 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             if (loaded != null) {
                 builders = loaded.first
                 savedAt = loaded.second
+                enrolled = loaded.third
             }
         }
     }

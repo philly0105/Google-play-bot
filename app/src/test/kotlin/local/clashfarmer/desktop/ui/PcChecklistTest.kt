@@ -1,5 +1,7 @@
 package local.clashfarmer.desktop.ui
 
+import local.clashfarmer.accounts.AccountRecord
+import local.clashfarmer.accounts.PcAccount
 import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.sidecar.SurfaceSize
@@ -118,6 +120,32 @@ class PcChecklistTest {
         assertEquals(1 to 2, SetupChecklist.ready(lines))
         assertEquals(TabBadge(0, Tone.WARN), SetupChecklist.badge(lines))
         assertEquals("game_window", SetupChecklist.primaryFix(lines)?.key)
+    }
+
+    @Test
+    fun `an account not read yet is amber, says what reads it, and offers no fix`() {
+        val fresh = AccountRecord(PcAccount.ID, PcAccount.FRESH_VILLAGE_NAME, PcAccount.FRESH_SUPERCELL_NAME, PcAccount.FRESH_PLAYER_TAG)
+        val unread = PcChecklist.account(fresh, enrolled = false)
+        assertEquals("account_identity", unread.key)
+        assertEquals(Tone.WARN, unread.tone)
+        assertEquals("Not read", unread.chip)
+        assertTrue(unread.detail.contains("first supervised attack"))
+        assertFalse(unread.detail.contains(PcAccount.FRESH_PLAYER_TAG))
+        assertTrue(unread.counts)
+        assertNull(unread.fix)
+        val unknown = PcChecklist.account(fresh, enrolled = null)
+        assertEquals(Tone.NEUTRAL, unknown.tone)
+        assertFalse(unknown.counts)
+    }
+
+    @Test
+    fun `a read account is green and named by its village`() {
+        val line = PcChecklist.account(AccountRecord(PcAccount.ID, "Farmland", "Someone", "#TEST2468"), enrolled = true)
+        assertEquals(Tone.OK, line.tone)
+        assertEquals("Read", line.chip)
+        assertTrue(line.detail.contains("Farmland"))
+        assertFalse(line.detail.contains("#TEST2468"))
+        assertEquals(1 to 1, SetupChecklist.ready(listOf(line)))
     }
 
     @Test
