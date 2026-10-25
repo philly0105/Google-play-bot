@@ -279,7 +279,32 @@ class PcProfilesTest {
         } catch (e: StopException) {
             assertTrue(e.message!!, e.message!!.contains("Calibrate"))
         }
-        assertEquals(null, PcProfiles.surfaceProblem(SurfaceSize(1280, 720)))
+        assertEquals(null, PcProfiles.surfaceProblem(SurfaceSize(1280, 720), resized = false))
+    }
+
+    @Test
+    fun aSmallAreaIsToldToGrowTheWindowUnlessTheBotsResizeWasCapped() {
+        fun stop(surface: SurfaceSize): String = try {
+            PcProfiles.derive(calibrated, surface, emptySet())
+            fail("a ${surface.width}x${surface.height} area should be refused")
+            ""
+        } catch (e: StopException) {
+            e.message!!
+        }
+        // A 16:9 area under 720 rows is all the monitor held when the run sized it to 1740x978.
+        val capped = stop(SurfaceSize(1245, 700))
+        assertEquals("Clash's game area is 1245x700, too small for the bot to read. " +
+            "Move the Clash window to a larger screen, then start again.", capped)
+        // A run leaves a 16:10 area at the window's own size, so a larger window is the fix.
+        val left = stop(SurfaceSize(1120, 700))
+        assertEquals("Clash's game area is 1120x700, too small for the bot to read. Make the Clash window larger or " +
+            "maximize it so the game area is at least 720 pixels tall, then try again. If it is maximized already, " +
+            "move it to a larger screen.", left)
+        assertEquals(capped, PcProfiles.surfaceProblem(SurfaceSize(1245, 700), resized = true))
+        assertEquals(left, PcProfiles.surfaceProblem(SurfaceSize(1120, 700), resized = false))
+        // Captures for Calibrate, Inspect and the tray check size only a 16:9 area.
+        assertTrue(PcProfiles.captureResizes(SurfaceSize(1245, 700)))
+        assertFalse(PcProfiles.captureResizes(SurfaceSize(1120, 700)))
     }
 
     @Test
@@ -322,7 +347,7 @@ class PcProfilesTest {
         // A 1366x768 laptop's work area under its taskbar, with GPG's chrome taken off, is under 720 rows.
         val laptop = PcProfiles.fitInside(want, SurfaceSize(1350, 700))
         assertEquals(SurfaceSize(1245, 700), laptop)
-        assertTrue(PcProfiles.surfaceProblem(laptop)!!.contains("too small"))
+        assertTrue(PcProfiles.surfaceProblem(laptop, resized = true)!!.contains("too small"))
     }
 
     @Test

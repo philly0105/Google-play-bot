@@ -161,6 +161,8 @@ class PcChecklistTest {
         assertEquals(Tone.BAD, small.tone)
         assertEquals("Can't run", small.chip)
         assertTrue(small.detail, small.detail.contains("too small for the bot to read"))
+        // The run sizes this shape, and the monitor holds no more: only a larger screen helps.
+        assertTrue(small.detail, small.detail.endsWith("Move the Clash window to a larger screen, then start again."))
         val square = compared(1000, 1000)
         assertEquals(Tone.BAD, square.tone)
         assertTrue(square.detail, square.detail.contains("a shape the bot can't work with"))
@@ -183,6 +185,9 @@ class PcChecklistTest {
         assertEquals(Tone.BAD, line.tone)
         assertEquals("Can't run", line.chip)
         assertTrue(line.detail, line.detail.contains("1120x700, too small for the bot to read"))
+        // A run leaves this shape at the window's own size, so a larger window is the fix.
+        assertTrue(line.detail, line.detail.endsWith("Make the Clash window larger or maximize it so the game area is " +
+            "at least 720 pixels tall, then try again. If it is maximized already, move it to a larger screen."))
     }
 
     @Test

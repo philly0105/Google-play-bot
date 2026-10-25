@@ -77,7 +77,9 @@ object TrayCheckSheet {
     internal fun profileAt(profile: PhoneProfile, width: Int, height: Int): Pair<PhoneProfile, String?> = try {
         PcProfiles.derive(profile, SurfaceSize(width, height), emptySet()) to null
     } catch (e: StopException) {
-        profile to e.message
+        // The frame is as the capture sized it, which is not always as a run would.
+        val frame = SurfaceSize(width, height)
+        profile to (PcProfiles.surfaceProblem(frame, PcProfiles.captureResizes(frame)) ?: e.message)
     }
 
     /**

@@ -72,7 +72,7 @@ internal object StarterProfile {
     fun sizeFor(frame: SurfaceSize?, current: PhoneProfile, starter: PhoneProfile): SurfaceSize {
         if (frame != null) return frame
         val edited = SurfaceSize(current.resolutionWidth, current.resolutionHeight)
-        return if (PcProfiles.surfaceProblem(edited) == null) edited
+        return if (saveProblem(current) == null) edited
         else SurfaceSize(starter.resolutionWidth, starter.resolutionHeight)
     }
 

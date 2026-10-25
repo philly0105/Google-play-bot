@@ -144,7 +144,8 @@ object PcChecklist {
         val shape = PcProfiles.shape(surface.width, surface.height)
         val calibratedShape = PcProfiles.shape(profile.resolutionWidth, profile.resolutionHeight)
         fun line(detail: String, chip: String, tone: Tone) = CheckLine(GAME_WINDOW, "Game window", detail, chip, tone)
-        PcProfiles.surfaceProblem(run)?.let { return line("Found. $it", "Can't run", Tone.BAD) }
+        val resized = PcProfiles.sameAspect(surface.width, surface.height, profile.resolutionWidth, profile.resolutionHeight)
+        PcProfiles.surfaceProblem(run, resized)?.let { return line("Found. $it", "Can't run", Tone.BAD) }
         return when {
             PcProfiles.sameAspect(run.width, run.height, profile.resolutionWidth, profile.resolutionHeight) -> when {
                 // A calibration moved before it was verified can't earn verification there.
