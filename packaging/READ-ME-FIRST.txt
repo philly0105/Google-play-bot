@@ -30,7 +30,9 @@ First run
 ---------
 1. Open Clash of Clans in Google Play Games.
 2. In Clash Farmer, open Setup and fix anything it marks in red or amber.
-3. Calibrate when Setup asks you to.
+3. Calibrate when Setup asks you to. Press "Start from the standard positions", then check
+   each troop card against your own battle tray, press "Not in my army" on any hero or spell
+   you don't have, and press "Save calibration".
 4. Start one supervised attack and watch it all the way through before you leave it alone.
 
 Closing the window keeps Clash Farmer running in the notification area (next to the clock).
