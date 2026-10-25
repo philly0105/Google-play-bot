@@ -429,6 +429,10 @@ object EventText {
         "surface_resized" -> "Resized the game window${str(e, "from")?.let { " from $it" } ?: ""} to ${str(e, "to") ?: "its calibrated size"}" to Tone.NEUTRAL
         "surface_aspect_differs" -> "The game window is not the shape it was calibrated at${str(e, "profile")?.let { " ($it)" } ?: ""}, so it was left as it is" to Tone.WARN
         "surface_resize_failed" -> "The game window could not be resized" to Tone.WARN
+        "surface_resize_capped" -> "The screen could not hold the game window at ${str(e, "asked") ?: "its calibrated size"}, so it is ${str(e, "reached") ?: "smaller"}" to Tone.NEUTRAL
+        "profile_moved" -> "Moved the calibration${str(e, "calibrated")?.let { " from $it" } ?: ""} onto the game window${str(e, "surface")?.let { " at $it" } ?: ""}" to Tone.NEUTRAL
+        "surface_verified" -> "The calibration is now verified on a game window of this shape${str(e, "surface")?.let { " ($it)" } ?: ""}" to Tone.OK
+        "surface_verification_skipped_unverified_calibration" -> "Did not verify this game window's shape: the calibration is not verified where it was taken" to Tone.WARN
 
         // Readings.
         "storage_read" -> "Storage read: ${storageText(e)}" to Tone.NEUTRAL

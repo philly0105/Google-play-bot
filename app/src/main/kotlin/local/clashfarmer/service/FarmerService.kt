@@ -98,10 +98,13 @@ class FarmerService(
          * Desktop: the size the bot works at without a calibration to hold it to, for a game
          * surface now [surface]: [PcGeometry]'s 1740x978, where every PC measurement was taken,
          * when the surface has its aspect, else the surface's own size, since Google Play Games
-         * keeps the aspect it chose at launch.
+         * keeps the aspect it chose at launch. 1740x978 shrinks to fit [room], the largest game
+         * area the window's monitor holds, as the sidecar's resize would shrink it.
          */
-        fun preferredSurface(surface: SurfaceSize): SurfaceSize =
-            if (sameAspect(surface, PcGeometry.WIDTH, PcGeometry.HEIGHT)) SurfaceSize(PcGeometry.WIDTH, PcGeometry.HEIGHT) else surface
+        fun preferredSurface(surface: SurfaceSize, room: SurfaceSize? = null): SurfaceSize =
+            if (sameAspect(surface, PcGeometry.WIDTH, PcGeometry.HEIGHT)) {
+                local.clashfarmer.desktop.PcProfiles.fitInside(SurfaceSize(PcGeometry.WIDTH, PcGeometry.HEIGHT), room)
+            } else surface
 
         private fun sameAspect(surface: SurfaceSize, width: Int, height: Int): Boolean =
             kotlin.math.abs(surface.width.toDouble() / surface.height * height / width - 1) <= SAME_ASPECT_TOLERANCE
@@ -458,8 +461,10 @@ class FarmerService(
             AppLog.log("stop_side_effect", "reason" to reason)
             return
         }
-        overlay?.updateStatus("Stopped: $reason")
-        AppLog.log("run_stopped", "reason" to reason)
+        // Desktop: a game-area stop is said in words, not as the copied code's Viewport(...).
+        val shown = local.clashfarmer.desktop.PcProfiles.plainStopReason(reason)
+        overlay?.updateStatus("Stopped: $shown")
+        AppLog.log("run_stopped", "reason" to shown, "raw" to reason.takeIf { it != shown })
         // A Stop press reaches here a second time as the runner's own exception, so the guard's
         // earlier reason is checked too. The shade's hold cap is no failure of the run's either.
         val quiet = { r: String? -> FailureSnapshot.isUserStop(r) || AppSwitchLatch.isHoldTimeout(r) }
@@ -467,7 +472,7 @@ class FarmerService(
             saveFailureSnapshot("run_stopped")
         }
         // Posted after the guard has stopped, so the app-switch latch cannot read it as leaving Clash.
-        if (wasBusy) notifier?.post(RunNotice.stopped(null, reason))
+        if (wasBusy) notifier?.post(RunNotice.stopped(null, shown))
     }
 
     /**
@@ -543,7 +548,17 @@ class FarmerService(
             val store = local.clashfarmer.accounts.AccountStore(filesDir)
             val accounts = store.load()
             val selected = runCatching { store.selectedId() }.getOrNull()
-            val profiles = accounts.associate { it.id to runCatching { store.readProfile(it.id) }.getOrNull() }
+            // Desktop: verified as the game area's shape now allows, as the run will judge it.
+            val surfaceNow = host.window.value.surface
+            val profiles = accounts.associate { account ->
+                account.id to runCatching {
+                    store.readProfile(account.id)?.let { p ->
+                        if (surfaceNow == null) p else p.copy(isVerified = local.clashfarmer.desktop.PcProfiles.verifiedAt(
+                            p, surfaceNow.width, surfaceNow.height,
+                            local.clashfarmer.desktop.SurfaceVerification.aspects(store.profileFile(account.id))))
+                    }
+                }.getOrNull()
+            }
             val now = System.currentTimeMillis()
             val zone = java.time.ZoneId.systemDefault()
             plan.readiness(accounts, profiles, connected = true, busy = isBusy, selectedId = selected, nowMs = now, zone = zone)
@@ -889,11 +904,14 @@ class FarmerService(
                     ensureClashForeground()
                     // Desktop: an account not yet calibrated is checked at the preferred size,
                     // where the phone's default was the one display its switcher supports.
-                    val profile = saved
-                        ?: host.window.value.surface?.let { preferredSurface(it) }?.let { PhoneProfile.createDefault(it.width, it.height) }
+                    val base = saved
+                        ?: host.window.value.let { s -> s.surface?.let { preferredSurface(it, s.window?.room) } }
+                            ?.let { PhoneProfile.createDefault(it.width, it.height) }
                         ?: PhoneProfile.createDefault(1600, 720)
-                    fitSurface(profile)
+                    fitSurface(base)
                     kotlin.coroutines.coroutineContext.ensureActive()
+                    // Desktop: a calibration is moved onto the game area as a run's is.
+                    val profile = if (saved != null) runProfile(saved, target.id) else base
                     overlay?.updateStatus("Switching to ${target.villageName}...")
 
                     val switchToken = runGuard.startRun(
@@ -1191,20 +1209,20 @@ class FarmerService(
         timeLimitAt: Long? = null
     ): local.clashfarmer.core.RunOutcome? {
         val store = local.clashfarmer.accounts.AccountStore(filesDir)
-        val profile = store.readProfile(account.id)
+        val saved = store.readProfile(account.id)
             ?: throw StopException("No calibration profile for ${account.villageName}")
         val profileFile = store.profileFile(account.id)
 
         val wallsEnabled = if (supervised) false else (overrideWallsEnabled ?: account.settings.wallsEnabled)
-        if (wallOnly) profile.validateForWalls() else profile.validateForAttack()
-        if (wallsEnabled && !wallOnly) profile.validateForWalls()
+        if (wallOnly) saved.validateForWalls() else saved.validateForAttack()
+        if (wallsEnabled && !wallOnly) saved.validateForWalls()
 
         val snapshotBefore = AppLog.sessionSnapshot()
         var completed = 0
         val attackLimit = if (wallOnly) 0 else (overrideAttacks ?: account.settings.attacks)
         // Checked before the account switch rather than after it, so a refused start costs nothing.
-        if (!profile.isVerified && !local.clashfarmer.core.Policy.mayStartUnverified(supervised, attackLimit, wallOnly)) {
-            throw StopException(local.clashfarmer.core.Policy.verificationRequired(account.villageName))
+        if (!saved.isVerified && !local.clashfarmer.core.Policy.mayStartUnverified(supervised, attackLimit, wallOnly)) {
+            throw StopException(local.clashfarmer.desktop.PcProfiles.verificationRequired(account.villageName, null))
         }
         var resultStatus = "Failed"
         var resultReason: String? = null
@@ -1216,8 +1234,18 @@ class FarmerService(
         verifiedAccountId = null
         try {
             ensureClashForeground()
-            fitSurface(profile)
+            fitSurface(saved)
             kotlin.coroutines.coroutineContext.ensureActive()
+            // Desktop: the calibration on the game area Google Play Games gives now. At another
+            // shape it is checked again, and is verified only where a supervised attack has worked.
+            val profile = runProfile(saved, account.id)
+            if (profile !== saved) {
+                if (wallOnly) profile.validateForWalls() else profile.validateForAttack()
+                if (!profile.isVerified && !local.clashfarmer.core.Policy.mayStartUnverified(supervised, attackLimit, wallOnly)) {
+                    throw StopException(local.clashfarmer.desktop.PcProfiles.verificationRequired(
+                        account.villageName, local.clashfarmer.desktop.PcProfiles.shape(profile.resolutionWidth, profile.resolutionHeight)))
+                }
+            }
 
             // Step 1: Verify identity and switch if needed
             overlay?.updateStatus("Verifying ${account.villageName} identity...")
@@ -1259,7 +1287,11 @@ class FarmerService(
                 profileFile = profileFile,
                 currencyPreference = account.settings.currencyPreference,
                 maxWallsPerPhase = account.settings.maxWallsPerPhase,
-                profileUpdater = { update -> store.updateProfile(account.id, update) },
+                profileUpdater = if (profile === saved) {
+                    { update -> store.updateProfile(account.id, update) }
+                } else {
+                    movedProfileUpdater(account.id, SurfaceSize(profile.resolutionWidth, profile.resolutionHeight))
+                },
                 goal = account.settings.goal,
                 capacities = account.settings.capacities,
                 opponent = account.settings.opponent,
@@ -1388,8 +1420,10 @@ class FarmerService(
         account: local.clashfarmer.accounts.AccountRecord,
         remaining: Int
     ) = withAccountContext(account) {
-        val profile = local.clashfarmer.accounts.AccountStore(filesDir).readProfile(account.id)
+        val saved = local.clashfarmer.accounts.AccountStore(filesDir).readProfile(account.id)
             ?: throw StopException("No calibration profile for ${account.villageName}")
+        // Desktop: the game area the session ran on, which the calibration was moved onto.
+        val profile = runProfile(saved, account.id)
         val viewport = Viewport(0, 0, profile.resolutionWidth, profile.resolutionHeight)
         stopBetweenRuns("Waiting for village")
         waitingForVillage = true
@@ -1425,8 +1459,10 @@ class FarmerService(
         kotlin.coroutines.coroutineContext.ensureActive()
         AppLog.log("village_retry_reopening", "account" to account.villageName)
         ensureClashForeground()
-        fitSurface(profile)
-        val token = runGuard.startRun(ACCOUNT_CHECK_MS, viewport, profile.resolutionWidth, profile.resolutionHeight)
+        fitSurface(saved)
+        val reopened = runProfile(saved, account.id)
+        val token = runGuard.startRun(ACCOUNT_CHECK_MS, Viewport(0, 0, reopened.resolutionWidth, reopened.resolutionHeight),
+            reopened.resolutionWidth, reopened.resolutionHeight)
         try {
             ScreenReader().use { reader ->
                 local.clashfarmer.accounts.AccountSwitcher(this, reader)
@@ -1464,10 +1500,12 @@ class FarmerService(
         delay(3000)
         kotlin.coroutines.coroutineContext.ensureActive()
 
-        val profile = local.clashfarmer.accounts.AccountStore(filesDir).readProfile(account.id)
+        val saved = local.clashfarmer.accounts.AccountStore(filesDir).readProfile(account.id)
             ?: throw StopException("No calibration profile for ${account.villageName}")
         ensureClashForeground()
-        fitSurface(profile)
+        fitSurface(saved)
+        // Desktop: Return Home and the viewport on the game area shown now.
+        val profile = runProfile(saved, account.id)
         val token = runGuard.startRun(
             // A maintenance break on the way back is waited out under this same token.
             timeoutMs = policy.RECOVERY_TIMEOUT_MS + PopupGuard.MAINTENANCE_MAX_MS + 30_000L,
@@ -1731,7 +1769,8 @@ class FarmerService(
                 unknownPurchaseCost = if (belongsToThisRun) snapshot.unknownPurchaseCost else 0,
                 unknownPurchaseWalls = if (belongsToThisRun) snapshot.unknownPurchaseWalls else 0,
                 status = status,
-                stopReason = reason,
+                // Desktop: Home's card shows it, so a game-area stop is said in words.
+                stopReason = reason?.let { local.clashfarmer.desktop.PcProfiles.plainStopReason(it) },
                 completionReason = completionReason
             )
             val store = local.clashfarmer.accounts.AccountStore(filesDir)
@@ -1874,7 +1913,7 @@ class FarmerService(
      */
     suspend fun captureClashGame(returnToActivityClass: Class<*>? = null): CapturedImage {
         ensureClashForeground()
-        host.window.value.surface?.let { preferredSurface(it) }?.let { fitSurface(it.width, it.height) }
+        host.window.value.let { s -> s.surface?.let { preferredSurface(it, s.window?.room) } }?.let { fitSurface(it.width, it.height) }
         return transport.capture()
     }
 
@@ -1884,10 +1923,12 @@ class FarmerService(
      * still apply, and refuses anything but the village with nothing selected. Desktop: no helper
      * screen is reopened after it, so [returnToActivityClass] is not used.
      */
-    suspend fun captureNormalizedVillage(profile: PhoneProfile, returnToActivityClass: Class<*>? = null): CapturedImage {
+    suspend fun captureNormalizedVillage(calibration: PhoneProfile, returnToActivityClass: Class<*>? = null): CapturedImage {
         if (isBusy) throw IllegalStateException("A farming session is already active")
         ensureClashForeground(timeoutMs = 90_000)
-        fitSurface(profile)
+        fitSurface(calibration)
+        // Desktop: only the viewport is read here, on the game area shown now.
+        val profile = runProfile(calibration, null)
         val expected = Viewport(0, 0, profile.resolutionWidth, profile.resolutionHeight)
         val rotateDeadline = System.currentTimeMillis() + 60_000L
         while (currentDisplayViewport() != expected && System.currentTimeMillis() < rotateDeadline) delay(500)
@@ -1959,13 +2000,58 @@ class FarmerService(
         host.window.value.surface?.let { Viewport(0, 0, it.width, it.height) }
 
     /**
-     * Desktop: sizes the game surface back to the size [profile] was calibrated at, which the run
-     * guard holds the run to, so a window sized by hand or opened at another size doesn't stop the
-     * run. Google Play Games keeps the aspect it chose at launch, so a surface of another aspect is
-     * left for the guard to refuse. A resize kept taps landing in the spike, where a relaunch did
-     * not (docs/gpg-spike.md, Restarting).
+     * Desktop: sizes the game surface back to the size [profile] was calibrated at, so a window
+     * sized by hand or opened at another size runs at the calibration's own points. Google Play
+     * Games keeps the aspect it chose at launch, so a surface of another aspect is left as it is
+     * and [runProfile] moves the calibration onto it. The sidecar caps a size its monitor can't
+     * hold; the size reached is the run's. A resize kept taps landing in the spike, where a
+     * relaunch did not (docs/gpg-spike.md, Restarting).
      */
     internal suspend fun fitSurface(profile: PhoneProfile) = fitSurface(profile.resolutionWidth, profile.resolutionHeight)
+
+    /**
+     * Desktop: [saved], the account's calibration, moved onto the game area Clash shows now
+     * ([local.clashfarmer.desktop.PcProfiles.derive]); [saved] itself at its own size. Call it
+     * after [fitSurface], so the area is the one the run will see. Throws, in words for the user,
+     * on an area the bot can't read. [accountId] names whose verified shapes count; null counts none.
+     */
+    internal fun runProfile(saved: PhoneProfile, accountId: String?): PhoneProfile {
+        val now = host.window.value.surface ?: return saved
+        if (now.width == saved.resolutionWidth && now.height == saved.resolutionHeight) return saved
+        val aspects = accountId?.let {
+            local.clashfarmer.desktop.SurfaceVerification.aspects(local.clashfarmer.accounts.AccountStore(filesDir).profileFile(it))
+        }.orEmpty()
+        val moved = local.clashfarmer.desktop.PcProfiles.derive(saved, now, aspects)
+        AppLog.log("profile_moved", "calibrated" to "${saved.resolutionWidth}x${saved.resolutionHeight}",
+            "surface" to "${now.width}x${now.height}", "verified" to moved.isVerified)
+        return moved
+    }
+
+    /**
+     * Desktop: the profile updater for a run on a moved calibration. The runner's only write is
+     * the verification a supervised attack earns ([LocalRunner]'s markEarnedVerification), and it
+     * is handed the calibration as moved now, so it can compare it with what it ran on. What it
+     * earns is this game area's shape, kept in surfaces.json; profile.json keeps the points the
+     * user tapped and is not written.
+     */
+    internal fun movedProfileUpdater(accountId: String, surface: SurfaceSize): ((PhoneProfile) -> PhoneProfile) -> PhoneProfile = { update ->
+        val store = local.clashfarmer.accounts.AccountStore(filesDir)
+        val file = store.profileFile(accountId)
+        val saved = store.readProfile(accountId) ?: throw IllegalStateException("No saved profile for this account")
+        val now = local.clashfarmer.desktop.PcProfiles.derive(saved, surface, local.clashfarmer.desktop.SurfaceVerification.aspects(file))
+        val next = update(now)
+        if (next.isVerified && !now.isVerified) {
+            if (saved.isVerified) {
+                local.clashfarmer.desktop.SurfaceVerification.record(file, surface.width, surface.height)
+                AppLog.log("surface_verified", "surface" to "${surface.width}x${surface.height}")
+            } else {
+                // The calibration itself has not been proven where it was taken, and that is what
+                // the moved points rest on.
+                AppLog.log("surface_verification_skipped_unverified_calibration", "surface" to "${surface.width}x${surface.height}")
+            }
+        }
+        next
+    }
 
     private suspend fun fitSurface(width: Int, height: Int) {
         val surface = host.window.value.surface ?: return
@@ -1982,6 +2068,10 @@ class FarmerService(
             return
         }
         AppLog.log("surface_resized", "from" to from, "to" to "${reached.width}x${reached.height}")
+        if (reached.width != width || reached.height != height) {
+            // The sidecar shrank a size the monitor couldn't hold; runProfile moves the points onto it.
+            AppLog.log("surface_resize_capped", "asked" to "${width}x$height", "reached" to "${reached.width}x${reached.height}")
+        }
         withTimeoutOrNull(RESIZE_SEEN_MS) { host.window.first { it.surface == reached } }
     }
 

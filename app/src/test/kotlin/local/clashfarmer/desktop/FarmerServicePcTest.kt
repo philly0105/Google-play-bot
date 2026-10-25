@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.DeviceHealth
+import local.clashfarmer.core.Point
 import local.clashfarmer.core.StopException
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.platform.ClashHost
@@ -57,6 +58,8 @@ class FarmerServicePcTest {
         var opensAfterMs = 600L
         val resizes = mutableListOf<SurfaceSize>()
         var battery: () -> PowerState = { PowerState(ac = true, batteryPercent = -1, saver = false) }
+        /** The largest game area the monitor holds; a resize past it reaches this, as the sidecar's cap does. */
+        var room: SurfaceSize? = null
 
         override suspend fun launch() {
             launches++
@@ -68,11 +71,12 @@ class FarmerServicePcTest {
 
         override suspend fun resize(width: Int, height: Int): SurfaceSize {
             resizes += SurfaceSize(width, height)
+            val reached = PcProfiles.fitInside(SurfaceSize(width, height), room)
             scope.launch {
                 delay(300)
-                window.value = openWindow(width, height)
+                window.value = openWindow(reached.width, reached.height)
             }
-            return SurfaceSize(width, height)
+            return reached
         }
 
         override suspend fun power(): PowerState = battery()
@@ -242,6 +246,84 @@ class FarmerServicePcTest {
         host.window.value = openWindow(1860, 1162)
         service.captureClashGame().bitmap.recycle()
         assertEquals(emptyList<SurfaceSize>(), host.resizes)
+    }
+
+    /** A verified calibration at 1740x978 with the Battle anchor, saved as Blood's. */
+    private fun savedCalibration(): PhoneProfile {
+        AccountStore(filesDir).ensureMigrated()
+        val saved = PhoneProfile.createDefault(1740, 978)
+            .copy(stateAnchors = mapOf("attack" to Point(96, 885)), isVerified = true)
+        AccountStore(filesDir).saveProfile(AccountStore.BLOOD_ID, saved)
+        return saved
+    }
+
+    @Test
+    fun `the preferred size shrinks to what the monitor holds`() {
+        assertEquals(SurfaceSize(1600, 899), FarmerService.preferredSurface(SurfaceSize(1280, 720), SurfaceSize(1600, 900)))
+        assertEquals(SurfaceSize(1740, 978), FarmerService.preferredSurface(SurfaceSize(1280, 720), SurfaceSize(2560, 1400)))
+        // Another aspect stays the surface's own size: nothing is resized at it.
+        assertEquals(SurfaceSize(1860, 1162), FarmerService.preferredSurface(SurfaceSize(1860, 1162), SurfaceSize(1600, 900)))
+    }
+
+    @Test
+    fun `a resize the monitor caps leaves the run on the size reached`() = runBlocking {
+        val saved = savedCalibration()
+        host.room = SurfaceSize(1600, 900)
+        host.window.value = openWindow(1280, 720)
+        service.fitSurface(saved)
+        assertEquals(listOf(SurfaceSize(1740, 978)), host.resizes)
+        assertEquals(Viewport(0, 0, 1600, 899), service.currentDisplayViewport())
+        val run = service.runProfile(saved, AccountStore.BLOOD_ID)
+        assertEquals(Viewport(0, 0, 1600, 899), run.viewport)
+        // The same shape, so the calibration's verification holds.
+        assertTrue(run.isVerified)
+    }
+
+    @Test
+    fun `at the calibrated size the run uses the calibration itself`() = runBlocking {
+        val saved = savedCalibration()
+        host.window.value = openWindow(1740, 978)
+        assertTrue(service.runProfile(saved, AccountStore.BLOOD_ID) === saved)
+    }
+
+    @Test
+    fun `at 16 by 10 the run is moved and unverified until an attack works there`() {
+        val saved = savedCalibration()
+        host.window.value = openWindow(1860, 1162)
+        val run = service.runProfile(saved, AccountStore.BLOOD_ID)
+        assertEquals(Viewport(0, 0, 1860, 1162), run.viewport)
+        assertEquals(Point(114, 1052), run.stateAnchors["attack"])
+        assertFalse(run.isVerified)
+
+        // The supervised attack's verification goes to surfaces.json; profile.json is not written.
+        val profileFile = AccountStore(filesDir).profileFile(AccountStore.BLOOD_ID)
+        val before = profileFile.readText()
+        val earned = service.movedProfileUpdater(AccountStore.BLOOD_ID, SurfaceSize(1860, 1162))
+            .invoke { current -> current.copy(isVerified = true) }
+        assertTrue(earned.isVerified)
+        assertEquals(before, profileFile.readText())
+        assertEquals(setOf(1.6), SurfaceVerification.aspects(profileFile))
+        assertTrue(service.runProfile(saved, AccountStore.BLOOD_ID).isVerified)
+        // 1565x978 is the same shape.
+        host.window.value = openWindow(1565, 978)
+        assertTrue(service.runProfile(saved, AccountStore.BLOOD_ID).isVerified)
+    }
+
+    @Test
+    fun `an attack at another shape earns nothing for a calibration never verified`() {
+        AccountStore(filesDir).ensureMigrated()
+        AccountStore(filesDir).saveProfile(AccountStore.BLOOD_ID, PhoneProfile.createDefault(1740, 978))
+        service.movedProfileUpdater(AccountStore.BLOOD_ID, SurfaceSize(1860, 1162))
+            .invoke { current -> current.copy(isVerified = true) }
+        assertTrue(SurfaceVerification.aspects(AccountStore(filesDir).profileFile(AccountStore.BLOOD_ID)).isEmpty())
+    }
+
+    @Test
+    fun `a game area too small to read is refused in words`() {
+        val saved = savedCalibration()
+        host.window.value = openWindow(1120, 700)
+        val stop = assertThrows(StopException::class.java) { service.runProfile(saved, AccountStore.BLOOD_ID) }
+        assertTrue(stop.message!!, stop.message!!.contains("too small"))
     }
 
     @Test

@@ -286,6 +286,38 @@ class PcProfilesTest {
     }
 
     @Test
+    fun aSizePastTheMonitorShrinksAtItsAspect() {
+        val want = SurfaceSize(1740, 978)
+        assertSame(want, PcProfiles.fitInside(want, null))
+        assertSame(want, PcProfiles.fitInside(want, SurfaceSize(1740, 978)))
+        assertEquals(SurfaceSize(1600, 899), PcProfiles.fitInside(want, SurfaceSize(1600, 1000)))
+        assertEquals(SurfaceSize(1531, 861), PcProfiles.fitInside(want, SurfaceSize(1900, 861)))
+        // A 1366x768 laptop's work area under its taskbar, with GPG's chrome taken off, is under 720 rows.
+        val laptop = PcProfiles.fitInside(want, SurfaceSize(1350, 700))
+        assertEquals(SurfaceSize(1245, 700), laptop)
+        assertTrue(PcProfiles.surfaceProblem(laptop)!!.contains("too small"))
+    }
+
+    @Test
+    fun gameAreaStopsAreSaidInWords() {
+        val guard = "Session is stopped: Viewport mismatch: expected Viewport(left=0, top=0, right=1740, bottom=978), " +
+            "got Viewport(left=0, top=0, right=1860, bottom=1162)"
+        assertEquals(
+            "Clash's game area changed from 1740x978 to 1860x1162 during the run. " +
+                "Leave the Clash window's size alone while the bot runs, then start again.",
+            PcProfiles.plainStopReason(guard)
+        )
+        assertTrue(PcProfiles.plainStopReason("Viewport mismatch: expected Viewport(left=0, top=0, right=1740, bottom=978), got null")
+            .startsWith("Clash's game area went missing"))
+        val runner = "The screen is Viewport(left=0, top=0, right=1565, bottom=978) but this profile was calibrated for " +
+            "Viewport(left=0, top=0, right=1740, bottom=978). Put Clash in the orientation you calibrated, or calibrate again."
+        val plain = PcProfiles.plainStopReason(runner)
+        assertTrue(plain, plain.startsWith("Clash's game area is 1565x978, not the 1740x978 the run expected."))
+        assertFalse(plain.contains("Viewport") || plain.contains("orientation"))
+        assertEquals("Stopped by user", PcProfiles.plainStopReason("Stopped by user"))
+    }
+
+    @Test
     fun movingAnXKeepsItsEdge() {
         assertEquals(114, PcGeometry.moveX(96, 1740, 1860, 1162 / 978.0, Anchor.LEFT))
         assertEquals(1708, PcGeometry.moveX(1612, 1740, 1860, 1162 / 978.0, Anchor.RIGHT))

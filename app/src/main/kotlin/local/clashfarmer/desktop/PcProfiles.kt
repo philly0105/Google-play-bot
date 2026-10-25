@@ -66,6 +66,18 @@ object PcProfiles {
     }
 
     /**
+     * [want], or the largest size of its aspect inside [room] when it doesn't fit there. The
+     * sidecar caps a resize with the same sum (Server.cs, FitInside), so a window is never sized
+     * past its monitor's work area, where the taskbar would cover the game's bottom rows.
+     */
+    fun fitInside(want: SurfaceSize, room: SurfaceSize?): SurfaceSize {
+        if (room == null || room.width <= 0 || room.height <= 0) return want
+        if (want.width <= room.width && want.height <= room.height) return want
+        val scale = minOf(room.width.toDouble() / want.width, room.height.toDouble() / want.height)
+        return SurfaceSize(kotlin.math.floor(want.width * scale).toInt(), kotlin.math.floor(want.height * scale).toInt())
+    }
+
+    /**
      * Whether [profile] counts as verified on a game area of [width]x[height]: it was verified
      * where it was calibrated, and the area has that aspect or one in [verifiedAspects].
      */
@@ -74,6 +86,48 @@ object PcProfiles {
             sameAspect(width, height, profile.resolutionWidth, profile.resolutionHeight) ||
                 verifiedAspects.any { sameAspect(aspect(width, height), it) }
             )
+
+    private val SIZE = Regex("""Viewport\(left=(-?\d+), top=(-?\d+), right=(-?\d+), bottom=(-?\d+)\)""")
+    private val GUARD_MISMATCH = Regex("""Viewport mismatch: expected (Viewport\([^)]*\)), got (Viewport\([^)]*\)|null)""")
+    private val RUNNER_MISMATCH = Regex("""The screen is (Viewport\([^)]*\)|null) but this profile was calibrated for (Viewport\([^)]*\))""")
+
+    /**
+     * [reason] in words for the user when it is one of the copied code's game-area stops, which
+     * print Kotlin's Viewport(left=0, top=0, right=1740, bottom=978); else [reason] unchanged. The
+     * run guard's stop says the area changed under the run, and the runner's that it never became
+     * the size the run expected.
+     */
+    fun plainStopReason(reason: String): String {
+        GUARD_MISMATCH.find(reason)?.let { m ->
+            val seen = size(m.groupValues[2]) ?: return "Clash's game area went missing during the run. " +
+                "Check that the Clash window is open, then start again."
+            return "Clash's game area changed from ${size(m.groupValues[1])} to $seen during the run. " +
+                "Leave the Clash window's size alone while the bot runs, then start again."
+        }
+        RUNNER_MISMATCH.find(reason)?.let { m ->
+            val seen = size(m.groupValues[1]) ?: return "The bot couldn't see Clash's game area. " +
+                "Check that the Clash window is open, then start again."
+            return "Clash's game area is $seen, not the ${size(m.groupValues[2])} the run expected. " +
+                "Start again, and if this keeps happening, open Calibrate and capture the game again."
+        }
+        return reason
+    }
+
+    /** "1740x978" for Kotlin's printed Viewport, null for "null". */
+    private fun size(viewport: String): String? = SIZE.matchEntire(viewport)?.let { m ->
+        val (left, top, right, bottom) = m.destructured
+        "${right.toInt() - left.toInt()}x${bottom.toInt() - top.toInt()}"
+    }
+
+    /**
+     * Why a run that needs a verified calibration is refused, the PC's Policy.verificationRequired.
+     * [shape] is the game area's shape when the calibration was moved onto another, else null.
+     */
+    fun verificationRequired(villageName: String, shape: String?): String {
+        val why = if (shape == null) "$villageName has not earned verification on this PC."
+        else "$villageName was calibrated on a game area of another shape and has not had a supervised attack at $shape yet."
+        return "$why Run \"Supervised attack\" once and let it return to the village; that attack earns it."
+    }
 
     /**
      * [profile] moved onto a game area of [surface]. At the profile's own size it is [profile]
