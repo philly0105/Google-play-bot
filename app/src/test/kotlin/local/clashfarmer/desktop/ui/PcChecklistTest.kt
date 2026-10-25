@@ -8,6 +8,7 @@ import local.clashfarmer.desktop.sidecar.ClashWindow
 import local.clashfarmer.desktop.sidecar.PcInfo
 import local.clashfarmer.desktop.sidecar.Hello
 import local.clashfarmer.desktop.sidecar.SurfaceSize
+import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.ui.TabBadge
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.screens.CheckLine
@@ -15,6 +16,7 @@ import local.clashfarmer.ui.screens.SetupChecklist
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -97,6 +99,104 @@ class PcChecklistTest {
         val line = PcChecklist.gameWindow(status)
         assertEquals(Tone.OK, line.tone)
         assertEquals("Found. The game area is 1860x1162.", line.detail)
+    }
+
+    private val calibrated = PhoneProfile.createDefault(1740, 978).copy(isVerified = true)
+
+    private fun open(width: Int, height: Int, room: SurfaceSize? = null) =
+        WindowStatus(checked = true, window = window(width, height).copy(room = room), surface = SurfaceSize(width, height))
+
+    private fun compared(width: Int, height: Int, room: SurfaceSize? = null, profile: PhoneProfile = calibrated,
+                         aspects: Set<Double> = emptySet()) =
+        PcChecklist.gameWindow(open(width, height, room), PcChecklist.Calibration("Main", profile, aspects))
+
+    @Test
+    fun `a game area at the calibrated size says so`() {
+        val line = compared(1740, 978)
+        assertEquals(Tone.OK, line.tone)
+        assertEquals("Open", line.chip)
+        assertEquals("Found. The game area is 1740x978, the size Main was calibrated at.", line.detail)
+    }
+
+    @Test
+    fun `a game area of the calibrated shape is sized to the calibration`() {
+        val line = compared(1920, 1080)
+        assertEquals(Tone.OK, line.tone)
+        assertEquals("Found. The game area is 1920x1080. Main was calibrated at 1740x978, and a run sizes the window to it.",
+            line.detail)
+    }
+
+    @Test
+    fun `a screen too small for the calibration gives the size a run works at`() {
+        val line = compared(1600, 899, room = SurfaceSize(1600, 900))
+        assertEquals(Tone.OK, line.tone)
+        assertTrue(line.detail, line.detail.endsWith("this screen holds 1600x899, and a run works at that."))
+    }
+
+    @Test
+    fun `a new shape is amber until a supervised attack works there`() {
+        val line = compared(1860, 1162)
+        assertEquals(Tone.WARN, line.tone)
+        assertEquals("New shape", line.chip)
+        assertTrue(line.counts)
+        assertEquals("Found. The game area is 1860x1162 (16:10), but Main was calibrated at 16:9. A run moves the " +
+            "calibration onto it; run one supervised attack, then the bot can farm on its own.", line.detail)
+        val verified = compared(1860, 1162, aspects = setOf(1.6))
+        assertEquals(Tone.OK, verified.tone)
+        assertTrue(verified.detail, verified.detail.endsWith("a supervised attack has worked at 16:10 too."))
+    }
+
+    @Test
+    fun `an unverified calibration at a new shape is told to calibrate again`() {
+        val line = compared(1860, 1162, profile = calibrated.copy(isVerified = false), aspects = setOf(1.6))
+        assertEquals(Tone.WARN, line.tone)
+        assertTrue(line.detail, line.detail.contains("has not been verified. Calibrate again on this game area"))
+    }
+
+    @Test
+    fun `a game area a run can't use is red`() {
+        val small = compared(1600, 900, room = SurfaceSize(1245, 700))
+        assertEquals(Tone.BAD, small.tone)
+        assertEquals("Can't run", small.chip)
+        assertTrue(small.detail, small.detail.contains("too small for the bot to read"))
+        val square = compared(1000, 1000)
+        assertEquals(Tone.BAD, square.tone)
+        assertTrue(square.detail, square.detail.contains("a shape the bot can't work with"))
+    }
+
+    @Test
+    fun `a run sizes an area of the calibration's shape and leaves another shape alone`() {
+        // FarmerService.fitSurface resizes only at the calibration's shape.
+        assertEquals(SurfaceSize(1860, 1162), PcChecklist.runSize(SurfaceSize(1860, 1162), null, calibrated))
+        assertEquals(SurfaceSize(1860, 1162), PcChecklist.runSize(SurfaceSize(1860, 1162), SurfaceSize(1600, 900), calibrated))
+        assertEquals(SurfaceSize(1740, 978), PcChecklist.runSize(SurfaceSize(1740, 978), null, calibrated))
+        assertEquals(SurfaceSize(1740, 978), PcChecklist.runSize(SurfaceSize(1280, 720), null, calibrated))
+        assertEquals(SurfaceSize(1600, 899), PcChecklist.runSize(SurfaceSize(1740, 978), SurfaceSize(1600, 900), calibrated))
+    }
+
+    @Test
+    fun `a small area of another shape is red, as the run refuses it`() {
+        // A 16:10 laptop: a run works at the area's own 1120x700, which is under 720 rows.
+        val line = compared(1120, 700)
+        assertEquals(Tone.BAD, line.tone)
+        assertEquals("Can't run", line.chip)
+        assertTrue(line.detail, line.detail.contains("1120x700, too small for the bot to read"))
+    }
+
+    @Test
+    fun `an unverified calibration on a smaller screen is told to calibrate again`() {
+        val line = compared(1600, 899, room = SurfaceSize(1600, 900), profile = calibrated.copy(isVerified = false))
+        assertEquals(Tone.WARN, line.tone)
+        assertEquals("New size", line.chip)
+        assertTrue(line.detail, line.detail.endsWith("this screen holds 1600x899. Calibrate again on this game area."))
+    }
+
+    @Test
+    fun `verification is counted as a run counts it on the game area shown`() {
+        assertSame(calibrated, PcChecklist.verifiedHere(calibrated, open(1740, 978), emptySet()))
+        assertFalse(PcChecklist.verifiedHere(calibrated, open(1860, 1162), emptySet()).isVerified)
+        assertTrue(PcChecklist.verifiedHere(calibrated, open(1860, 1162), setOf(1.6)).isVerified)
+        assertSame(calibrated, PcChecklist.verifiedHere(calibrated, WindowStatus(checked = true), emptySet()))
     }
 
     @Test

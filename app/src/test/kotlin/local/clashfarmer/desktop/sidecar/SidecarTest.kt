@@ -7,6 +7,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -44,6 +45,23 @@ class SidecarTest {
         val older = async(Dispatchers.Default) { sidecar.find() }
         fake.ok(fake.next()) { window() }
         assertTrue(older.await()!!.visible)
+    }
+
+    @Test
+    fun `find reads the room the monitor holds, and null when the sidecar can't measure it`() = runBlocking {
+        val fake = FakeSidecar()
+        val sidecar = Sidecar { fake.connection }
+        fun JSONObject.window() = put("found", true).put("top", 1).put("game", 2).put("title", "Clash of Clans")
+            .put("iconic", false).put("width", 1740).put("height", 978).put("foreground", false).put("monitorDpi", 120)
+        val measured = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window().put("roomWidth", 1904).put("roomHeight", 1001) }
+        assertEquals(SurfaceSize(1904, 1001), measured.await()!!.room)
+        val unmeasured = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window().put("roomWidth", JSONObject.NULL).put("roomHeight", JSONObject.NULL) }
+        assertNull(unmeasured.await()!!.room)
+        val older = async(Dispatchers.Default) { sidecar.find() }
+        fake.ok(fake.next()) { window() }
+        assertNull(older.await()!!.room)
     }
 
     @Test

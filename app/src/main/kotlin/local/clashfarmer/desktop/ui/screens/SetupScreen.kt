@@ -30,6 +30,7 @@ import local.clashfarmer.desktop.BuildInfo
 import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.sidecar.Hello
 import local.clashfarmer.desktop.sidecar.SidecarStatus
+import local.clashfarmer.desktop.SurfaceVerification
 import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.desktop.ui.DashboardScreen
 import local.clashfarmer.desktop.ui.PcChecklist
@@ -92,6 +93,8 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     private var savedAt: Map<String, Long> by mutableStateOf(emptyMap())
     /** Whether each account has its identity template ([PcAccount]); empty until the files are read. */
     private var enrolled: Map<String, Boolean> by mutableStateOf(emptyMap())
+    /** The shapes supervised attacks verified each account at besides its own (surfaces.json). */
+    private var verifiedAspects: Map<String, Set<Double>> by mutableStateOf(emptyMap())
     private var filesAtMs = 0L
     private var filesFor: List<String>? = null
     private var loading = false
@@ -276,18 +279,26 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
     /** The rows above the accounts: the game window, the text reader and tray, the battery and the remote page. */
     private fun checklist(state: DashboardState): Checklist {
         val m = machine
+        // A run moves each calibration onto the game area shown now, and counts it verified there
+        // only at a shape a supervised attack has worked at; the rows say what a run would find.
+        val profiles = state.profiles.mapValues { (id, profile) ->
+            profile?.let { PcChecklist.verifiedHere(it, windowStatus, verifiedAspects[id].orEmpty()) }
+        }
+        val picked = state.selected?.let { account ->
+            state.profiles[account.id]?.let { PcChecklist.Calibration(account.displayName, it, verifiedAspects[account.id].orEmpty()) }
+        }
         val machineLines = listOfNotNull(
-            PcChecklist.gameWindow(windowStatus),
+            PcChecklist.gameWindow(windowStatus, picked),
             PcChecklist.windowsVersion(windowStatus.pc),
             PcChecklist.textReader(m?.textReader),
             m?.let { PcChecklist.trayIcon(it.tray) } ?: notRead(PcChecklist.TRAY_ICON, "Tray icon"),
             m?.let { SetupChecklist.battery(it.battery) } ?: notRead("battery", "Battery and heat"),
             m?.let { PcChecklist.remote(it.serviceOn, it.remote) } ?: notRead(PcChecklist.REMOTE, "Remote page")
         )
-        val findings = health(state)
+        val findings = health(state.accounts, profiles)
         val accounts = state.accounts.map { account ->
             account to listOf(PcChecklist.account(account, enrolled[account.id])) +
-                SetupChecklist.account(account, state.profiles[account.id], findings[account.id].orEmpty(),
+                SetupChecklist.account(account, profiles[account.id], findings[account.id].orEmpty(),
                     state.profileError.takeIf { account.id == state.selectedId }, builders[account.id], nowMs)
         }
         return Checklist(machineLines, accounts)
@@ -304,11 +315,11 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         if (account == null) "Check the battle tray (open a scout screen first)"
         else "Check $account's battle tray (open $account's scout screen first)"
 
-    private fun health(state: DashboardState): Map<String, List<Finding>> {
-        val inputs = Triple(state.accounts, state.profiles, savedAt)
+    private fun health(accounts: List<AccountRecord>, profiles: Map<String, PhoneProfile?>): Map<String, List<Finding>> {
+        val inputs = Triple(accounts, profiles, savedAt)
         if (inputs != healthKey) {
             healthKey = inputs
-            health = runCatching { CalibrationHealth.check(state.accounts, state.profiles, savedAt) }.getOrDefault(emptyMap())
+            health = runCatching { CalibrationHealth.check(accounts, profiles, savedAt) }.getOrDefault(emptyMap())
         }
         return health
     }
@@ -350,7 +361,15 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
         )
     }
 
-    /** Builder readings, profile save times and identity templates on IO; the rows redraw from them when done. */
+    /** What [loadFiles] reads per account. */
+    private class LoadedFiles(
+        val builders: Map<String, BuilderReading?>,
+        val savedAt: Map<String, Long>,
+        val enrolled: Map<String, Boolean>,
+        val aspects: Map<String, Set<Double>>
+    )
+
+    /** Builder readings, profile save times, identity templates and verified shapes on IO; the rows redraw from them when done. */
     private fun loadFiles(force: Boolean) {
         val state = this.state ?: return
         val ids = state.accounts.map { it.id }
@@ -367,7 +386,10 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
                     val saved = ids.mapNotNull { id ->
                         runCatching { accountStore.profileFile(id).takeIf { it.exists() }?.lastModified() }.getOrNull()?.let { id to it }
                     }.toMap()
-                    Triple(readings, saved, ids.associateWith { PcAccount.enrolled(files, it) })
+                    val aspects = ids.associateWith { id ->
+                        runCatching { SurfaceVerification.aspects(accountStore.profileFile(id)) }.getOrDefault(emptySet())
+                    }
+                    LoadedFiles(readings, saved, ids.associateWith { PcAccount.enrolled(files, it) }, aspects)
                 }
             }.getOrNull()
             // runCatching also catches cancellation; a closed window's state must not be touched.
@@ -376,9 +398,10 @@ class SetupScreen(private val host: DashboardHost) : DashboardScreen {
             filesFor = ids
             filesAtMs = System.currentTimeMillis()
             if (loaded != null) {
-                builders = loaded.first
-                savedAt = loaded.second
-                enrolled = loaded.third
+                builders = loaded.builders
+                savedAt = loaded.savedAt
+                enrolled = loaded.enrolled
+                verifiedAspects = loaded.aspects
             }
         }
     }

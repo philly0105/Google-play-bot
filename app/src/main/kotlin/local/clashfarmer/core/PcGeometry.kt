@@ -61,4 +61,18 @@ object PcGeometry {
     /** [x] of [pixel] as a fraction of [viewport]'s width, for the readers that compare fractions. */
     fun xFraction(viewport: Viewport, pixel: Int, anchor: Anchor): Double =
         (x(viewport, pixel, anchor) - viewport.left).toDouble() / viewport.width
+
+    /**
+     * An x measured on a frame [fromWidth] wide, moved to a frame [toWidth] wide whose height is
+     * [scale] times the first's. The same rule as [x], between any two frames rather than from
+     * 1740x978: a calibration saved at one size gives its points at the size GPG shows now.
+     */
+    fun moveX(x: Int, fromWidth: Int, toWidth: Int, scale: Double, anchor: Anchor): Int = when (anchor) {
+        Anchor.LEFT -> (x * scale).roundToInt()
+        Anchor.CENTRE -> (toWidth / 2.0 + (x - fromWidth / 2.0) * scale).roundToInt()
+        Anchor.RIGHT -> toWidth - ((fromWidth - x) * scale).roundToInt()
+    }
+
+    /** A y moved the way [moveX] moves an x: heights scale from the top. */
+    fun moveY(y: Int, scale: Double): Int = (y * scale).roundToInt()
 }

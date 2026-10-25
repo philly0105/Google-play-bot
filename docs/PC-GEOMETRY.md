@@ -12,7 +12,8 @@ stands for `audit-evidence/spike/geo-x.json` and its `.png`, and `live-x` for th
 
 All positions are frame pixels. After a relaunch, posted taps have landed above their aim
 (`docs/gpg-spike.md`). That is the input transport's problem and doesn't change these values. The calibration profile's
-positions, such as deploy points, troop cards and the profile's ROIs, are out of scope.
+positions, such as deploy points, troop cards and the profile's ROIs, are tapped by the user at
+the calibrated size; Moving a calibration, below, says how a run moves them onto another one.
 
 ## Which frames are the PC
 
@@ -77,6 +78,31 @@ No list, army or result screen has been captured at 16:10. Clash may scale a cen
 by the height, which is what CENTRE does, or by the width, W/1740, which is 1.069 at 1860x1162 and
 0.899 at 1565x978. PcGeometryTest checks the army and result screens both ways. The height is
 likelier, since the HUD follows it.
+
+## Moving a calibration
+
+A run, Calibrate's capture, the camera reference and the tray check move a profile calibrated at
+one size onto the game area they find (`desktop/PcProfiles.derive`), with the rule above and the
+profile's own size in place of 1740x978. At the calibrated size the profile is used as it is.
+
+| Profile field | Anchor | Why |
+| --- | --- | --- |
+| `stateAnchors` attack, end_battle, find_match | LEFT | Battle and End Battle sit in the HUD's left corners; Find a Match's cards run from the left |
+| `stateAnchors` next | RIGHT | Next sits in the HUD's right corner |
+| other `stateAnchors` (return_home, army, ...) | CENTRE | drawn on centred panels |
+| `troopAnchors`, `troopRois` | CENTRE | the tray is centred along the bottom |
+| `deploymentPoints`, `perimeterSegments`, `heroDrop`, `wallPoints`, `wallRows` | CENTRE | map space, about the centre |
+| `wallConfig` dialog fields | CENTRE | centred dialog |
+| `homeResourceRois`, `wallConfig.resourceRois`, `scoutFeeRoi` | RIGHT | the storage balances and the fee sit at the right edge |
+| `scoutLootRois` | LEFT | the scout's loot panel sits at the left edge |
+| `scoutCountdownRoi` | CENTRE | centred at the top |
+| `collectionTargets` | dropped | measured on the camera reference, taken at the calibrated size |
+
+Proven on a 16:10 capture (PcProfilesTest): Battle moved from Blood's 1740x978 calibration lands
+inside its button on `live-1860-village`, and the storage boxes over the balances the OCR read.
+The tray, the army button, Next and the battle map are moved by the rule but were never seen at
+16:10, which is why a moved profile counts as verified only after a supervised attack at that
+aspect (`desktop/SurfaceVerification`, `accounts/<id>/surfaces.json`).
 
 ## PC values
 

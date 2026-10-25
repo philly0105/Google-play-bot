@@ -65,7 +65,9 @@ Returns `found`, and when found: `top` and `game` (window handles as numbers), `
 `visible`, `width` and `height` of the game surface, `foreground` (the Clash window is the active
 window), and `monitorDpi`. `visible` is false once the window was closed by hand: Google Play Games
 hides it and keeps the game running, and a launch then is the relaunch that broke input
-(`docs/gpg-spike.md`, Restarting).
+(`docs/gpg-spike.md`, Restarting). `roomWidth` and `roomHeight` are the largest game surface the
+work area of the window's monitor holds with the window's chrome around it, the room `resize` caps
+to; they are null when the window is minimized or can't be measured.
 
 Also `ownerPid` and `ownerStartedMs` (the process that owns the window and when it started, Unix
 ms; null when Windows won't say), so the app can tell the same game process showing its window
@@ -134,6 +136,13 @@ image's pixels, top to bottom. The ML Kit shim gives each line its own text bloc
 Arguments: `width`, `height` of the game surface. Resizes the top-level window without activating
 it. Returns the `width` and `height` the surface ended at; Google Play Games keeps the aspect it
 chose at launch, so asking for 1740x978 on a 16:10 surface gave 1565x978.
+
+A size the monitor's work area can't hold with the chrome around it is first shrunk, at its own
+aspect, to the largest that fits (the `find` op's room), so the game's bottom rows never go under
+the taskbar. The reply then also gives `requestedWidth`, `requestedHeight` and `capped`. The app
+works at the size reached: it moves the calibration onto it (`PcProfiles.derive`), and refuses one
+under 720 rows. `PcProfiles.fitInside` does the same sum and has the tests; there is no C# test
+project.
 
 ### `launch`
 

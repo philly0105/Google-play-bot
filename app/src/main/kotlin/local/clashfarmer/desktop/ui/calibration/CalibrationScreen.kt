@@ -57,6 +57,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import local.clashfarmer.core.Point
+import local.clashfarmer.desktop.ui.components.MessageDialog
 import local.clashfarmer.desktop.ui.components.PrimaryButton
 import local.clashfarmer.desktop.ui.components.SecondaryButton
 import local.clashfarmer.desktop.ui.components.hoverClick
@@ -83,6 +84,16 @@ fun CalibrationScreen(model: CalibrationModel) {
         FrameView(model, Modifier.weight(1f).fillMaxHeight())
         Box(Modifier.width(1.dp).fillMaxHeight().background(FarmerColors.line))
         Sidebar(model, Modifier.width(SIDEBAR_WIDTH).fillMaxHeight())
+    }
+    model.saveQuestion?.let { question ->
+        MessageDialog(
+            title = "Save at another shape?",
+            message = question,
+            confirm = "Save",
+            onConfirm = model::confirmSave,
+            onDismiss = model::cancelSave,
+            dismiss = "Cancel"
+        )
     }
 }
 

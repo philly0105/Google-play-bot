@@ -2,10 +2,13 @@ package local.clashfarmer.desktop.ui
 
 import local.clashfarmer.accounts.AccountRecord
 import local.clashfarmer.accounts.PcAccount
+import local.clashfarmer.desktop.PcProfiles
 import local.clashfarmer.desktop.RemotePage
 import local.clashfarmer.desktop.platform.WindowStatus
-import local.clashfarmer.desktop.sidecar.PcInfo
 import local.clashfarmer.desktop.sidecar.Hello
+import local.clashfarmer.desktop.sidecar.PcInfo
+import local.clashfarmer.desktop.sidecar.SurfaceSize
+import local.clashfarmer.recognition.PhoneProfile
 import local.clashfarmer.remote.RemoteServer
 import local.clashfarmer.ui.components.Tone
 import local.clashfarmer.ui.screens.CheckLine
@@ -39,10 +42,13 @@ object PcChecklist {
      * With no window, the line says first what stops Clash from opening at all: Google Play Games
      * missing (red, since the fix's launch has nothing to open it), the last start failing, or
      * Clash missing. A full-screen window can't be sized to the calibration, so it is amber.
+     *
+     * With [calibration], an open window's game area is compared with it ([compared]).
      */
-    fun gameWindow(status: WindowStatus): CheckLine {
+    fun gameWindow(status: WindowStatus, calibration: Calibration? = null): CheckLine {
         val window = status.window
-        val area = status.surface?.let { "The game area is ${it.width}x${it.height}." }
+        val surface = status.surface
+        val area = surface?.let { "The game area is ${it.width}x${it.height}." }
         return when {
             !status.checked -> CheckLine(GAME_WINDOW, "Game window", "Looking for the Clash of Clans window.",
                 SetupChecklist.chip(Tone.NEUTRAL), Tone.NEUTRAL, counts = false)
@@ -71,6 +77,7 @@ object PcChecklist {
                 "Full screen", Tone.WARN)
             window.iconic -> CheckLine(GAME_WINDOW, "Game window",
                 listOfNotNull("Minimized. A run restores it without taking focus.", area).joinToString(" "), "Minimized", Tone.OK)
+            surface != null && calibration != null -> compared(surface, window.room, calibration)
             else -> CheckLine(GAME_WINDOW, "Game window", listOfNotNull("Found.", area).joinToString(" "), "Open", Tone.OK)
         }
     }
@@ -89,6 +96,75 @@ object PcChecklist {
 
     /** Windows 11's first build. */
     private const val WINDOWS_11_BUILD = 22000
+
+    /**
+     * The calibration the Game window line compares the game area with: the account picked on
+     * Home, by [name], with the shapes supervised attacks verified it at (surfaces.json).
+     */
+    class Calibration(val name: String, val profile: PhoneProfile, val verifiedAspects: Set<Double> = emptySet())
+
+    /**
+     * The game area a run on [profile] works at, from a window whose area is [surface] on a monitor
+     * that holds [room] ([PcProfiles.runSize]): the calibration's size, shrunk to what the monitor
+     * holds, when the area has its shape, else the area's own size, which a run leaves alone.
+     */
+    fun runSize(surface: SurfaceSize, room: SurfaceSize?, profile: PhoneProfile): SurfaceSize =
+        PcProfiles.runSize(surface, room, SurfaceSize(profile.resolutionWidth, profile.resolutionHeight))
+
+    /**
+     * [profile] with isVerified as a run would count it on this window's game area: a calibration
+     * moved onto another shape counts only once a supervised attack worked at that shape. Unchanged
+     * when the area is not known.
+     */
+    fun verifiedHere(profile: PhoneProfile, status: WindowStatus, verifiedAspects: Set<Double>): PhoneProfile {
+        val surface = status.surface ?: return profile
+        if (status.window == null) return profile
+        val size = runSize(surface, status.window.room, profile)
+        val verified = PcProfiles.verifiedAt(profile, size.width, size.height, verifiedAspects)
+        return if (verified == profile.isVerified) profile else profile.copy(isVerified = verified)
+    }
+
+    /**
+     * An open window's line with the game area set beside [calibration]: red when a run can't work
+     * at the size it would reach, amber at a shape the calibration was never verified at, and
+     * green otherwise.
+     */
+    private fun compared(surface: SurfaceSize, room: SurfaceSize?, calibration: Calibration): CheckLine {
+        val profile = calibration.profile
+        val name = calibration.name
+        val run = runSize(surface, room, profile)
+        val wanted = SurfaceSize(profile.resolutionWidth, profile.resolutionHeight)
+        val capped = PcProfiles.fitInside(wanted, room) != wanted
+        val area ="Found. The game area is ${surface.width}x${surface.height}"
+        val calibrated = "${profile.resolutionWidth}x${profile.resolutionHeight}"
+        val shape = PcProfiles.shape(surface.width, surface.height)
+        val calibratedShape = PcProfiles.shape(profile.resolutionWidth, profile.resolutionHeight)
+        fun line(detail: String, chip: String, tone: Tone) = CheckLine(GAME_WINDOW, "Game window", detail, chip, tone)
+        PcProfiles.surfaceProblem(run)?.let { return line("Found. $it", "Can't run", Tone.BAD) }
+        return when {
+            PcProfiles.sameAspect(run.width, run.height, profile.resolutionWidth, profile.resolutionHeight) -> when {
+                // A calibration moved before it was verified can't earn verification there.
+                capped && !profile.isVerified -> line("$area. $name was calibrated at $calibrated and has not been " +
+                    "verified; this screen holds ${run.width}x${run.height}. Calibrate again on this game area.",
+                    "New size", Tone.WARN)
+                capped -> line("$area. $name was calibrated at $calibrated; this screen holds ${run.width}x${run.height}, " +
+                    "and a run works at that.", "Open", Tone.OK)
+                surface.width == profile.resolutionWidth && surface.height == profile.resolutionHeight ->
+                    line("$area, the size $name was calibrated at.", "Open", Tone.OK)
+                else -> line("$area. $name was calibrated at $calibrated, and a run sizes the window to it.", "Open", Tone.OK)
+            }
+            PcProfiles.verifiedAt(profile, run.width, run.height, calibration.verifiedAspects) ->
+                line("$area ($shape). $name was calibrated at $calibratedShape, and a supervised attack has worked at $shape too.",
+                    "Open", Tone.OK)
+            profile.isVerified ->
+                line("$area ($shape), but $name was calibrated at $calibratedShape. A run moves the calibration onto it; " +
+                    "run one supervised attack, then the bot can farm on its own.", "New shape", Tone.WARN)
+            else ->
+                line("$area ($shape), but $name was calibrated at $calibratedShape and has not been verified. Calibrate " +
+                    "again on this game area, or restart the PC and open Clash of Clans on a $calibratedShape screen.",
+                    "New shape", Tone.WARN)
+        }
+    }
 
     /**
      * Whether runs can show their status in the notification area, the PC's notifications

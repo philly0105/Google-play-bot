@@ -17,7 +17,14 @@ ban can be permanent.
   to spend it on, and it can buy walls when that is turned on for the account.
 - It works in the background. Input is posted to the Clash window, so the cursor and the keyboard
   stay yours and Clash can sit behind other windows. Before each run, and before Calibrate,
-  Inspect and the tray check, it sizes the game back to 1740x978, the size it was calibrated at.
+  Inspect and the tray check, it sizes a 16:9 game back to 1740x978, the size it was calibrated
+  at, or to the largest that fits when the monitor is smaller.
+- Google Play Games keeps the game's shape from when it opened, so after a relaunch the game can
+  be 16:10 (1860x1162) instead of 16:9. A run then leaves the game at that size and moves the
+  calibration onto it, without saving the moved points. It refuses a shape narrower than 1.3:1 or
+  2:1 and wider, or a game under 720 rows. At a shape the account wasn't calibrated at, unattended
+  runs wait for one supervised attack there, and a calibration that was never verified has to be
+  taken again on that game area; Setup's Game window line says which applies.
 - It never spends gems and never presses a button on a dialog that shows a gem price. It runs one
   account, the one signed in to Clash on this PC, and never signs accounts in or out.
 - The dashboard has the phone's tabs (Home, Run, Stats, Activity, Setup); Ctrl+1 to Ctrl+5 and
