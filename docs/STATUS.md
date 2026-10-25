@@ -100,9 +100,28 @@ Evidence: `audit-evidence/live/20261025-060815-battlefit` and `20261025-061116-r
 supervised attacks), `20261025-064500-unattended1610` (the run's failure snapshots) and
 `20261025-065005-results1610` (its last result screens, the 14:02 one among them).
 
+At 14:19 a second unattended run at 16:10 started on `fc4253b`, set to 15 attacks. It started 15
+battles, recorded all 15 and finished at 14:51 on its limit, with no stop, restart or waited-out
+screen. Every result read its damage, stars and three loot rows, and each was checked against its
+result screen: all 15 match.
+
+| Stars | 1 | 2 | 3 |
+| --- | --- | --- | --- |
+| Battles | 10 | 4 | 1 |
+
+Damage ran from 60% to 100%. The loot read 8,296,391 gold, 8,605,989 elixir and 98,617 dark
+elixir. Gold and elixir were full at 31,000,000 and 30,500,000 from the start, so only the dark
+elixir was kept (238,982 to 379,475, league bonuses included). At 14:28 the 1,494,043 elixir row
+read as 494,043 and the reader put the 1 back (`result_loot_leading_one`); 1,028,918 gold at 14:27,
+113,469 gold and 1,468 dark at 14:40, and 1,165,054 elixir at 14:51 read whole. The Valkyries'
+card was tapped twice three times (14:37, 14:43 and 14:47). One "Anyone there?" screen at the
+start was reloaded, as it should be.
+
+Evidence: `audit-evidence/live/20261025-071936-verify1610` (every result screen, with the crops
+checked in `check/`).
+
 ### Not done
 
-- An unattended run at 16:10.
 - A defeat, walls, ending a battle early, the in-app Calibrate flow, the remote page from another
   device and the SendInput fallback, as on 24 October.
 
