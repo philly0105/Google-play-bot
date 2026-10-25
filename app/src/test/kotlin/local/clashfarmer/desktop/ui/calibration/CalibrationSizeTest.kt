@@ -1,12 +1,23 @@
 package local.clashfarmer.desktop.ui.calibration
 
+import androidx.compose.ui.input.key.Key
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import local.clashfarmer.accounts.AccountStore
 import local.clashfarmer.core.CollectionTarget
 import local.clashfarmer.core.Point
 import local.clashfarmer.core.Viewport
 import local.clashfarmer.desktop.PcProfiles
 import local.clashfarmer.desktop.SurfaceVerification
+import local.clashfarmer.desktop.platform.WindowStatus
 import local.clashfarmer.desktop.sidecar.SurfaceSize
+import local.clashfarmer.desktop.ui.DashboardHost
 import local.clashfarmer.recognition.PhoneProfile
+import local.clashfarmer.ui.Tab
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -14,9 +25,37 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.awt.image.BufferedImage
+import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CopyOnWriteArrayList
+import javax.imageio.ImageIO
 
 class CalibrationSizeTest {
+    private val filesDir = Files.createTempDirectory("calibration-size").toFile()
+    private val testScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    /** What the calibration screen said, oldest first. */
+    private val toasts = CopyOnWriteArrayList<String>()
+
+    private val host = object : DashboardHost {
+        override val scope: CoroutineScope get() = testScope
+        override val filesDir: File get() = this@CalibrationSizeTest.filesDir
+        override val windowStatus = MutableStateFlow(WindowStatus(checked = true))
+        override fun act(action: String) {}
+        override fun refresh() {}
+        override fun openTab(tab: Tab) {}
+        override fun openCalibration(accountId: String?) {}
+        override fun inspection(block: suspend () -> Unit): Boolean = false
+        override fun toast(text: String, long: Boolean) {
+            toasts += text
+        }
+    }
+
+    @After
+    fun stop() {
+        testScope.cancel()
+        filesDir.deleteRecursively()
+    }
 
     /** A verified calibration at the owner's 1740x978, with Battle and Next and one collector. */
     private val calibrated = PhoneProfile.createDefault(1740, 978).copy(
@@ -136,6 +175,123 @@ class CalibrationSizeTest {
         val moved = refit(calibrated, 1860, 1162).profile
         val note = referenceMismatch(1740, 978, moved)!!
         assertTrue(note, note.contains("taken at 1740x978") && note.contains("now 1860x1162"))
+        assertTrue(note, note.contains("no points can be marked on it"))
         assertTrue(note, note.endsWith("press Retake camera reference."))
+    }
+
+    @Test
+    fun `a point clicked on a saved screenshot of another size is not applied`() {
+        // A capture at 16:10 wrote frozen.png at 1860x1162 and its move was never saved, so the
+        // screen opens again with that screenshot over the saved 1740x978 calibration.
+        blood(calibrated, "calibration/frozen.png", 1860, 1162)
+        val model = open()
+        assertEquals(1860 to 1162, model.frame!!.let { it.width to it.height })
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == "attack" })
+        model.click(Point(261, 820))
+        model.applyPoint()
+        assertEquals(calibrated.stateAnchors, model.profile.stateAnchors)
+        assertFalse(model.unsaved)
+        val note = toasts.last()
+        assertTrue(note, note.contains("taken at 1860x1162") && note.contains("1740x978"))
+        assertTrue(note, note.endsWith("Press Capture game screen first."))
+
+        // At the calibration's own size the same click is set.
+        blood(calibrated, "calibration/frozen.png", 1740, 978)
+        val same = open()
+        same.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == "attack" })
+        same.click(Point(261, 820))
+        same.applyPoint()
+        assertEquals(Point(261, 820), same.profile.stateAnchors["attack"])
+    }
+
+    @Test
+    fun `a camera reference of another size takes no points`() {
+        // The calibration was moved to 16:10 and saved; the reference is still the 1740x978 one.
+        val moved = refit(calibrated, 1860, 1162).profile
+        blood(moved, "wall_camera.png", 1740, 978)
+        val model = open()
+        model.showCameraReference()
+        settle(model)
+        assertEquals(1740 to 978, model.frame!!.let { it.width to it.height })
+        assertEquals(referenceMismatch(1740, 978, moved), toasts.last())
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == "attack" })
+        model.click(Point(96, 885))
+        model.applyPoint()
+        assertEquals(moved.stateAnchors, model.profile.stateAnchors)
+        assertTrue(toasts.last(), toasts.last().contains("taken at 1740x978"))
+        // Nor a collector.
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        model.click(Point(900, 500))
+        model.applyPoint()
+        assertTrue(model.profile.collectionTargets.isEmpty())
+    }
+
+    @Test
+    fun `a collector on a camera reference of another size points to Retake`() {
+        val moved = refit(calibrated, 1860, 1162).profile
+        blood(moved, "wall_camera.png", 1740, 978)
+        val model = open()
+        model.showCameraReference()
+        settle(model)
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        model.click(Point(900, 500))
+        model.applyPoint()
+        // Capture game screen would lead back to Show camera reference and this same reference.
+        assertEquals(referenceMismatch(1740, 978, moved), toasts.last())
+        assertTrue(model.profile.collectionTargets.isEmpty())
+
+        // On the screenshot of a capture at another size, collectors still want the camera
+        // reference, and a reference at the calibration's size takes them.
+        blood(calibrated, "calibration/frozen.png", 1860, 1162)
+        val frozen = open()
+        frozen.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        frozen.click(Point(900, 500))
+        frozen.applyPoint()
+        assertEquals("Press Show camera reference first; collectors are measured on it", toasts.last())
+        frozen.showCameraReference()
+        settle(frozen)
+        frozen.click(Point(900, 500))
+        frozen.applyPoint()
+        assertEquals(2, frozen.profile.collectionTargets.size)
+    }
+
+    @Test
+    fun `a point refused on a frame of another size lets Enter reach the buttons`() {
+        // The note names a button to press; a point still waiting for Apply would take its Enter.
+        blood(calibrated, "calibration/frozen.png", 1860, 1162)
+        val model = open()
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == "attack" })
+        model.click(Point(261, 820))
+        assertTrue(takesEnter(Key.Enter, model.pending))
+        model.applyPoint()
+        assertFalse(takesEnter(Key.Enter, model.pending))
+        assertEquals(calibrated.stateAnchors, model.profile.stateAnchors)
+        // Likewise a collector, which waits for Show camera reference.
+        model.pickTarget(CALIBRATION_TARGETS.indexOfFirst { it.name == COLLECTOR })
+        model.click(Point(900, 500))
+        model.applyPoint()
+        assertFalse(model.pending)
+    }
+
+    /** Blood with [saved] as its calibration and a black PNG of [width]x[height] at [path] in its folder. */
+    private fun blood(saved: PhoneProfile, path: String, width: Int, height: Int) {
+        val store = AccountStore(filesDir)
+        store.ensureMigrated()
+        store.saveProfile(AccountStore.BLOOD_ID, saved)
+        val file = File(store.profileFile(AccountStore.BLOOD_ID).parentFile, path)
+        file.parentFile.mkdirs()
+        ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", file)
+    }
+
+    /** Blood's calibration screen once it has read what is saved. */
+    private fun open(): CalibrationModel = CalibrationModel(host, AccountStore.BLOOD_ID, onBack = {}).also { settle(it) }
+
+    /** Waits until [model] has read its files and finished what it was doing. */
+    private fun settle(model: CalibrationModel) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!model.loaded || model.working) {
+            assertTrue("the calibration screen is still busy", System.currentTimeMillis() < deadline)
+            Thread.sleep(10)
+        }
     }
 }
