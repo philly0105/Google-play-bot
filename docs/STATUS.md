@@ -127,6 +127,11 @@ checked in `check/`).
 - A tray with another troop of x5 or more right of the main troop has not been seen live. Reading
   it as the plain tray rather than an event tray is tested offline only, on band reads off
   Blood's two scout frames rearranged.
+- An account without the King or the Queen has not run either. Its tray is now read at the card
+  width Clash draws (`PC_CARD_PITCH`); that is tested offline only.
+- The Valkyries' card is still tapped twice now and then at 16:10: three times in the 14:19 run.
+- Stopping a run when the storages are full needs their sizes entered in Setup; Blood's are not
+  entered, so both runs kept attacking with gold and elixir full.
 
 ## 2026-10-24
 
