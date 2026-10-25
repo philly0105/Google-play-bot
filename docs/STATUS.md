@@ -56,6 +56,50 @@ Evidence: `audit-evidence/live/20261025-033812-menus` (the army screen),
 `20261025-053311-result1610` (the second result screen) and `20261025-055038-result1610b` (the
 third).
 
+Three more supervised attacks at 1860x1162 followed. At 12:59 the Valkyries' card was tapped a
+second time (`card_retry`), as in every 16:10 attack so far: the drop points, scaled by the
+height, fell on the beach and in the forest. Clash fits the battle map inside the game area as it
+does the army screen, and the drop points are now fitted the same way (`94851b9`); the 13:08 attack
+on that build tapped every card once. At 13:08 the damage read failed again, 59% as "c9%", and the
+damage box now has the PC's own lengths (`63e9270`).
+
+| Start | Damage | Stars read | Earned read |
+| --- | --- | --- | --- |
+| 12:59 | 100% | 3 | 561,751 gold, 166,880 elixir, 7,538 dark |
+| 13:08 | 59% on the screen, not read | 2 | 152,285 gold, 469,745 elixir, 8,020 dark |
+| 13:11 | 57% | 1 | 256,280 gold, 407,642 elixir, 3,966 dark |
+
+The 13:11 attack tapped the Valkyries' card twice once more, so fitting the drop points made the
+retry rarer but has not removed it.
+
+At 13:25 the first unattended run at 16:10 started on `63e9270`, set to 15 attacks. It started 16
+battles, recorded 12 and stopped at 14:06. Ten results read their damage and stars:
+
+| Stars | 1 | 2 | 3 |
+| --- | --- | --- | --- |
+| Battles | 3 | 6 | 1 |
+
+Damage ran from 55% to 100%. Their loot read 6,581,796 gold, 4,693,953 elixir and 69,561 dark
+elixir, with three rows missing (below). Gold was full at 31,000,000, so none of the gold was
+kept. The Valkyries' card was tapped twice once, at 13:52.
+
+What went wrong:
+
+- At 1860x1162 the reader often turns Return Home's t into an f, "RefurN HoMe", and the result
+  screen was then unknown. Four results were waited out (13:29, 13:37, 13:55 and 14:06), so those
+  battles were not recorded. The app restarted the run three times, its limit, and the fourth
+  stopped it. Two other results (13:34 and 13:41) were read on one frame only: the next frame's
+  button read the same way and ended the read, so they recorded nothing. A result now also
+  matches on " home " with "Troops expended" (`cfa1560`).
+- A result row's leading 1, alone before the first group, was dropped by every cut: at 13:49
+  1,512,953 gold and 1,501,482 elixir read as 512,953 and 501,482, and at 14:02 1,247,184 elixir as
+  247,184. The ink count refused the short reads, so those rows recorded nothing. The reader now
+  puts the 1 back when the ink shows it (`fc4253b`).
+
+Evidence: `audit-evidence/live/20261025-060815-battlefit` and `20261025-061116-result1610c` (the
+supervised attacks), `20261025-064500-unattended1610` (the run's failure snapshots) and
+`20261025-065005-results1610` (its last result screens, the 14:02 one among them).
+
 ### Not done
 
 - An unattended run at 16:10.
