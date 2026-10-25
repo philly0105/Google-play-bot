@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1797 tests, the phone's 1635
-and the PC's 162, and none failed.
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1804 tests, the phone's 1635
+and the PC's 169, and none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
 `Tests: N ran, N passed, N failed, N skipped`.
@@ -46,7 +46,7 @@ at 1740x978 and 1860x1162, and a few PNG crops.
 | Test | Covers | Tests |
 | --- | --- | --- |
 | `PcGeometryTest` | `PcGeometry`, and the phone's readers on captured PC frames: the village, the quit prompt, the builder counter and list, a Wall row, the army screen, the idle dialog, the scout, the result screen, the selection buttons, and the 16:10 frames | 20 |
-| `PcProfilesTest` | `PcProfiles.derive` against Blood's 1740x978 calibration: the same profile at its own size, 1860x1162 and 1565x978 values (Battle inside its button and the storage boxes over their balances on a 16:10 capture), 1920x1080, a round trip, the attack check at four sizes, verification per aspect, refusals, `fitInside`, `plainStopReason` and `SurfaceVerification` | 17 |
+| `PcProfilesTest` | `PcProfiles.derive` against Blood's 1740x978 calibration: the same profile at its own size, 1860x1162 and 1565x978 values (Battle inside its button and the storage boxes over their balances on a 16:10 capture), 1920x1080, a round trip, the attack check at four sizes, verification per aspect, refusals, `fitInside`, `plainStopReason` and `SurfaceVerification`; `runSize`, and `startRefusal` sending a calibration not yet verified, moved onto another area, to Calibrate; on boxes from geo-army and geo-scout moved by the height (and the width for the gem button), the army tap on Attack! and at least 8 px from the gem and clan buttons, and the loot, fee, countdown and first card boxes holding their text as well as at 1740x978 | 21 |
 | `FarmerServicePcTest` | The ported `FarmerService`: the Clash window as the foreground app, the viewport, the battery, launching Clash, sizing the game surface, capping it to the monitor, moving the calibration onto the size reached (the same profile at 1740x978, unverified at 16:10 until a supervised attack writes surfaces.json and never profile.json), and refusing every account but Blood | 20 |
 | `PcAccountSwitcherTest` | Blood's identity check on the profile menu's Settings strip | 6 |
 | `PcBattleDamageTest` | The battle's damage with the PC's End Battle label between the word and the value | 2 |

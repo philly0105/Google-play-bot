@@ -188,12 +188,14 @@ Setup:
   the game area at its live size, such as "Found. The game area is 1860x1162."; nothing in the UI
   assumes 16:9.
 - With an account picked on Home and calibrated, a found window's line sets the game area beside
-  that calibration, at the size a run would reach (`PcChecklist.runSize`: the calibration's size,
-  shrunk to what the monitor holds, at the game area's own shape). The same shape is green, and
-  says when the window will be resized or the screen holds less. Another shape is green once a
-  supervised attack has worked there (surfaces.json), else amber, "New shape", saying to run one
-  supervised attack, or to calibrate again when the calibration itself is not verified. A shape
-  outside 16:9 to 16:10 or a game under 720 rows is red, "Can't run".
+  that calibration, at the size a run would reach (`PcProfiles.runSize`: at the calibration's
+  shape, its size shrunk to what the monitor holds; at another shape, the game area's own size,
+  which a run leaves alone). The same shape is green, and says when the window will be resized or
+  the screen holds less; a screen that holds less with a calibration not yet verified is amber,
+  "New size", saying to calibrate again. Another shape is green once a supervised attack has
+  worked there (surfaces.json), else amber, "New shape", saying to run one supervised attack, or
+  to calibrate again when the calibration itself is not verified. A shape narrower than 1.3:1 or
+  2:1 and wider (`PcGeometry.isPc`), or a game under 720 rows, is red, "Can't run".
 - The account lines count verification as a run would on the game area shown
   (`PcChecklist.verifiedHere`), so at an unverified shape they ask for a supervised attack.
 - Tray icon is `java.awt.SystemTray.isSupported()`: "On", or amber "Off" with no fix.
@@ -237,8 +239,10 @@ Calibration:
   size. A toast says the points were moved and, when there were any, that the collectors were
   cleared. A profile that can't be moved, such as the phone's default, is relabelled as before.
 - The camera reference follows: a frame from `captureNormalizedVillage` of another size moves the
-  profile instead of failing, and a saved `wall_camera.png` of another size than the profile is
-  set aside with its collectors, as Retake does, and a new one captured.
+  profile instead of failing. Show camera reference never changes a saved reference: one of
+  another size than the profile being edited is shown with a note (`referenceMismatch`), and
+  collectors can't be marked on it until Retake sets it aside with its collectors and captures a
+  new one.
 - Save refuses a game area a run can't use. Replacing a saved calibration of one shape with one of
   another asks first ("Save at another shape?"). A save that changes the points also deletes the
   account's surfaces.json, since the shapes in it were verified on the old points.
@@ -297,9 +301,9 @@ of main at b514d40):
 
 | Test | Covers | Tests |
 | --- | --- | --- |
-| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix; the game area against the calibration (same size, same shape, capped, new shape, verified shape, unverified calibration, too small, unsupported shape), `runSize` and `verifiedHere` | 19 |
+| `desktop/ui/PcChecklistTest.kt` | The Game window and Tray icon lines, including a 1860x1162 surface and a window closed by hand, and how they count toward ready, the tab dot and the primary fix; the game area against the calibration (same size, same shape, capped, capped and unverified, new shape, verified shape, unverified calibration, too small, too small at another shape, unsupported shape), `runSize` and `verifiedHere` | 21 |
 | `desktop/ui/TrayCheckSheetTest.kt` | `profileAt`: the calibration itself, moved to 16:10, and a game area too small | 3 |
-| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, and `SurfaceVerification.calibrationSaved` | 8 |
+| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved` | 9 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |

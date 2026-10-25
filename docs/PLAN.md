@@ -107,9 +107,11 @@ GPG keeps the game area at an aspect it picks at launch (16:9 and 16:10 so far),
 aspect (1740x978 came back as 1860x1162, and 1565x978 when 1740x978 was asked), and relaunching to
 get the old one back breaks input until the PC restarts, so the bot works at the area it gets:
 
-- Before every profile read, `FarmerService` brings Clash forward and asks for the calibration's
-  size (`fitSurface`). The sidecar caps that to the monitor's work area at the same aspect
-  (`docs/SIDECAR.md`, resize), and `preferredSurface` does the same sum for a new profile.
+- Before every profile read, `FarmerService` brings Clash forward and, when the game area has the
+  calibration's aspect, asks for the calibration's size (`fitSurface`); an area of another aspect
+  is left at its own size. The sidecar caps a resize to the monitor's work area at the same aspect
+  (`docs/SIDECAR.md`, resize), `preferredSurface` does the same sum for a new profile, and
+  `PcProfiles.runSize` predicts the size a run reaches for Setup and the start check.
 - `PcProfiles.derive` then moves the saved profile onto the size reached, with the anchors in
   `docs/PC-GEOMETRY.md`. At the calibrated size it returns the profile itself, so the owner's
   1740x978 runs are what they were. It refuses a shape outside `PcGeometry.isPc` or an area under
@@ -120,7 +122,9 @@ get the old one back breaks input until the PC restarts, so the bot works at the
   `accounts/<id>/surfaces.json` (`SurfaceVerification`): the moved profile counts as verified when
   the calibration is and its aspect is recorded there, which a supervised attack at that aspect
   does through the run's profile updater. Calibrate's Save deletes the file when it changes the
-  points.
+  points. A calibration not yet verified can't earn verification on a moved area, so an attack
+  there, supervised or not, is refused with the advice to calibrate again on that area
+  (`PcProfiles.startRefusal`).
 - Calibrate, the tray check and Setup's Game window line use the same move (`docs/UI.md`).
 
 The phone tree places taps and reads text with fractions of 1600x720, mostly in `ScreenTargets`,
