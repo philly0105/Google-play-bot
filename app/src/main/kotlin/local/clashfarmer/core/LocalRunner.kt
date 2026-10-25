@@ -201,6 +201,8 @@ class LocalRunner(
     /** Whether an attack of this run has judged its hero slots yet, and slot 1's count on the last attack; see [heroCheckDue]. */
     private var heroSlotsJudged = false
     private var lastSlot1Count: Int? = null
+    /** Slots 1 and 2's counts when the last hero check read an event layout as the plain tray; see [readTray]. */
+    private var troopInSlot2Counts: Pair<Int?, Int?>? = null
     /** Attacks in a row whose calibrated hero cards showed no hero landed; see [countHeroLandings]. */
     private var heroesStayed = 0
     /** Why the run stops once the battle under way is home; set by [countHeroLandings]. */
@@ -1230,8 +1232,13 @@ class LocalRunner(
         val tray: AttackPlanner.TrayPlan,
         /** The hero slots of [tray], when this attack judged them. */
         val heroes: TrayCheck.Report?,
-        /** The same slots one card right, judged only when a tray not read as an event tray showed a count on one. */
-        val shifted: TrayCheck.Report?
+        /**
+         * The same slots one card right, judged only when a tray not read as an event tray showed a
+         * count on one, or when [troopInSlot2] turned an event layout plain.
+         */
+        val shifted: TrayCheck.Report?,
+        /** An event layout deployed as the plain tray: slot 2 holds a troop, not the main troop; see [readTray]. */
+        val troopInSlot2: Boolean
     )
 
     /**
@@ -1240,6 +1247,11 @@ class LocalRunner(
      * frame and judged as Setup's tray check judges them. Should one show a count on a tray not
      * read as an event tray, the slots one card right are judged too: one more band unless the
      * profile's card areas are uneven. No frame is taken when the profile cannot place the badges.
+     *
+     * Should one show a count on an event layout, the slots where they were calibrated are judged
+     * too, and [TrayCheck.troopInSlot2] may find the plain tray with a troop in slot 2, which is
+     * then deployed plain. Until the next hero check, the same two counts read as an event layout
+     * are deployed plain as well.
      */
     private suspend fun readTray(runToken: Long, timer: StepTimer): TrayRead {
         val bands = AttackPlanner.trayBadgeRegions(profile)
@@ -1247,24 +1259,40 @@ class LocalRunner(
         try {
             val badges = cap?.let { shot -> bands?.map { screenReader.readTrayBadge(shot.bitmap, it) } }
             val slot1 = badges?.get(0).orEmpty()
-            val layout = AttackPlanner.trayLayout(slot1, badges?.get(1).orEmpty())
-            val tray = AttackPlanner.forTray(profile, layout, eventMode = withEventTroops)
+            val slot2 = badges?.get(1).orEmpty()
+            val counts = AttackPlanner.badgeCount(slot1) to AttackPlanner.badgeCount(slot2)
+            val read = AttackPlanner.trayLayout(slot1, slot2)
+            val asRead = AttackPlanner.forTray(profile, read, eventMode = withEventTroops)
             var shifted: TrayCheck.Report? = null
-            val heroes = if (cap == null || !heroCheckDue(AttackPlanner.badgeCount(slot1))) null else {
+            var troop = false
+            val heroes = if (cap == null || !heroCheckDue(counts.first)) {
+                troop = read == AttackPlanner.TrayLayout.EVENT && counts == troopInSlot2Counts
+                null
+            } else {
                 heroSlotsJudged = true
                 val bandReads = HashMap<Region, List<String>>()
                 timer.step("heroBadges") {
-                    val report = judgeHeroes(tray.profile, layout, cap.bitmap, bandReads)
+                    val report = judgeHeroes(asRead.profile, read, cap.bitmap, bandReads)
                     // An event card that did not read leaves every hero slot one card left of its
                     // hero, so a count there is judged one card right as well before it stops a run.
-                    if (layout != AttackPlanner.TrayLayout.EVENT && TrayCheck.wrongHero(report) != null) {
+                    if (read != AttackPlanner.TrayLayout.EVENT && TrayCheck.wrongHero(report) != null) {
                         shifted = runCatching { AttackPlanner.withEventCard(profile) }.getOrNull()
-                            ?.let { judgeHeroes(it, layout, cap.bitmap, bandReads) }
+                            ?.let { judgeHeroes(it, read, cap.bitmap, bandReads) }
                     }
-                    report
-                }
+                    // A troop of x5 or more right of the main troop reads as an event card in front.
+                    val plain = if (read == AttackPlanner.TrayLayout.EVENT && TrayCheck.wrongHero(report) != null) {
+                        judgeHeroes(profile, AttackPlanner.TrayLayout.PLAIN, cap.bitmap, bandReads)
+                    } else null
+                    troop = plain != null && TrayCheck.troopInSlot2(report, plain)
+                    if (troop) {
+                        shifted = report
+                        plain
+                    } else report
+                }.also { troopInSlot2Counts = counts.takeIf { troop } }
             }
-            return TrayRead(badges, layout, tray, heroes, shifted)
+            val layout = if (troop) AttackPlanner.TrayLayout.PLAIN else read
+            val tray = if (troop) AttackPlanner.forTray(profile, layout, eventMode = withEventTroops) else asRead
+            return TrayRead(badges, layout, tray, heroes, shifted, troop)
         } finally {
             cap?.bitmap?.recycle()
         }
@@ -1303,15 +1331,16 @@ class LocalRunner(
      * Leaves a scout whose tray is not the one calibrated before a single troop is down, and
      * stops the run once home. [slot] is the hero slot that showed a count; it is read again
      * off the next frame so one misread frame cannot end a run, and false says that look saw
-     * no count and the attack goes ahead.
+     * no count and the attack goes ahead. [eventCard]: the tray was read as an event tray, which
+     * the stop reason says.
      *
      * End Battle is found as a surrender finds it, by its word or the calibrated end_battle point
      * in the button's corner. With nothing on the ground it goes straight home without asking
      * (audit-evidence/clash-18647, 10-after-endbattle), so it may be sent again while the scout
      * is still up.
      */
-    private suspend fun refuseTray(slot: TrayCheck.Slot, tray: PhoneProfile, runToken: Long): Boolean {
-        val reason = TrayCheck.trayMismatch(AppLog.runContextSnapshot().currentAccountName, slot)
+    private suspend fun refuseTray(slot: TrayCheck.Slot, tray: PhoneProfile, runToken: Long, eventCard: Boolean): Boolean {
+        val reason = TrayCheck.trayMismatch(AppLog.runContextSnapshot().currentAccountName, slot, eventCard)
         for (look in 1..MAX_SURRENDER_MISSES) {
             val cap = service.transport.capture(runToken)
             val state: ScreenState
@@ -1363,6 +1392,10 @@ class LocalRunner(
                 AppLog.log("event_card_ambiguous", "slot1" to slot1.joinToString(","),
                     "slot2" to slot2.joinToString(","), "decision" to tray.decision)
             }
+            if (read.troopInSlot2) {
+                AppLog.log("event_card_ruled_out", "slot1" to AttackPlanner.badgeCount(slot1),
+                    "slot2" to AttackPlanner.badgeCount(slot2), "heroCheck" to (read.heroes != null))
+            }
             val troopDrops = AttackPlanner.dropCounts(layout, slot1, slot2)
             AppLog.log("event_card_detected", "slot1" to AttackPlanner.badgeCount(slot1),
                 "slot2" to AttackPlanner.badgeCount(slot2),
@@ -1373,7 +1406,8 @@ class LocalRunner(
                 "heroes" to read.heroes?.let { heroSummary(it) + read.shifted?.let { s -> " | one card right " + heroSummary(s) }.orEmpty() })
             // A hero slot showing a count means the hero groups would tap troop cards: Blood's army
             // change of 14 October left every hero in the tray for two hours that way.
-            read.heroes?.let { TrayCheck.wrongHero(it, read.shifted) }?.let { refuseTray(it, tray.profile, runToken) }
+            read.heroes?.let { TrayCheck.wrongHero(it, read.shifted) }
+                ?.let { refuseTray(it, tray.profile, runToken, eventCard = layout == AttackPlanner.TrayLayout.EVENT) }
             timer.step("zoomOut") { zoomOutForDeployment(runToken) }
             val deployProfile = tray.profile
             val plan = AttackPlanner.buildDeployment(deployProfile, withEventTroops = tray.withEventTroops,

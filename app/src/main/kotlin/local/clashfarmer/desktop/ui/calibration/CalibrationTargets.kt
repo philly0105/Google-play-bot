@@ -70,7 +70,8 @@ val CALIBRATION_TARGETS: List<CalibrationTarget> = listOf(
     CalibrationTarget("end_battle", "End Battle button", "Click the End Battle button at the bottom left.", SCOUT),
     CalibrationTarget("valkyries", "Main troop card (e.g. Valkyries)",
         "The troop the bot drops all around the base, such as Valkyries. Click the middle of its card. " +
-            "Use a tray without the event card.", TRAY, required = true),
+            "Use a tray without the event card. The card right of it should not be another troop with a count of " +
+            "x5 or more, because the bot takes that for an event card in front of the tray.", TRAY, required = true),
     CalibrationTarget("rages", "Spell cast inside (e.g. Rage)",
         "The spell the bot casts five times inside the base, such as Rage. Click the middle of its card.", TRAY, required = true),
     CalibrationTarget("jumps", "Jump spell card (optional)",

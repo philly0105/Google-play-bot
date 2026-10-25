@@ -516,6 +516,23 @@ class EventTextTest {
     }
 
     @Test
+    fun aTroopReadAsTheEventCardReadsPlainly() {
+        // The stop line keeps the first sentence, which says the tray was read as an event tray.
+        val mismatch = "Blood's army no longer matches its tray setup: the Champion's card shows a troop count, with the " +
+            "tray read as starting with an event card. If there is no event card, the bot is reading another troop " +
+            "with a count of x5 or more right of the main troop as one, and recalibrating will not change that. " +
+            "Check the tray in Setup."
+        assertEquals("the army no longer matches its tray setup: the Champion's card shows a troop count, with the tray " +
+            "read as starting with an event card", EventText.stopLine(mismatch))
+
+        // Each attack an event layout is deployed plain says so in the technical log only.
+        val ruledOut = event("2026-10-25T09:00:00Z", "event_card_ruled_out", "slot1" to 44, "slot2" to 20, "heroCheck" to true)
+        assertNull(EventText.describe(ruledOut))
+        assertEquals("The card right of the main troop was another troop, not an event card; deployed the normal army",
+            EventText.technical(ruledOut))
+    }
+
+    @Test
     fun aWallRowLostBeforeItsTapIsOnTheTimelineAndEachLookIsNot() {
         val lost = EventText.describe(event("2026-10-15T08:00:00Z", "wall_list_pick_lost", "picked" to "Wall x80@582",
             "missed" to false, "rows" to 10))!!

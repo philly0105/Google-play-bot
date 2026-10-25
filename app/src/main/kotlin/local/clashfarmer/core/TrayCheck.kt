@@ -135,7 +135,9 @@ object TrayCheck {
 
     /**
      * Reads the tray the way an attack does: the first two badges pick the layout, an event
-     * layout shifts every card area one card right, and then each card area is judged.
+     * layout shifts every card area one card right, and then each card area is judged. An event
+     * layout that [troopInSlot2] finds is the plain tray is read as the plain tray, as an attack
+     * whose hero check is due reads it.
      * [readBadge] returns the cut readings of a badge band; [saturation] the mean saturation of
      * a card area. Inline so a caller can pass suspending reads.
      */
@@ -146,18 +148,42 @@ object TrayCheck {
     ): Report {
         val reads = HashMap<Region, List<String>>()
         val bands = AttackPlanner.trayBadgeRegions(profile)
-        val layout = if (bands == null) AttackPlanner.TrayLayout.UNKNOWN else AttackPlanner.trayLayout(
+        val read = if (bands == null) AttackPlanner.TrayLayout.UNKNOWN else AttackPlanner.trayLayout(
             reads.getOrPut(bands[0]) { readBadge(bands[0]) },
             reads.getOrPut(bands[1]) { readBadge(bands[1]) }
         )
-        val shift = runCatching { AttackPlanner.forTray(profile, layout, eventMode = false).profile }
-        val tray = shift.getOrDefault(profile)
+        val shift = runCatching { AttackPlanner.forTray(profile, read, eventMode = false).profile }
+        val shiftedHeroes = shift.getOrNull()?.takeIf { read == AttackPlanner.TrayLayout.EVENT }?.let {
+            heroSlots(it, read, { band -> reads.getOrPut(band) { readBadge(band) } }, saturation)
+        }
+        val troop = shiftedHeroes != null && wrongHero(shiftedHeroes) != null && troopInSlot2(shiftedHeroes,
+            heroSlots(profile, AttackPlanner.TrayLayout.PLAIN, { band -> reads.getOrPut(band) { readBadge(band) } }, saturation))
+        val layout = if (troop) AttackPlanner.TrayLayout.PLAIN else read
+        val tray = if (troop) profile else shift.getOrDefault(profile)
         val slots = tray.troopRois.entries.sortedBy { it.value.left }.map { (name, roi) ->
             val band = AttackPlanner.badgeBand(roi)
             slot(tray, name, roi, reads.getOrPut(band) { readBadge(band) }, saturation(roi))
         }
-        return report(layout, slots, measured = bands != null, shiftFailure = shift.exceptionOrNull()?.message)
+        return report(layout, slots, measured = bands != null, shiftFailure = shift.exceptionOrNull()?.message,
+            troopInSlot2 = troop)
     }
+
+    /**
+     * Whether a tray read as an event tray is the plain tray with another troop of x5 or more in
+     * slot 2, whose first two badges read as the event card's and the main troop's do. [shifted]
+     * is its hero slots judged one card right, where the event tray puts them; [plain] the same
+     * slots judged where they were calibrated, off the same frame.
+     *
+     * On the plain tray with a troop in slot 2 the heroes are where they were calibrated, so
+     * [plain] shows no count, and one card right the last hero slot lies past the heroes, on a
+     * spell's count when the army brings one there. With the event card in front every card sits
+     * one card right of its calibration: one card right the heroes show no count, and the King's
+     * calibrated slot lies on the card calibrated left of him, which shows a count when it is the
+     * main troop or another troop. Only a tray whose heroes show a count one card right is read
+     * plain, so an event tray whose heroes are where the shift puts them is never questioned.
+     */
+    fun troopInSlot2(shifted: Report, plain: Report): Boolean =
+        wrongHero(shifted) != null && wrongHero(plain) == null
 
     /**
      * The hero slots of the tray an attack is about to deploy, judged as [check] judges them, off
@@ -200,9 +226,21 @@ object TrayCheck {
 
     private const val CHECK_TRAY = "Check the tray in Setup, then recalibrate it."
 
-    /** Why an attack left the scout screen without deploying: [slot] is a hero slot showing a count. */
-    fun trayMismatch(village: String?, slot: Slot): String =
-        "${possessive(village)} $TRAY_MISMATCH: the ${label(slot.name)}'s card shows a troop count. $CHECK_TRAY"
+    /**
+     * What a stop on an event layout says in place of [CHECK_TRAY]: recalibrating keeps a troop
+     * of x5 or more right of the main troop where it is, so the tray reads as the event tray again.
+     */
+    private const val TROOP_AS_EVENT_CARD = "If there is no event card, the bot is reading another troop with a " +
+        "count of x5 or more right of the main troop as one, and recalibrating will not change that. Check the tray in Setup."
+
+    /**
+     * Why an attack left the scout screen without deploying: [slot] is a hero slot showing a count.
+     * [eventCard]: the tray was read as starting with an event card, so [slot] lay one card right
+     * of its calibration.
+     */
+    fun trayMismatch(village: String?, slot: Slot, eventCard: Boolean = false): String =
+        "${possessive(village)} $TRAY_MISMATCH: the ${label(slot.name)}'s card shows a troop count" +
+            if (eventCard) ", with the tray read as starting with an event card. $TROOP_AS_EVENT_CARD" else ". $CHECK_TRAY"
 
     /** Why a run stopped after [attacks] attacks in a row whose hero cards showed no landed hero. */
     fun heroesStayed(village: String?, attacks: Int): String =
@@ -214,15 +252,25 @@ object TrayCheck {
     /**
      * The report on [slots] judged under [layout]. [measured] is false when the profile cannot
      * place the first two badges; [shiftFailure] is why an event layout could not shift the card
-     * areas. On a frame where no band read a badge, a slot's "no count badge" red is only amber:
-     * the picture, not the card, is the likely cause.
+     * areas; [troopInSlot2] says an event layout was read as the plain tray (see [check]). On a
+     * frame where no band read a badge, a slot's "no count badge" red is only amber: the picture,
+     * not the card, is the likely cause.
      */
-    fun report(layout: AttackPlanner.TrayLayout, slots: List<Slot>, measured: Boolean, shiftFailure: String?): Report {
+    fun report(
+        layout: AttackPlanner.TrayLayout,
+        slots: List<Slot>,
+        measured: Boolean,
+        shiftFailure: String?,
+        troopInSlot2: Boolean = false
+    ): Report {
         val note = when {
             !measured -> "The Valkyries card area or the King and Queen taps are not calibrated, so the bot cannot " +
                 "look for an event card. Card areas are read where they were calibrated."
             shiftFailure != null -> "The tray starts with an event card, but the card areas could not be moved one " +
                 "card right ($shiftFailure), so they are read where they were calibrated."
+            troopInSlot2 -> "The card right of the main troop shows a troop count, as an event card in front would, " +
+                "but the hero cards are where they were calibrated. So there is no event card, and card areas are " +
+                "read where they were calibrated, as an attack does."
             else -> null
         }
         val report = Report(layout, slots, note)
