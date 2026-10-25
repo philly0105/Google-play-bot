@@ -161,9 +161,17 @@ object BattleResultReader {
         return (r * 299 + g * 587 + b * 114) / 1000 > FILL_LUMINANCE && maxOf(r, g, b) - minOf(r, g, b) < FILL_SPREAD
     }
 
+    /**
+     * Where the damage digits sit under "Total damage:". The phone's lengths read the PC's digits
+     * at 1740x978 on all 30 battles of 25 October, so on the PC they scale from there with the
+     * frame's height ([PcGeometry.length]): unscaled at 1860x1162 they cut off the digits' lower
+     * part, and 72% read as "730" and "720" (audit-evidence/live/20261025-053311-result1610).
+     */
     fun damageRegion(boxes: List<RecognizedBox>, viewport: Viewport): Region? {
         val anchor = find(boxes, viewport, TOTAL_DAMAGE, DAMAGE_BAND) ?: return null
-        return Region(anchor.x - 45, anchor.y + 13, anchor.x + 45, anchor.y + 43)
+        val pc = viewport.takeIf(PcGeometry::isPc)
+        fun length(pixels: Int) = pc?.let { PcGeometry.length(it, pixels) } ?: pixels
+        return Region(anchor.x - length(45), anchor.y + length(13), anchor.x + length(45), anchor.y + length(43))
     }
 
     /**

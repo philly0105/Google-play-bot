@@ -78,10 +78,11 @@ The army screen has been captured at 16:10 (`live-1860-army`), and Clash fits it
 area: it scales by the smaller of W/1740 and H/978 about the centre, so at 1860x1162 it grows by
 the width's 1.069, not the height's 1.188. Its Attack!, gem and clan buttons sit within 6 px of that
 rule. The profile menu and its Settings tab, also captured at 16:10, follow the height
-(`audit-evidence/live/20261025-034323-profile3`). No list, recipes tab or result screen has been
-captured at 16:10; Clash may scale them by the height, which is what CENTRE does, or fit them, by
-1.069 at 1860x1162 and 0.899 at 1565x978. PcGeometryTest checks the recipes tab and the result
-screen both ways.
+(`audit-evidence/live/20261025-034323-profile3`), and so does the result screen
+(`live-1860-result`): its label, VICTORY and the gap from "You got" to the first row grow by 1.175
+to 1.19 about the centre. No list or recipes tab has been captured at 16:10; Clash may scale them by
+the height, which is what CENTRE does, or fit them, by 1.069 at 1860x1162 and 0.899 at 1565x978.
+PcGeometryTest checks the recipes tab both ways.
 
 ## Moving a calibration
 
@@ -188,7 +189,10 @@ These have PC handling of their own, outside the values above:
 - The tray badge read, `ScreenReader.readTrayBadge` and `AttackPlanner`'s badge band.
 - `BattleResultReader`, `BattleDamage`, `core/RatePrompt.kt`, `core/StarBonusNotice.kt` and
   `LocalRunner.observeSettled`. The result reader's PC row lengths agree with 978/720 within 3 px,
-  and its first star is exact. By the width at 16:10 they would come out about 11% too large.
+  and its first star is exact. At 1860x1162 they scale by the height, as the screen does, and hold
+  the three rows and both stars of `live-1860-result`. Its damage box now scales the same way: at
+  the phone's lengths it cut off the lower part of the 16:10 digits, and 72% read as "730" and
+  "720".
 
 `AccountSwitcher` calls `returnHomeTarget` with `Point(800, 624)` as its calibrated anchor. On a PC
 frame that sits at (0.46,0.638), outside `RESULT_BUTTON`, so `returnHomeTarget` drops it and falls
@@ -240,6 +244,7 @@ The five below were fixed on 25 October from captures and logs. None of the fixe
 | `live-1860-counter` | `audit-evidence/live/20261024-034034-dragmeasure/4a-right150.json` |
 | `live-1860-replay` | `audit-evidence/live/20261024-033349-look/frame.json`, the attacker's name replaced |
 | `live-1860-army` | `audit-evidence/live/20261025-033812-menus/2-army.json`, the lines above y 150 (the HUD's names and balances) left out |
+| `live-1860-result` | `audit-evidence/live/20261025-053311-result1610/1792931695135.json`, the defender's name and clan replaced |
 
 The `corner-*` fixtures hold the lines the sidecar's recogniser read, offline, from the x3 crop of
 `Builders.pcCornerRegion` on a saved PNG. Each also has the crop's region and scale.
@@ -253,8 +258,12 @@ The `corner-*` fixtures hold the lines the sidecar's recogniser read, offline, f
 | `corner-1860-village` | `audit-evidence/live/20261024-034034-dragmeasure/4b-right150-back.png` |
 | `corner-1860-dragged` | `audit-evidence/live/20261024-034034-dragmeasure/1a-down300.png` |
 
+`PcBattleResultTest` also reads raw RGB crops of the two result frames: `result-1740-rows.rgb` and
+`result-1740-stars.rgb` from `live-1740-result`'s PNG, and `result-1860-stars.rgb`, 400x140 from
+(740, 180), from `live-1860-result`'s.
+
 Some inputs are built in the test rather than captured. The 1565x978 HUD boxes come from the image
-by correlation. The 16:10 list, recipes and result screens are the 1740x978 captures moved by the
+by correlation. The 16:10 list and recipes screens are the 1740x978 captures moved by the
 model. The Wall rows are `geo-list-end` with two countdowns removed and two names changed to
 "Wall x 9" and "Wall x 80".
 
@@ -264,7 +273,7 @@ model. The Wall rows are `geo-list-end` with two countdowns removed and two name
 | --- | --- |
 | the recipes tab at 16:10 | whether it is fitted like My Army, and the army values marked estimated |
 | the upgrade list at 16:10, and how far a swipe scrolls it | the panel, `CARD_LINE_GAP`, the coin column, both list swipes |
-| a result at 16:10, and a defeat | `RESULT_*` and the result reader's PC lengths |
+| a defeat | the result reader on a battle with no stars and little loot |
 | a selected building at 16:10 | `PC_BUTTON_PITCH` |
 | a Clash popup with an X, and "All builders are busy!" | `CLOSE_CORNER` in `PopupGuard` and `Builders`, and `Builders`' other regions |
 | the takeover and connection-lost dialogs | `RELOAD_BUTTON` for Clash's own Reload |
