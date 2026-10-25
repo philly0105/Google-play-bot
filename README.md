@@ -10,8 +10,10 @@ ban can be permanent.
 
 ## What it does
 
-- Attacks with the army Clash has trained: Battle, Find a Match, the army check, then heroes,
-  abilities, spells and the event card, with the phone's stall watcher and optional early end. It
+- Attacks with one army plan: a mass troop such as Valkyries dropped all around the base, a spell
+  such as Rage cast five times inside, an optional Jump spell, and up to four heroes. It runs
+  Battle, Find a Match, the army check, then heroes, abilities, spells and the event card, with
+  the phone's stall watcher and optional early end. It
   reads the result screen (loot, damage, stars) and records every battle.
 - Between attacks it reads the village's storage. It stops when storage is full and nothing is left
   to spend it on, and it can buy walls when that is turned on for the account.
@@ -70,7 +72,8 @@ The version is `appVersion` in `gradle.properties`, and only there. The exe, Set
 Setup has a line for each thing a run needs: the Clash window, the text reader (the sidecar's
 OCR), the tray icon, battery, the remote page (which needs Tailscale), and per account whether the
 bot has read it, the calibration, the troop tray, walls, the goal and rules, and builders. Open
-Clash from the Game window line, calibrate the account, then run one supervised attack.
+Clash from the Game window line, calibrate the account, then run one supervised attack. A new
+account can start calibration from the standard positions and only check its troop cards.
 Unattended runs stay locked until a supervised attack has verified the account's profile. The
 bottom of Setup names the version and has Open logs folder.
 
