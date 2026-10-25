@@ -3,8 +3,8 @@
 The phone's Android UI (file class 4 in `docs/PLAN.md`) is ported to Compose for Desktop under
 `app/src/main/kotlin/local/clashfarmer/desktop/ui/`. It uses Compose Foundation only, no Material,
 and adds no dependencies: Compose Desktop 1.8.2 and `kotlinx-coroutines-swing` are already on the
-build. It compiles and runs, and `DashboardRenderTest` draws every tab, the account editor and
-calibration off-screen (see Tests).
+build. It compiles and runs, and `DashboardRenderTest` draws every tab, the account editor,
+calibration and the whole window off-screen (see Tests).
 
 Every screen, sheet, editor, chart, chip, number and action of the phone UI is kept, with the
 phone's wording except where it names Android things (see Wording). Nothing in
@@ -80,8 +80,9 @@ visibility. The overlay is its own window, and the PC bot works the game in the 
 
 The PC runs only Blood. `pcAccounts` drops every other account from what the controller reads,
 both the tick it binds and its starts, so Sweat's calibration and wall lines never sit in Setup
-or Activity, Home has no second-account card, and Run greys out Both. Sweat's record and files
-stay on disk. `Main.kt` selects Blood at each start, and calibration falls back to Blood. The
+or Activity, and Home has no second-account card. With one account Run hides the account
+picker, the Both preset and the Switch account tool (`shownPresets`), and Stats hides its
+All/account filter. Sweat's record and files stay on disk. `Main.kt` selects Blood at each start, and calibration falls back to Blood. The
 built-in "Both accounts" preset is kept and refused with "Both needs two accounts".
 
 ## Actions
@@ -89,8 +90,12 @@ built-in "Both accounts" preset is kept and refused with "Both needs two account
 Every action but `stop`, `pause`, `edit:` and `history` is refused while a run or an inspection
 is on, with the toast "Wait for the current operation or stop the bot first." and the log event
 `handle_action_busy`. Every action logs `handle_action`; a failure logs `handle_action_error` and
-shows "Could not start" with the reason, such as the service's "The PC runs only Blood, not
-Sweat".
+shows an alert titled for what was asked (`actionFailure`): "Could not start the run" for
+`plan:`, `supervised` and `walls`, "Could not choose that account" for `select:` and
+`switch_only:`, "Could not clear the marker" for `acknowledge_wall:`, else "Something went
+wrong". Its message is the reason when the code worded one, such as the service's "The PC runs
+only Blood, not Sweat."; any other exception reads "Something went wrong. The Technical log on
+the Activity tab has the details." and its text stays in the log.
 
 | Action | What it does |
 | --- | --- |
@@ -155,6 +160,20 @@ Shell:
   selected and copied.
 - Controls are 40 dp tall and the main action 44 dp, down from the 48 dp finger target. Buttons
   show a hand cursor and a hover wash. Pages are at most 880 dp wide, forms 640 dp.
+- Tab moves between controls, and the one with focus has a 2 dp ring: gold, or the text colour
+  on a gold button and on the selected segment. Enter or Space presses it. Up and Down step a
+  stepper, Left and Right move a segmented choice. Ctrl+1 to Ctrl+5 open the tabs, and Ctrl+Tab
+  and Ctrl+Shift+Tab step through them, wherever focus is (`tabForKey`).
+- A disabled main button keeps the glass fill with faint text, not a dimmed gold.
+- Home's and Run's start buttons sit in a footer under a hairline that stays put while the page
+  scrolls. When Start is off, the reason shows above it in plain words, with a link to the fix
+  where there is one (`StartFix`): "Calibrate Blood >" opens calibration on the account, "Run a
+  supervised attack >" opens Run's tools (from Home, the Run tab), and a reason that names Setup
+  opens Setup. With
+  the bot not running the reason reads "Clash Farmer is still starting..." in place of the
+  readiness check's accessibility line.
+- The save dialog of Export CSV and the tray menu are Windows' own and follow its theme, not the
+  app's dark one. That is known and kept.
 
 Home:
 
@@ -163,11 +182,20 @@ Home:
   frame, so this is the same rule. A 16:10 surface such as 1860x1162 gives a taller box, about
   530 dp in the 1100x760 window; Pause and Stop stay in view and the page scrolls.
 - Frames are decoded off the UI thread and drawn through `toComposeImageBitmap()`.
+- While idle, the chip by the title is the game window's state (`gameChip`), toned as Setup's
+  Game window line: "Clash open" or "Clash minimized" green, "Looking for Clash" grey, "Clash
+  not open" amber, "Clash closed" or "Clash not found" red. An amber or red chip opens Setup.
+  While a run is going it shows the run's state as before.
+- A resource the bot has not read shows "Not read" on its bar and a faint dash in its tile, not
+  a zero.
 
 Run:
 
 - Presets wrap onto as many lines as they need; the phone scrolled them sideways. A right-click
-  offers "Rename or delete", the phone's long press.
+  offers "Rename or delete", the phone's long press, and hovering one says so.
+- The steppers fill the form's width.
+- The one-attack tool is "Supervised attack (one attack you watch)", the name the reasons and
+  Setup use.
 - Start at and End by open `TimeDialog`: type HH:MM (8:30, 0830 and 8.30 also read) or use the
   hour and minute steppers. Enter or Set confirms.
 
@@ -175,6 +203,23 @@ Stats:
 
 - Export opens a save dialog on Downloads with the export's file name and writes through a
   temporary file, so a failed write keeps an older file. The toast names the folder chosen.
+- The title row holds Export CSV at its right, as a small button.
+
+Activity:
+
+- The Problems tab reads "Problems (2)" with the count.
+- Clear resolved is a small button on the right and clears only past events (`clearable`). A
+  calibration or settings finding stays until it is fixed, since it still stops runs; on the
+  phone Clear resolved hid it for 30 days.
+- A calibration or settings finding's button goes to its fix (`findingFix`): "Calibrate" opens
+  calibration on the account when the calibration is missing, incomplete, has copied points or
+  uneven card spacing; "Open Run" when it is not yet verified, which takes a supervised attack;
+  "Open Setup" for an unreachable goal or the wall setup.
+
+Raids:
+
+- A battle's ids sit under Details, headed "For a bug report: select an id to copy it.", below
+  what the battle did.
 
 Setup:
 
@@ -233,7 +278,11 @@ Calibration:
 
 | Phone | PC |
 | --- | --- |
-| "Enable Accessibility Service first!", "Accessibility Service is not enabled!", "Turn on the accessibility service in Setup", "Turn on the accessibility service first." | "The bot service is not running." |
+| "Enable Accessibility Service first!", "Accessibility Service is not enabled!", "Turn on the accessibility service in Setup", "Turn on the accessibility service first." | "Clash Farmer is still starting. If this stays, quit it from the tray icon and open it again." |
+| "Test one attack (supervised)" | "Supervised attack (one attack you watch)"; the overlay says "Starting a supervised attack on Blood..." and "Starting walls only on Blood..." |
+| "Inspect Result: VILLAGE_HOME" | "What the bot sees"; the report says "village home" |
+| "Inspect failed: <exception>" | "Inspect could not read the game window. Make sure Clash is open, then try again." |
+| "Please calibrate the profile first.", "Unknown account", "Account not found" | "Blood is not calibrated. Open Setup and calibrate it first.", "That account is gone. Choose one on Home." |
 | "Switching to Clash and capturing..." and "Switching to Clash and capturing game frame..." (overlay status) | "Capturing the game screen..." |
 | "Selected: None (tap image)" | "Selected: None (click the image)" |
 | "Tap a point on the screenshot first" | "Click a point on the screenshot first" |
@@ -253,20 +302,22 @@ label "Clash Farmer remote link" and its sensitive flag, and the `intent_action_
 The phone's screen-reader labels are kept: "Increase" and "Decrease" on the steppers, "Bar
 chart", "<section>, show or hide" on the editor's section headers, and each number box's label.
 
-Phone wording remains in shared files the UI shows but this port must not edit (line numbers as
-of main at b514d40):
+The stop reasons, the battery guard's lines and "on this phone" in `insight/EventText.kt`,
+`insight/Problems.kt`, `insight/CalibrationHealth.kt`, `core/Policy.kt`, `ui/screens/HomeCards.kt`
+and `service/RunNotice.kt` now say PC things; each edit has a row in `docs/DIVERGENCES.md`. The
+notifications and the status panel show a stop through `EventText.stopLine`, not the raw reason.
+
+Phone wording remains in shared files (line numbers as of 3c438fb):
 
 - `core/RunPlan.kt:284` "Turn on the accessibility service in Setup", the readiness reason when
-  the service is not connected.
-- `core/Policy.kt:330` and `insight/CalibrationHealth.kt:77`, `:220` "on this phone".
-- `core/DeviceGuard.kt:32` "Phone too hot"; `ui/screens/HomeCards.kt:117` "Let the phone cool or
-  charge".
-- `core/AppSwitchLatch.HOLD_TIMEOUT_REASON` (the notification shade).
+  the service is not connected. Home and Run show "Clash Farmer is still starting..." in its
+  place (`StartFix.plainReason`).
+- `core/DeviceGuard.kt:32` "Phone too hot". The PC has no temperature reading, so it cannot fire.
+- `core/AppSwitchLatch.HOLD_TIMEOUT_REASON` and `insight/EventText.kt:168`-`171` and `:577` (the
+  notification shade), which the PC does not detect.
+- `insight/EventText.kt:612` "a touch on the screen cancelled a tap".
 - `core/TrayCheck.kt:113` "tap Attack", and `:253`-`254` "Tap the middle of the right card again
   in Calibrate".
-- `insight/EventText.kt:168`-`171` (the notification shade), `:192`, `:444`-`445`, `:530`,
-  `:546` ("Phone guard"), `:575`, `:579` ("the phone was locked") and `:600` ("a touch on the
-  screen"); `insight/Problems.kt:127`, `:129`, `:165`.
 - `ui/screens/SetupChecklist.kt:95` "Starts with the accessibility service.", on Setup's remote
   line.
 
@@ -278,8 +329,12 @@ of main at b514d40):
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets, `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 14 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
-| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts`, and every tab, the account editor and calibration drawn off-screen at 1100x760 into `app/build/ui-renders` | 2 |
-| `desktop/RunTrayTest.kt` | `RunNotifier` through `RunTray`, and the panel's status text, idle shape and Stop | 5 |
+| `desktop/ui/DashboardRenderTest.kt` | `pcAccounts` and `shownPresets` with Blood alone; every tab, the account editor and calibration drawn off-screen at 1100x760, and the whole window at 100%, at 150% in 1280x650 dp and with a run going, into `app/build/ui-renders`; `tabForKey` | 4 |
+| `desktop/ui/StartFixTest.kt` | `StartFix` for each readiness reason, `plainReason`, `shownPresets` and `gameChip` | 8 |
+| `desktop/ui/ControllerTextTest.kt` | `actionFailure`'s titles and messages, and `readableState` | 3 |
+| `desktop/ui/ActivityLinksTest.kt` | `clearable` and `findingFix` | 2 |
+| `desktop/ui/components/KeyControlsTest.kt` | `stepKey` and `nextOption` | 2 |
+| `desktop/RunTrayTest.kt` | `RunNotifier` through `RunTray`, its stop notice in `stopLine`'s words, and the panel's status text, plain lines, idle shape and Stop | 9 |
 
 ## Open points
 
