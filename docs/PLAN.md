@@ -134,7 +134,8 @@ get the old one back breaks input until the PC restarts, so the bot works at the
 - A new account can start from the standard positions, `app/src/main/resources/profile/
   pc-start-1740x978.json`: the owner's verified 1740x978 calibration with no collectors, wall or
   deployment points, and not verified. Calibrate moves it onto the game area shown with the same
-  rule, the user checks the troop cards against their own tray and saves, and it stays unverified
+  rule, the user checks the troop cards against their own tray, removes any hero or jump spell
+  the army lacks (Not in my army), and saves, and it stays unverified
   until a supervised attack on that account.
 
 The phone tree places taps and reads text with fractions of 1600x720, mostly in `ScreenTargets`,

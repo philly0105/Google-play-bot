@@ -53,6 +53,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -99,13 +100,16 @@ private const val LOUPE_SPAN = 32
  * Calibration in place of the tabs: the phone's CalibrationActivity laid out for a desktop
  * window, the frame on the left and the target list, actions and status in a sidebar.
  *
- * The keys ([calibrationKey]) are read on the whole screen, after any button that has focus: a
- * click on the frame takes focus back from the last button pressed, so Enter applies the point
- * rather than pressing that button again. Escape asks the way Back does.
+ * The keys ([calibrationKey]) are read on the whole screen, after any button that has focus, but
+ * Enter is taken before that button while a point waits for Apply ([takesEnter]): the button
+ * last pressed keeps focus after a pick from the list and the arrow keys, and would otherwise run
+ * again. Escape asks the way Back does.
  */
 @Composable
 fun CalibrationScreen(model: CalibrationModel) {
     val focus = remember { FocusRequester() }
+    // Whether the screen took the last Enter press, so its release does not reach a button either.
+    val enter = remember { booleanArrayOf(false) }
     LaunchedEffect(model) {
         // After the first frame, once the screen's nodes are attached.
         withFrameNanos {}
@@ -115,6 +119,23 @@ fun CalibrationScreen(model: CalibrationModel) {
         Modifier
             .fillMaxSize()
             .background(FarmerColors.background)
+            .onPreviewKeyEvent { e ->
+                if (!isEnter(e.key)) return@onPreviewKeyEvent false
+                when (e.type) {
+                    // A held key repeats its press; the screen keeps the presses it started.
+                    KeyEventType.KeyDown -> when {
+                        enter[0] -> true
+                        takesEnter(e.key, model.pending) -> {
+                            enter[0] = true
+                            model.applyPoint()
+                            true
+                        }
+                        else -> false
+                    }
+                    KeyEventType.KeyUp -> enter[0].also { enter[0] = false }
+                    else -> false
+                }
+            }
             .onKeyEvent { e ->
                 val action = calibrationKey(e.key, e.isShiftPressed) ?: return@onKeyEvent false
                 if (e.type == KeyEventType.KeyDown) when (action) {
@@ -184,6 +205,15 @@ internal fun calibrationKey(key: Key, shift: Boolean): CalibrationKey? {
         else -> null
     }
 }
+
+/** Enter on the main keys or the number pad. */
+internal fun isEnter(key: Key): Boolean = key == Key.Enter || key == Key.NumPadEnter
+
+/**
+ * Whether the screen takes [key] before the button that has focus: Enter, while a clicked or
+ * nudged point is [pending]. With nothing to apply, Enter presses the focused button as usual.
+ */
+internal fun takesEnter(key: Key, pending: Boolean): Boolean = pending && isEnter(key)
 
 /**
  * The phone's CalibrationView: the frame as large as fits, centred, with the game area in green,
@@ -266,7 +296,7 @@ private fun FrameView(model: CalibrationModel, modifier: Modifier, onFocus: () -
                 // is drawn where a run would click.
                 if (image.width == profile.resolutionWidth && image.height == profile.resolutionHeight) {
                     savedBox(profile, model.target.name)?.let { box(it, FarmerColors.ok, thin) }
-                    savedPoint(profile, model.target.name)?.let { pt ->
+                    model.targetPoint(model.target.name)?.let { pt ->
                         val spot = Offset(fit.x(pt.x), fit.y(pt.y))
                         drawCircle(FarmerColors.ok, radius = 7.dp.toPx(), center = spot, style = Stroke(2.dp.toPx()))
                         label("Saved", spot.x + 10.dp.toPx(), spot.y + 18.dp.toPx())
@@ -332,7 +362,8 @@ private fun DrawScope.loupe(image: ImageBitmap, fit: FrameFit, centre: Point) {
 
 /**
  * The phone's sidebar: the account and progress, the target picker, what to click for the
- * target and where it is, the actions, the profile's status, the actions that clear saved work,
+ * target and where it is, the actions (with Not in my army on an optional card), the profile's
+ * status, the actions that clear saved work,
  * and the way back. Every button but Back is off while a capture, a read or a save runs, and a
  * line under them says which.
  */
@@ -359,6 +390,12 @@ private fun Sidebar(model: CalibrationModel, modifier: Modifier) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SecondaryButton("Capture game screen", Modifier.fillMaxWidth(), enabled = idle) { model.capture() }
                 SecondaryButton("Apply point", Modifier.fillMaxWidth(), enabled = idle) { model.applyPoint() }
+                // Only on the jump spell and the heroes, which not every army has.
+                if (model.target.name in OPTIONAL_CARDS) {
+                    SecondaryButton("Not in my army", Modifier.fillMaxWidth(), enabled = idle && model.removable) {
+                        model.removeCard()
+                    }
+                }
                 SecondaryButton("Start from the standard positions", Modifier.fillMaxWidth(), enabled = model.standardEnabled) {
                     model.startFromStandard()
                 }
@@ -411,7 +448,7 @@ private fun TargetPicker(model: CalibrationModel) {
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Check(isSet(model.profile, model.target.name) && model.target.name !in VIEWPORT_TARGETS)
+            Check(model.targetSet(model.target.name) && model.target.name !in VIEWPORT_TARGETS)
             Label(model.target.label, Modifier.weight(1f), size = FarmerTheme.SMALL + 1, medium = true, maxLines = 1)
             Chevron(Modifier.padding(start = 8.dp).size(width = 10.dp, height = 6.dp))
         }
@@ -481,7 +518,7 @@ private fun TargetList(model: CalibrationModel, modifier: Modifier, onPick: (Int
                         val target = CALIBRATION_TARGETS[row.index]
                         val selected = row.index == model.targetIndex
                         val enabled = targetEnabled(profile, target.name)
-                        val set = isSet(profile, target.name)
+                        val set = model.targetSet(target.name)
                         Row(
                             Modifier
                                 .fillMaxWidth()

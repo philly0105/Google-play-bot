@@ -74,12 +74,16 @@ val CALIBRATION_TARGETS: List<CalibrationTarget> = listOf(
     CalibrationTarget("rages", "Spell cast inside (e.g. Rage)",
         "The spell the bot casts five times inside the base, such as Rage. Click the middle of its card.", TRAY, required = true),
     CalibrationTarget("jumps", "Jump spell card (optional)",
-        "Optional: a spell the bot casts once in the middle of the base, such as Jump. Click the middle of its card.", TRAY),
-    CalibrationTarget("king", "Barbarian King (skip if you don't have it)", "Click the middle of the Barbarian King's card.", TRAY),
-    CalibrationTarget("queen", "Archer Queen (skip if you don't have it)", "Click the middle of the Archer Queen's card.", TRAY),
-    CalibrationTarget("warden", "Grand Warden (skip if you don't have it)", "Click the middle of the Grand Warden's card.", TRAY),
-    CalibrationTarget("champion", "Fourth hero (skip if you don't have it)",
-        "Click the middle of the Royal Champion's card, or your fourth hero's.", TRAY),
+        "Optional: a spell the bot casts once in the middle of the base, such as Jump. Click the middle of its card. " +
+            "If you don't bring one, press Not in my army.", TRAY),
+    CalibrationTarget("king", "Barbarian King (if you have it)",
+        "Click the middle of the Barbarian King's card. If you don't have it, press Not in my army.", TRAY),
+    CalibrationTarget("queen", "Archer Queen (if you have it)",
+        "Click the middle of the Archer Queen's card. If you don't have it, press Not in my army.", TRAY),
+    CalibrationTarget("warden", "Grand Warden (if you have it)",
+        "Click the middle of the Grand Warden's card. If you don't have it, press Not in my army.", TRAY),
+    CalibrationTarget("champion", "Fourth hero (if you have it)",
+        "Click the middle of the Royal Champion's card, or your fourth hero's. If you don't have one, press Not in my army.", TRAY),
     CalibrationTarget("hero_drop", "Hero drop point", "Click where the heroes should land, just outside the base.", MAP),
     CalibrationTarget("perim_1_start", "Edge 1 start", "Click the start of the first edge the main troop is dropped along.", MAP, required = true),
     CalibrationTarget("perim_1_end", "Edge 1 end", "Click the end of the first edge.", MAP, required = true),
@@ -110,13 +114,16 @@ internal fun targetEnabled(profile: PhoneProfile, name: String): Boolean =
     name !in VIEWPORT_TARGETS || !PcGeometry.isPc(profile.viewport)
 
 /**
- * Whether [profile] has a value for the target [name]. A perimeter edge's end counts only once
- * the edge has two different ends, since Apply fills an edge's missing end with the clicked one.
+ * Whether [profile] has a value for the target [name]. Apply fills an edge's missing end with the
+ * clicked point, so an edge with both ends on one point does not say which end was clicked: an
+ * end counts once the edge has two different ends, or once it is in [applied], the edge ends
+ * applied on this visit.
  */
-internal fun isSet(profile: PhoneProfile, name: String): Boolean {
+internal fun isSet(profile: PhoneProfile, name: String, applied: Set<String> = emptySet()): Boolean {
     perimeterEnd(name)?.let { (index, start) ->
         val (first, second) = profile.perimeterSegments.getOrNull(index) ?: return false
-        return first != second && (if (start) first else second) != Point(0, 0)
+        if ((if (start) first else second) == Point(0, 0)) return false
+        return first != second || name in applied
     }
     return when (name) {
         in VIEWPORT_TARGETS -> true
@@ -135,8 +142,8 @@ internal fun isSet(profile: PhoneProfile, name: String): Boolean {
  * The point saved for the target [name] on [profile], drawn on the frame and where the arrow keys
  * start from; null for a box target, the collector, the game area's corners and a target not set.
  */
-internal fun savedPoint(profile: PhoneProfile, name: String): Point? {
-    if (!isSet(profile, name)) return null
+internal fun savedPoint(profile: PhoneProfile, name: String, applied: Set<String> = emptySet()): Point? {
+    if (!isSet(profile, name, applied)) return null
     perimeterEnd(name)?.let { (index, start) ->
         val edge = profile.perimeterSegments[index]
         return if (start) edge.first else edge.second
@@ -167,6 +174,25 @@ internal fun savedBox(profile: PhoneProfile, name: String): Region? = when (name
 }
 
 private val TROOP_CARDS = setOf("valkyries", "rages", "jumps", "king", "queen", "warden", "champion")
+
+/**
+ * The cards an army may lack: the jump spell and the four heroes. The attack uses every one whose
+ * card is set (AttackPlanner), so a hero card set where the user has no such hero drops whatever
+ * sits in that slot as a hero, or the tray check stops the run on the count badge there.
+ */
+internal val OPTIONAL_CARDS = setOf("jumps", "king", "queen", "warden", "champion")
+
+/** Whether [name] is a perimeter edge's start or end. */
+internal fun isPerimeterEnd(name: String): Boolean = perimeterEnd(name) != null
+
+/**
+ * [profile] without the card [name], for "Not in my army": its click point and card area go, so
+ * the attack skips it. Anything but a set optional card leaves the profile as it was.
+ */
+internal fun withoutCard(profile: PhoneProfile, name: String): PhoneProfile {
+    if (name !in OPTIONAL_CARDS || (name !in profile.troopAnchors && name !in profile.troopRois)) return profile
+    return profile.copy(troopAnchors = profile.troopAnchors - name, troopRois = profile.troopRois - name, isVerified = false)
+}
 
 /** The perimeter edge [name] belongs to, from 0, and whether it is the edge's start; null for any other target. */
 private fun perimeterEnd(name: String): Pair<Int, Boolean>? {

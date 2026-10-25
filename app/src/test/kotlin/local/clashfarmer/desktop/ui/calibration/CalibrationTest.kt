@@ -53,9 +53,42 @@ class CalibrationTest {
         assertEquals("Spell cast inside (e.g. Rage)", label("rages"))
         assertTrue(label("jumps").contains("optional"))
         listOf("king", "queen", "warden", "champion").forEach {
-            assertTrue(label(it), label(it).endsWith("(skip if you don't have it)"))
+            assertTrue(label(it), label(it).endsWith("(if you have it)"))
         }
         assertTrue(CALIBRATION_TARGETS.first { it.name == "rages" }.description.contains("five times"))
+        // Each optional card says how to leave it out, which the standard positions set.
+        OPTIONAL_CARDS.forEach { name ->
+            val description = CALIBRATION_TARGETS.first { it.name == name }.description
+            assertTrue(description, description.contains("press Not in my army"))
+        }
+    }
+
+    @Test
+    fun `Not in my army removes an optional card so the attack skips it`() {
+        val starter = StarterProfile.load()
+        assertEquals(OPTIONAL_CARDS, OPTIONAL_CARDS.filter { isSet(starter, it) }.toSet())
+        val noWarden = withoutCard(starter, "warden")
+        assertFalse(isSet(noWarden, "warden"))
+        assertNull(noWarden.troopRois["warden"])
+        assertFalse(noWarden.isVerified)
+        // Only that card goes.
+        assertEquals(starter.troopAnchors - "warden", noWarden.troopAnchors)
+        assertEquals(starter.troopRois - "warden", noWarden.troopRois)
+        assertEquals(starter.copy(troopAnchors = noWarden.troopAnchors, troopRois = noWarden.troopRois), noWarden)
+
+        // An army of King and Queen, no Warden, no Champion and no jump spell.
+        val army = listOf("warden", "champion", "jumps").fold(starter) { p, name -> withoutCard(p, name) }
+        army.validateForAttack()
+        val groups = AttackPlanner.buildDeployment(army, kotlin.random.Random(1)).map { it.name }
+        assertTrue(groups.toString(), "king" in groups && "queen" in groups)
+        assertTrue(groups.toString(), groups.none { it in setOf("warden", "champion", "jumps") })
+        // King and Queen still measure the tray's card width for the event tray.
+        assertNotNull(AttackPlanner.trayBadgeRegions(army))
+
+        // The cards every attack needs, and a card not set, are left alone.
+        assertSame(starter, withoutCard(starter, "valkyries"))
+        assertSame(starter, withoutCard(starter, "rages"))
+        assertSame(noWarden, withoutCard(noWarden, "warden"))
     }
 
     @Test
@@ -121,6 +154,34 @@ class CalibrationTest {
         assertTrue(isSet(both, "perim_2_end"))
         assertEquals(Point(100, 200), savedPoint(both, "perim_2_start"))
         assertEquals(Point(300, 400), savedPoint(both, "perim_2_end"))
+    }
+
+    @Test
+    fun `an edge end applied on this visit counts as set at once, whichever end came first`() {
+        val start = applyTarget(PhoneProfile.createDefault(1740, 978), "perim_1_start", Point(300, 320))
+        val applied = setOf("perim_1_start")
+        // Apply filled the end with the same point, so only the visit knows which end was clicked.
+        assertTrue(isSet(start, "perim_1_start", applied))
+        assertEquals(Point(300, 320), savedPoint(start, "perim_1_start", applied))
+        assertFalse(isSet(start, "perim_1_end", applied))
+        assertNull(savedPoint(start, "perim_1_end", applied))
+
+        val end = applyTarget(PhoneProfile.createDefault(1740, 978), "perim_3_end", Point(900, 700))
+        assertTrue(isSet(end, "perim_3_end", setOf("perim_3_end")))
+        assertFalse(isSet(end, "perim_3_start", setOf("perim_3_end")))
+        // Edges before it were filled with zeros, which are never set.
+        assertFalse(isSet(end, "perim_1_start", setOf("perim_1_start")))
+        assertTrue(isPerimeterEnd("perim_4_end"))
+        assertFalse(isPerimeterEnd("hero_drop"))
+    }
+
+    @Test
+    fun `Enter is taken from a focused button only while a point waits for Apply`() {
+        assertTrue(takesEnter(Key.Enter, pending = true))
+        assertTrue(takesEnter(Key.NumPadEnter, pending = true))
+        assertFalse(takesEnter(Key.Enter, pending = false))
+        assertFalse(takesEnter(Key.DirectionRight, pending = true))
+        assertFalse(takesEnter(Key.Spacebar, pending = true))
     }
 
     @Test

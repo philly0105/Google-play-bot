@@ -73,7 +73,8 @@ Setup has a line for each thing a run needs: the Clash window, the text reader (
 OCR), the tray icon, battery, the remote page (which needs Tailscale), and per account whether the
 bot has read it, the calibration, the troop tray, walls, the goal and rules, and builders. Open
 Clash from the Game window line, calibrate the account, then run one supervised attack. A new
-account can start calibration from the standard positions and only check its troop cards.
+account can start calibration from the standard positions and only check its troop cards,
+pressing Not in my army on any hero or jump spell it doesn't have.
 Unattended runs stay locked until a supervised attack has verified the account's profile. The
 bottom of Setup names the version and has Open logs folder.
 

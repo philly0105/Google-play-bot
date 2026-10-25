@@ -2,8 +2,8 @@
 
 The phone's JVM unit tests, copied from `C:\Users\aideo\Projects\clash-farmer` at `eeaadba`, and
 the PC's own tests under `app/src/test/kotlin/local/clashfarmer/desktop/`. None of them needs
-Clash, Google Play Games or the sidecar. On 25 October the suite ran 1983 tests, 1637 copied
-from the phone and the PC's 346 (331 under `desktop/` and `accounts/PcAccountTest.kt`'s 15), and
+Clash, Google Play Games or the sidecar. On 25 October the suite ran 1988 tests, 1637 copied
+from the phone and the PC's 351 (336 under `desktop/` and `accounts/PcAccountTest.kt`'s 15), and
 none failed.
 
 Run them with `.\Build.ps1 -Tasks ':app:test'`. The test task ends with one line,
@@ -52,7 +52,7 @@ since the app no longer ships the owner's (`docs/DIVERGENCES.md`).
 
 ## PC tests
 
-331 `@Test` methods in 37 files under `desktop/`, and 15 in `accounts/PcAccountTest.kt`. Their
+336 `@Test` methods in 37 files under `desktop/`, and 15 in `accounts/PcAccountTest.kt`. Their
 fixtures are in `app/src/test/resources/pc-frames/`: the sidecar's OCR of frames captured from
 Blood's game window at 1740x978 and 1860x1162, its OCR of upscaled crops of the builders' counter,
 and a few PNG crops. `identity/pc/blood.png` is
@@ -87,7 +87,7 @@ same strip on the Settings tab and the village at 1860x1162
 | `platform/ClashWindowWatcherTest` | The Clash window lookup, a window opened again by the same game process (and a new game's window that starts hidden, which is not), `pcInfo` and a failed start | 14 |
 | `platform/SidecarGameSurfaceTest` | Taps, swipes, the pinch, Back and frames through the sidecar, and old frames on a locked PC, a dark display and a still village | 14 |
 | `sidecar/SidecarTest` | The sidecar protocol, against `FakeSidecar`, including frame age, the window's process and full screen, `sessionState`, and `pcInfo` with Clash unknown, hello's text reader error, and the monitor's room in `find` | 16 |
-| `ui/` (fourteen files) | The Compose UI; see `docs/UI.md` | 110 |
+| `ui/` (fourteen files) | The Compose UI; see `docs/UI.md` | 115 |
 
 ## When they run
 

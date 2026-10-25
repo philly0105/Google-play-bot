@@ -72,6 +72,11 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /** The profile as loaded, so a save writes only what was changed here. */
     private var openedProfile: PhoneProfile = profile
     private var tempPoint: Point? by mutableStateOf(null)
+    /**
+     * The perimeter edge ends applied on this visit. Apply fills an edge's other end with the same
+     * point, so the profile alone can't tell a start just applied from one never set ([isSet]).
+     */
+    private var appliedEnds: Set<String> by mutableStateOf(emptySet())
     /** Collection targets are only taken on the camera reference itself, never on another frame. */
     private var frameIsCameraReference = false
 
@@ -122,6 +127,18 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     /** Whether the profile has changes Save has not written, which Back asks before dropping. */
     val unsaved: Boolean get() = profile != openedProfile
 
+    /** Whether a point is waiting for Apply, so Enter applies it whatever button has focus. */
+    val pending: Boolean get() = tempPoint != null
+
+    /** Whether the profile being edited has a value for the target [name] ([isSet]). */
+    fun targetSet(name: String): Boolean = isSet(profile, name, appliedEnds)
+
+    /** The point saved for the target [name] on the profile being edited ([savedPoint]). */
+    fun targetPoint(name: String): Point? = savedPoint(profile, name, appliedEnds)
+
+    /** Whether "Not in my army" can remove the target shown: an optional card that is set. */
+    val removable: Boolean get() = target.name in OPTIONAL_CARDS && targetSet(target.name)
+
     /**
      * The line under the target's description: the point Apply would save, else where the target
      * is saved, else what to do. Coordinates are frame pixels, as the arrow keys move them.
@@ -130,20 +147,21 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         get() {
             tempPoint?.let { return "New point: x ${it.x}, y ${it.y}. Press Apply or Enter to set it." }
             if (!targetEnabled(profile, target.name)) return "Set by Capture: the game area is the whole screenshot."
-            savedPoint(profile, target.name)?.let { return "Set at x ${it.x}, y ${it.y}. Click the screenshot to move it." }
-            if (target.name != COLLECTOR && isSet(profile, target.name)) return "Set. Click the screenshot to move it."
+            targetPoint(target.name)?.let { return "Set at x ${it.x}, y ${it.y}. Click the screenshot to move it." }
+            if (target.name != COLLECTOR && targetSet(target.name)) return "Set. Click the screenshot to move it."
+            if (target.name in OPTIONAL_CARDS) return "Not set, so the bot won't use this card. Click the screenshot to place it."
             return "Click the screenshot to place this point."
         }
 
     /** "12 of 36 points set": the targets the list checks off, the game area's corners aside. */
     val progressText: String
-        get() = "${COUNTED_TARGETS.count { isSet(profile, it.name) }} of ${COUNTED_TARGETS.size} points set"
+        get() = "${COUNTED_TARGETS.count { targetSet(it.name) }} of ${COUNTED_TARGETS.size} points set"
 
     /** The status block under the buttons, in plain lines. */
     val statusText: String
         get() {
             val p = profile
-            val missing = CALIBRATION_TARGETS.filter { it.required && !isSet(p, it.name) }
+            val missing = CALIBRATION_TARGETS.filter { it.required && !targetSet(it.name) }
             val area = "Game area ${p.resolutionWidth}x${p.resolutionHeight}" + if (frame == null) ", no screenshot yet" else ""
             val attack = if (missing.isEmpty()) "Everything an attack needs is set."
             else "Still needed to attack: ${missing.joinToString(", ") { it.label }}."
@@ -211,7 +229,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
     fun nudge(dx: Int, dy: Int) {
         val image = frame ?: return
         if (!targetEnabled(profile, target.name)) return
-        val from = tempPoint ?: savedPoint(profile, target.name) ?: return
+        val from = tempPoint ?: targetPoint(target.name) ?: return
         click(Point((from.x + dx).coerceIn(0, image.width - 1), (from.y + dy).coerceIn(0, image.height - 1)))
     }
 
@@ -270,6 +288,8 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
             profile = next
             selectedRegion = null
             tempPoint = null
+            // The standard edges have two different ends each, so none needs remembering.
+            appliedEnds = emptySet()
             AppLog.log("standard_positions_loaded", "accountId" to accountId, "size" to "${next.resolutionWidth}x${next.resolutionHeight}")
             CALIBRATION_TARGETS.indexOfFirst { it.name == "valkyries" }.takeIf { it >= 0 }?.let { targetIndex = it }
             host.toast(STANDARD_LOADED, long = true)
@@ -427,6 +447,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         }
 
         profile = applyTarget(profile, target.name, pt)
+        if (isPerimeterEnd(target.name)) appliedEnds = appliedEnds + target.name
 
         // A card's area is centred on its tap, so the box shows a tap that missed the card's middle.
         selectedRegion = profile.troopRois[target.name]
@@ -435,6 +456,19 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         // On to the next target that can be picked, if there is one.
         CALIBRATION_TARGETS.indices.firstOrNull { it > idx && targetEnabled(profile, CALIBRATION_TARGETS[it].name) }
             ?.let { pickTarget(it) }
+    }
+
+    /**
+     * "Not in my army": removes the optional card shown ([withoutCard]), so the attack skips it.
+     * The standard positions set the jump spell and all four heroes, which not every army has.
+     */
+    fun removeCard() {
+        if (working || !removable) return
+        val label = target.label.substringBefore(" (")
+        profile = withoutCard(profile, target.name)
+        selectedRegion = null
+        tempPoint = null
+        host.toast("$label removed. The bot won't use this card. Save when you're done.")
     }
 
     /**
@@ -609,7 +643,9 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
      */
     private fun fitTo(width: Int, height: Int): String? {
         val fit = refit(profile, width, height)
-        if (fit.profile !== profile) AppLog.log(
+        // A game area reset at the same size is not a move.
+        val moved = width != profile.resolutionWidth || height != profile.resolutionHeight
+        if (moved && fit.profile !== profile) AppLog.log(
             "profile_moved",
             "accountId" to accountId,
             "calibrated" to "${profile.resolutionWidth}x${profile.resolutionHeight}",
@@ -662,7 +698,7 @@ class CalibrationModel(private val host: DashboardHost, val accountId: String, p
         const val STANDARD = "Loading the standard positions..."
         const val CAPTURE_FAILED = "Could not capture the game. Make sure Clash is open and not minimised, then try again."
         const val STANDARD_LOADED = "Standard positions loaded. Check each troop card against your own battle tray, " +
-            "move any that differ, then save."
+            "move any that differ, and press Not in my army on any hero or spell you don't have. Then save."
     }
 }
 

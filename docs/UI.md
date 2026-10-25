@@ -353,21 +353,28 @@ Calibration:
   which can't be picked: a capture fills the frame, and a stray click there would shrink it.
 - The troop cards are named for what the attack does with them, not the owner's army: "Main troop
   card (e.g. Valkyries)", dropped all around the base; "Spell cast inside (e.g. Rage)", cast five
-  times; "Jump spell card (optional)"; and the heroes "(skip if you don't have it)". The keys in
-  the profile are unchanged.
+  times; "Jump spell card (optional)"; and the heroes "(if you have it)". The keys in the profile
+  are unchanged. On the jump spell and the heroes a "Not in my army" button removes the card's
+  point and area (`withoutCard`), since the attack uses every hero and jump card that is set and
+  the tray check stops a run on a count badge in a hero's slot.
 - Start from the standard positions loads `profile/pc-start-1740x978.json`, the owner's verified
   1740x978 calibration shipped with no collectors, wall points or deployment points and not
   verified, moved onto the game area shown with the run's rule (`StarterProfile.onto`, which calls
-  `PcProfiles.derive`). What belongs to the account's village (grass, wall progress, collectors)
-  is kept from the profile being edited. It asks first when there is a saved calibration or unsaved
-  points, then picks the main troop card, since the tray is the one place an army differs. Nothing
+  `PcProfiles.derive`). What belongs to the account's village (grass, wall panel, wall progress,
+  collectors) is kept from the profile being edited, moved onto that game area first when it is
+  another size, which drops its collectors as a capture does. It asks first when there is a saved
+  calibration or unsaved points, then picks the main troop card, since the tray is the one place an
+  army differs, and its toast says to remove any hero or spell the army lacks. Nothing
   is written until Save, and the result is unverified until a supervised attack. Setup's
   calibration row for an account with no calibration says to start there
   (`StarterProfile.setupLine`).
 - The sidebar shows the selected target's saved point ("Set at x 307, y 903") and draws it, and
   its box, in green on the frame when the frame is the profile's size. Arrow keys move the point
   Apply would save by 1 frame pixel, 10 with Shift, starting from the saved point; Enter applies.
-  A click on the frame takes keyboard focus back from the last button pressed. A 128 dp loupe in
+  While a point waits for Apply, the screen takes Enter before the button that has focus
+  (`takesEnter`), so a pick from the list and the arrows never press Capture or Save again. An
+  edge end applied on this visit counts as set at once, though Apply put the edge's other end on
+  the same point. A 128 dp loupe in
   the frame's top-left corner (top-right when the point is under it) shows 32 frame pixels around
   the pointer, or the last click, without smoothing.
 - Back and Escape ask "Leave without saving?" when points were set or moved since the last save.
@@ -385,7 +392,9 @@ Calibration:
 - A capture of another size moves the points onto it with the run's rule (`refit`, which calls
   `PcProfiles.derive`) and leaves them unverified; the phone kept the points and changed only the
   size. A toast says the points were moved and, when there were any, that the collectors were
-  cleared. A profile that can't be moved, such as the phone's default, is relabelled as before.
+  cleared. A profile that can't be moved, such as the phone's default, is relabelled as before. A
+  capture at the profile's own size makes a PC profile's game area the whole frame again, with a
+  toast, so a game area an earlier build shrank through a corner click is repaired.
 - The camera reference follows: a frame from `captureNormalizedVillage` of another size moves the
   profile instead of failing. Show camera reference never changes a saved reference: one of
   another size than the profile being edited is shown with a note (`referenceMismatch`), and
@@ -470,11 +479,11 @@ Phone wording remains in shared files (line numbers as of 3c438fb):
 | `desktop/CrashHandlerTest.kt` | Which failures end the app, the dialog's text, its 10-minute limit, and window failures that skip it | 5 |
 | `desktop/BuildInfoTest.kt` | The version and About text, and the stamped version matching gradle.properties | 3 |
 | `desktop/ui/TrayCheckSheetTest.kt` | `profileAt`: the calibration itself, moved to 16:10, and a game area too small | 3 |
-| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved` | 9 |
+| `desktop/ui/calibration/CalibrationSizeTest.kt` | `refit` at the same size, with a shrunk game area, 16:10, a capped size, the empty default, a profile that can't be moved and a frame too small; `saveQuestion`, `saveProblem`, `referenceMismatch` and `SurfaceVerification.calibrationSaved` | 10 |
 | `desktop/ui/AccountEditorInputTest.kt` | `digitsTyped` and the editor's box order | 7 |
 | `desktop/ui/AccountEditorCloseTest.kt` | Close on an untouched sheet, the question after a changed box or switch, Keep editing, and a change put back | 3 |
-| `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets grouped by screen, their plain labels and the army's names, the needed set against `validateForAttack`, `isSet`, `savedPoint`, `savedBox`, `targetEnabled`, `targetRows`, `calibrationKey` and `saveFailure`; `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 22 |
-| `desktop/ui/calibration/StarterProfileTest.kt` | The shipped standard positions, `onto` at the same size and at 16:10 and an unworkable size, `sizeFor`, and Setup's row for an account with no calibration (`setupLine`) | 6 |
+| `desktop/ui/calibration/CalibrationTest.kt` | The 38 targets grouped by screen, their plain labels and the army's names, the needed set against `validateForAttack`, `isSet` (with edge ends applied on the visit), `savedPoint`, `savedBox`, `targetEnabled`, `targetRows`, `withoutCard` against `AttackPlanner.buildDeployment`, `calibrationKey`, `takesEnter` and `saveFailure`; `applyTarget` on phone and PC frames, its PC boxes against the OCR of PC captures, and `FrameFit` at 16:9 and 16:10 | 25 |
+| `desktop/ui/calibration/StarterProfileTest.kt` | The shipped standard positions, `onto` at the same size, over a profile of another size, at 16:10 and an unworkable size, `sizeFor`, and Setup's row for an account with no calibration (`setupLine`) | 7 |
 | `desktop/ui/components/ParseClockTest.kt` | `parseClock` | 3 |
 | `desktop/ui/DashboardRenderTest.kt` | `pcAccounts` and `shownPresets` with Blood alone; every tab, the account editor and calibration (empty, and with a screenshot, a clicked point and the loupe) drawn off-screen at 1100x760, and the whole window at 100%, at 150% in 1280x650 dp and with a run going, into `app/build/ui-renders`; `tabForKey`, and the tab keys after the page holding focus is dropped | 5 |
 | `desktop/ui/StartFixTest.kt` | `StartFix` for each readiness reason, `plainReason`, `shownPresets`, `gameChip` and `headerChip` | 9 |
